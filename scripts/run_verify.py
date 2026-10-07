@@ -19,7 +19,8 @@ LESSONS = [
     ("03_backprop_visual", "lessons.03_backprop_visual"),
     ("03_backpropagation", "lessons.03_backpropagation"),
     ("04_activations", "lessons.04_activations"),
-    ("05_mnist", "lessons.05_mnist"),
+    ("05_learning_rate", "lessons.05_learning_rate"),
+    ("06_mnist", "lessons.06_mnist"),
 ]
 
 
@@ -39,7 +40,7 @@ def run_all(mnist_epochs: int = 10) -> dict:
         entry = {"name": name, "status": "running"}
         try:
             mod = import_module(module_name)
-            if name == "05_mnist":
+            if name == "06_mnist":
                 metrics = mod.run(epochs=mnist_epochs)
             else:
                 metrics = mod.run()

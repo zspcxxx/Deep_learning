@@ -14,9 +14,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="单独运行 Deep Learning Lab 中的一个实验",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="示例:\n  python scripts/run_lesson.py --list\n  python scripts/run_lesson.py 01\n  python scripts/run_lesson.py mlp\n  python scripts/run_lesson.py 05 --epochs 3",
+        epilog="示例:\n  python scripts/run_lesson.py --list\n  python scripts/run_lesson.py 01\n  python scripts/run_lesson.py 05\n  python scripts/run_lesson.py 06 --epochs 3",
     )
-    parser.add_argument("lesson", nargs="?", help="实验编号或名称，如 01 / perceptron / 05")
+    parser.add_argument("lesson", nargs="?", help="实验编号或名称，如 01 / lr / 06")
     parser.add_argument("--list", action="store_true", help="列出全部实验")
     parser.add_argument("--epochs", type=int, default=None, help="仅 MNIST：训练轮数")
     parser.add_argument("--batch-size", type=int, default=None, help="仅 MNIST：批大小")
@@ -46,7 +46,7 @@ def main() -> int:
     print()
     mod = import_module(item["module"])
     kwargs = {}
-    if item["id"] == "05":
+    if item["id"] == "06":
         if args.epochs is not None:
             kwargs["epochs"] = args.epochs
         if args.batch_size is not None:

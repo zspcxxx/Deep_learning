@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>05 学习率 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_mnist.html">06 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#formula">更新公式</a></li>
+      <li><a href="#1d">一维玩具例子</a></li>
+      <li><a href="#xor">XOR 对比实验</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+      <li><a href="#tips">实践建议</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 05</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">调参核心</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>学习率：步子迈多大才合适</h1>
+          <p class="lead">反向传播算出了“该往哪边走”，学习率决定“这一步迈多远”。太小学得慢，太大直接跨过山谷甚至飞出悬崖。本实验用同一数据、同一网络、同一随机种子，只改学习率，把三种典型行为画出来。</p>
+          <p class="meta">入口 <code>lessons/05_learning_rate.py</code> · 复用 <code>src/dllab/mlp.py</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20,130 Q80,20 140,80 T260,50" fill="none" stroke="#94a3b8" stroke-width="2"/>
+            <circle cx="50" cy="100" r="5" fill="#3b82f6"/>
+            <circle cx="70" cy="78" r="5" fill="#3b82f6"/>
+            <circle cx="95" cy="55" r="5" fill="#3b82f6"/>
+            <text x="50" y="150" font-size="11" fill="#3b82f6" font-family="sans-serif">lr 太小</text>
+            <circle cx="160" cy="70" r="5" fill="#0f766e"/>
+            <circle cx="190" cy="52" r="5" fill="#0f766e"/>
+            <circle cx="215" cy="48" r="5" fill="#0f766e"/>
+            <text x="170" y="150" font-size="11" fill="#0f766e" font-family="sans-serif">合适</text>
+            <circle cx="120" cy="60" r="5" fill="#be123c"/>
+            <circle cx="200" cy="110" r="5" fill="#be123c"/>
+            <circle cx="100" cy="130" r="5" fill="#be123c"/>
+            <text x="210" y="140" font-size="11" fill="#be123c" font-family="sans-serif">太大</text>
+          </svg>
+          <div class="cap">损失曲面上三种步长</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>学习率在参数更新公式里扮演什么角色？</li>
+        <li>太小、合适、太大时，损失曲线分别长什么样？</li>
+        <li>为什么“同一模型换个 lr”就能从学不会变成学得会，或从学得会变成发散？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>把训练想成夜里下山：梯度告诉你哪边是下坡，学习率是你的步幅。</p>
+    <div class="card-grid">
+      <div class="card"><h4>太小</h4><p>一步一寸，安全但极慢；同样轮数内损失几乎不降，准确率爬不起来。</p></div>
+      <div class="card"><h4>合适</h4><p>稳步靠近谷底；损失平滑下降，准确率升到高位。</p></div>
+      <div class="card"><h4>太大</h4><p>一步跨到对面山坡，来回震荡，甚至数值爆炸（NaN）。</p></div>
+    </div>
+    <div class="callout warn"><strong>注意</strong>没有放之四海皆准的“最佳 lr”。它和损失形状、批量大小、网络深度、是否用 Adam 都有关。本实验先建立固定步长（SGD 风格）的直觉；MNIST 课里用的 Adam 会自适应缩放，但对初始 lr 仍然敏感。</div>
+
+    <h2 id="formula">更新公式里的 lr</h2>
+    <pre class="formula">W ← W − lr · ∂L/∂W
+b ← b − lr · ∂L/∂b</pre>
+    <p>梯度方向由反向传播决定；<code>lr</code> 只缩放步长。代码里对应 <code>MLP(..., learning_rate=lr)</code> 中的这一项。</p>
+
+    <h2 id="1d">一维玩具：L(w)=(w−2)²</h2>
+    <p>最优解在 <code>w=2</code>，梯度 <code>2(w−2)</code>。从 <code>w₀=-3</code> 出发，不同 lr 走 25 步：</p>
+    <table>
+      <tr><th>lr</th><th>现象</th></tr>
+      <tr><td>0.05</td><td>慢慢挪向 2，还没到就不远了</td></tr>
+      <tr><td>0.4</td><td>较快贴近最优（二次函数上较合适的量级）</td></tr>
+      <tr><td>1.05</td><td>越过最优点，振幅越来越大 → 发散</td></tr>
+    </table>
+    <p>脚本会画出三条轨迹图 <code>lr_1d_landscape.png</code>，建议先看这张建立直觉，再看 XOR 的真实曲线。</p>
+
+    <h2 id="xor">XOR 上的受控对比</h2>
+    <p>固定条件（只改 lr）：</p>
+    <ul>
+      <li>数据：与实验 02 相同的 XOR 噪声点</li>
+      <li>结构：<code>[2, 8, 8, 1]</code>，ReLU，seed=42</li>
+      <li>迭代：600 轮（刻意不给太小的 lr 太多时间）</li>
+      <li>学习率：<code>0.001</code>（太小）、<code>0.5</code>（合适）、<code>8.0</code>（太大）</li>
+    </ul>
+    <div class="callout ok"><strong>实验结论预期</strong>合适的 lr（0.5）很快到接近 100%；太小的（0.001）同样轮数里只爬到六成左右；太大的（8.0）会卡在约 50%（随机猜测），损失几乎不降。极端时还可能数值爆炸，图上会标 diverged。</div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 05
+# 或
+python lessons/05_learning_rate.py</pre>
+    <p>结果在 <code>artifacts/05_learning_rate/</code>：</p>
+    <ul>
+      <li><code>lr_curves.png</code> — 三条损失 / 准确率曲线叠在一起</li>
+      <li><code>lr_boundaries.png</code> — 三种 lr 的决策边界</li>
+      <li><code>lr_1d_landscape.png</code> — 一维玩具轨迹</li>
+      <li><code>metrics.json</code> — 最终准确率、是否发散</li>
+    </ul>
+    <p>不需要 PyTorch，通常几十秒内结束。</p>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th>图</th><th>太小</th><th>合适</th><th>太大</th></tr>
+      <tr><td>Loss</td><td>几乎水平或缓慢下降</td><td>平滑下降并稳住</td><td>剧烈抖动，或冲高 / NaN</td></tr>
+      <tr><td>Accuracy</td><td>爬升慢，终值偏低</td><td>升到接近 100%</td><td>乱跳或卡在低位</td></tr>
+      <tr><td>边界</td><td>分区模糊</td><td>对角同色清晰</td><td>可能无法画出有效边界</td></tr>
+    </table>
+
+    <h2 id="tips">实践建议</h2>
+    <ul>
+      <li>先在对数网格上试：<code>1e-4, 1e-3, 1e-2, 1e-1, 1</code>，看谁先让损失稳定下降。</li>
+      <li>损失前几步就变 NaN：优先把 lr 降一个数量级。</li>
+      <li>损失一直降但极慢：适当增大 lr，或检查是否该用更好的优化器 / 学习率衰减。</li>
+      <li>批量变大时，有时可以略增大 lr（线性缩放经验法则）；本实验为全批量，对照时请保持 batch 一致。</li>
+    </ul>
+    <div class="callout ok"><strong>自己改一改</strong>在 <code>LEARNING_RATES</code> 里加入 <code>0.1</code>、<code>1.0</code>、<code>2.0</code>，观察“合适区间”有多宽；或把 <code>N_ITERS</code> 加倍，看太小的 lr 是否“时间换效果”。</div>
+
+    <div class="footer-nav">
+      <a href="04_activations.html">← 04 激活函数</a>
+      <a href="06_mnist.html">下一课：MNIST →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

@@ -15,7 +15,7 @@ from dllab.paths import ensure_artifacts, PROJECT_ROOT
 
 
 def run(epochs: int = 3, batch_size: int = 256, lr: float = 1e-3) -> dict:
-    out = ensure_artifacts("05_mnist")
+    out = ensure_artifacts("06_mnist")
     data_dir = PROJECT_ROOT / "data"
     data_dir.mkdir(exist_ok=True)
     device = get_device()
@@ -48,11 +48,11 @@ def run(epochs: int = 3, batch_size: int = 256, lr: float = 1e-3) -> dict:
         print(f"  样本 {i+1}: 真实={true_label}, 预测={pred}, 置信度={prob[pred]:.4f}")
 
     images = [
-        "artifacts/05_mnist/samples.png",
-        "artifacts/05_mnist/mlp_history.png",
-        "artifacts/05_mnist/cnn_history.png",
-        "artifacts/05_mnist/confusion_matrix.png",
-        "artifacts/05_mnist/misclassified.png",
+        "artifacts/06_mnist/samples.png",
+        "artifacts/06_mnist/mlp_history.png",
+        "artifacts/06_mnist/cnn_history.png",
+        "artifacts/06_mnist/confusion_matrix.png",
+        "artifacts/06_mnist/misclassified.png",
     ]
     metrics = {
         "device": str(device),

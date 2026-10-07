@@ -51,7 +51,8 @@ a { color:var(--accent); }
     <a href="/learn/02">MLP</a>
     <a href="/learn/03">反向传播</a>
     <a href="/learn/04">激活函数</a>
-    <a href="/learn/05">MNIST</a>
+    <a href="/learn/05">学习率</a>
+    <a href="/learn/06">MNIST</a>
     <a href="/docs/architecture">MNIST 架构图</a>
   </div>
 </header>
@@ -66,7 +67,8 @@ a { color:var(--accent); }
     <h2>单独运行</h2>
     <pre>python scripts/run_lesson.py --list
 python scripts/run_lesson.py 01
-python scripts/run_lesson.py 05 --epochs 3</pre>
+python scripts/run_lesson.py 05
+python scripts/run_lesson.py 06 --epochs 3</pre>
   </section>
   {% for lesson in summary.lessons %}
   <section class="card lesson">
@@ -95,7 +97,8 @@ DOC_FILES = {
     "03": "03_backprop.html",
     "03-visual": "03_backprop.html",
     "04": "04_activations.html",
-    "05": "05_mnist.html",
+    "05": "05_learning_rate.html",
+    "06": "06_mnist.html",
 }
 
 

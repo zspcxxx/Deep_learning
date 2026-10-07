@@ -2,7 +2,7 @@
 
 从感知机到 MNIST 的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
 
-详细介绍是带侧栏目录、示意图和手算示例的 HTML（`docs/`）。**可直接双击本地打开**（已改成相对路径样式），也可通过看板 `/learn/` 阅读：
+详细介绍是带侧栏目录、示意图和手算示例的 HTML（`docs/`）。**可直接双击本地打开**（相对路径样式），也可通过看板 `/learn/` 阅读：
 
 | 实验 | 本地打开 | 看板地址 | 单独运行 |
 |------|----------|----------|----------|
@@ -11,7 +11,8 @@
 | 02 MLP | [docs/02_mlp.html](docs/02_mlp.html) | `/learn/02` | `python scripts/run_lesson.py 02` |
 | 03 反向传播 | [docs/03_backprop.html](docs/03_backprop.html) | `/learn/03` | `03-visual` / `03` |
 | 04 激活函数 | [docs/04_activations.html](docs/04_activations.html) | `/learn/04` | `python scripts/run_lesson.py 04` |
-| 05 MNIST | [docs/05_mnist.html](docs/05_mnist.html) | `/learn/05` | `python scripts/run_lesson.py 05 --epochs 3` |
+| 05 学习率 | [docs/05_learning_rate.html](docs/05_learning_rate.html) | `/learn/05` | `python scripts/run_lesson.py 05` |
+| 06 MNIST | [docs/06_mnist.html](docs/06_mnist.html) | `/learn/06` | `python scripts/run_lesson.py 06 --epochs 3` |
 
 ## 环境（一次）
 
@@ -20,7 +21,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 05 个实验需要。Jetson Orin CUDA 13.2：
+# 仅第 06 个实验需要。Jetson Orin CUDA 13.2：
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 ```
 
@@ -28,13 +29,14 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 
 ```bash
 source .venv/bin/activate
-python scripts/run_lesson.py --list          # 查看全部编号
+python scripts/run_lesson.py --list
 python scripts/run_lesson.py 01
-python scripts/run_lesson.py mlp             # 与 02 相同
+python scripts/run_lesson.py mlp
 python scripts/run_lesson.py 03-visual
 python scripts/run_lesson.py 03
 python scripts/run_lesson.py 04
-python scripts/run_lesson.py 05 --epochs 3 --batch-size 256
+python scripts/run_lesson.py 05              # 学习率对比
+python scripts/run_lesson.py 06 --epochs 3 --batch-size 256
 ```
 
 也可以直接调用入口：
@@ -45,10 +47,11 @@ python lessons/02_mlp.py
 python lessons/03_backprop_visual.py
 python lessons/03_backpropagation.py
 python lessons/04_activations.py
-python lessons/05_mnist.py --epochs 3
+python lessons/05_learning_rate.py
+python lessons/06_mnist.py --epochs 3
 ```
 
-图片和指标写到 `artifacts/`。01–04 只需 NumPy；05 需要 PyTorch（有 GPU 会自动用）。
+图片和指标写到 `artifacts/`。01–05 只需 NumPy；06 需要 PyTorch（有 GPU 会自动用）。
 
 ## 全部跑一遍 + 看板
 
