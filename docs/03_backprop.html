@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>03 反向传播 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_mnist.html">05 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#forward">前向缓存</a></li>
+      <li><a href="#backward">反向公式</a></li>
+      <li><a href="#check">梯度检查</a></li>
+      <li><a href="#run">两个入口</a></li>
+      <li><a href="#read">看图要点</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 03</span>
+        <span class="chip teal">手算 + 训练</span>
+        <span class="chip amber">梯度检查</span>
+      </div>
+      <h1>反向传播：误差如何一层层传回去</h1>
+      <p class="lead">训练神经网络 = 求损失对每个权重的导数，再沿导数反方向改一点点。反向传播用链式法则高效完成这件事，避免对每个权重逐个做数值扰动。</p>
+      <p class="meta">实现 <code>src/dllab/backprop.py</code> · 入口见文末两个脚本</p>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>前向时要记住哪些中间量？</li>
+        <li>输出层的误差为什么经常是 <code>ŷ − y</code>？</li>
+        <li>怎么证明手写梯度没有写错？（梯度检查）</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>把网络看成流水线：原料 x 经过“加权 + 激活”变成 ŷ，再变成损失 L。某个螺丝（权重）拧紧一点，L 会变大还是变小？这个变化率就是梯度。</p>
+    <div class="diagram">
+      <svg viewBox="0 0 720 150" width="720" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="af" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0f766e"/></marker>
+          <marker id="ab" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#be123c"/></marker>
+        </defs>
+        <rect x="40" y="30" width="90" height="40" rx="8" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="85" y="55" text-anchor="middle" font-size="13" fill="#1a2332" font-family="sans-serif">x</text>
+        <line x1="130" y1="50" x2="170" y2="50" stroke="#0f766e" stroke-width="2" marker-end="url(#af)"/>
+        <rect x="170" y="30" width="110" height="40" rx="8" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="225" y="55" text-anchor="middle" font-size="13" fill="#1a2332" font-family="sans-serif">z₁, a₁</text>
+        <line x1="280" y1="50" x2="320" y2="50" stroke="#0f766e" stroke-width="2" marker-end="url(#af)"/>
+        <rect x="320" y="30" width="110" height="40" rx="8" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="375" y="55" text-anchor="middle" font-size="13" fill="#1a2332" font-family="sans-serif">z₂, a₂=ŷ</text>
+        <line x1="430" y1="50" x2="470" y2="50" stroke="#0f766e" stroke-width="2" marker-end="url(#af)"/>
+        <rect x="470" y="30" width="90" height="40" rx="8" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="515" y="55" text-anchor="middle" font-size="13" fill="#1a2332" font-family="sans-serif">L</text>
+        <text x="300" y="20" text-anchor="middle" font-size="12" fill="#0f766e" font-family="Noto Sans SC,sans-serif">前向 →</text>
+
+        <line x1="515" y1="85" x2="375" y2="110" stroke="#be123c" stroke-width="2" marker-end="url(#ab)"/>
+        <line x1="375" y1="110" x2="225" y2="110" stroke="#be123c" stroke-width="2" marker-end="url(#ab)"/>
+        <line x1="225" y1="110" x2="85" y2="110" stroke="#be123c" stroke-width="2" marker-end="url(#ab)"/>
+        <text x="300" y="140" text-anchor="middle" font-size="12" fill="#be123c" font-family="Noto Sans SC,sans-serif">← 反向：链式法则把 dL 传回每个 W、b</text>
+      </svg>
+      <div class="cap">每一步只乘一个局部导数，整条链连起来就是 ∂L/∂W</div>
+    </div>
+
+    <h2 id="forward">前向（必须缓存）</h2>
+    <pre class="formula">z1 = X @ W1 + b1
+a1 = σ(z1)            # 或 ReLU
+z2 = a1 @ W2 + b2
+a2 = σ(z2)            # ŷ，形状 (N, 1)</pre>
+    <p><code>forward()</code> 把 <code>z1, a1, z2, a2</code> 放进字典。反向要用 z（算激活导数）和 a（当下一层的输入）。</p>
+
+    <h2 id="backward">反向：从输出往回</h2>
+    <p>对 <strong>BCE + 输出 Sigmoid</strong>，有一个被广泛使用的化简：</p>
+    <pre class="formula">dz2 = (a2 − y) / N          # N 是样本数，对应 mean
+
+dW2 = a1.T @ dz2
+db2 = sum(dz2, axis=0)
+
+da1 = dz2 @ W2.T
+dz1 = da1 * σ'(z1)          # Sigmoid: σ'(z)=σ(z)(1−σ(z))
+dW1 = X.T @ dz1
+db1 = sum(dz1, axis=0)</pre>
+    <p>然后 <code>W ← W − lr · dW</code>。</p>
+    <div class="callout ok"><strong>形状口诀</strong>误差从右边往左边流；权重梯度 =「流入这层的激活」转置 ×「这层的误差」。对照 <code>BackpropNN.backward</code> 读一遍就会对上。</div>
+
+    <div class="worked">
+      <h4>单样本直觉（与 03-visual 脚本一致）</h4>
+      <p>固定 <code>x=[0.5, 0.8]</code>，<code>y=1</code>，网络 2→2→1。前向得到 <code>a2≈0.70</code>，则</p>
+      <pre class="formula">dz2 = a2 − y ≈ 0.70 − 1 = −0.30</pre>
+      <p>负号表示：输出偏小，应增大指向正类的权重。随后 <code>dW2 = a1ᵀ · dz2</code>，再把误差经 <code>W2ᵀ</code> 传回隐藏层。</p>
+    </div>
+
+    <h2 id="check">梯度检查：用定义核对实现</h2>
+    <pre class="formula">数值梯度 ≈ [L(w+ε) − L(w−ε)] / (2ε)</pre>
+    <p>和反向传播得到的解析梯度比相对误差。本实验阈值是 <code>&lt; 1e-6</code>。通过了，才说明 backward 没有写反、没有漏除 N、没有用错激活导数。</p>
+    <div class="callout warn"><strong>注意</strong>检查时要用很小的网络和很小的 batch——每个参数都要前向两次。代码在 <code>gradient_check()</code>。</div>
+
+    <h2 id="run">两个入口，建议都跑</h2>
+    <div class="two-col">
+      <div class="panel">
+        <h4>1）固定数字走一遍</h4>
+        <p>建立手感，打印每一步中间量与梯度。</p>
+        <pre class="cmd">python scripts/run_lesson.py 03-visual
+# 或
+python lessons/03_backprop_visual.py</pre>
+        <p>结果：<code>artifacts/03_backprop/backprop_visualization.png</code></p>
+      </div>
+      <div class="panel">
+        <h4>2）梯度检查 + 训练</h4>
+        <p>小 XOR 子集检查，再训 XOR / Moons。</p>
+        <pre class="cmd">python scripts/run_lesson.py 03
+# 或
+python lessons/03_backpropagation.py</pre>
+        <p>控制台应看到 W1/b1/W2/b2 全部「通过」。</p>
+      </div>
+    </div>
+
+    <h2 id="read">看图与日志时注意什么</h2>
+    <ul>
+      <li>梯度检查失败：优先查有没有漏除样本数、激活导数是否作用在 z 上、BCE 是否和 Sigmoid 配错。</li>
+      <li>可视化图里输出层梯度范数通常大于隐藏层——误差往回传会被激活导数缩小，这和<a href="04_activations.html">实验 04 梯度消失</a>是同一件事的萌芽。</li>
+      <li>故意把 <code>dz2</code> 改成不除以 <code>m</code>，看相对误差炸到什么程度——这是最好的调试练习。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="02_mlp.html">← 02 MLP</a>
+      <a href="04_activations.html">下一课：激活函数 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

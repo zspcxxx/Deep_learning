@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>04 激活函数 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_mnist.html">05 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#family">按家族理解</a></li>
+      <li><a href="#formula">常用公式</a></li>
+      <li><a href="#vanish">梯度消失</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#pick">怎么选用</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 04</span>
+        <span class="chip teal">纯可视化</span>
+        <span class="chip amber">约 30 秒</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>激活函数：网络里的“弯折”</h1>
+          <p class="lead">线性层只会旋转、拉伸、平移空间。激活函数在每个神经元上弯折一次，网络才能拟合曲线。不同弯折方式还决定训练能不能进行下去。</p>
+          <p class="meta">实现 <code>src/dllab/activations.py</code> · 入口 <code>lessons/04_activations.py</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 260 160" width="260" height="160" xmlns="http://www.w3.org/2000/svg">
+            <line x1="20" y1="80" x2="240" y2="80" stroke="#cbd5e1"/>
+            <line x1="130" y1="20" x2="130" y2="140" stroke="#cbd5e1"/>
+            <path d="M30,120 C70,120 90,80 130,80 C170,80 190,40 230,40" fill="none" stroke="#1f6feb" stroke-width="3"/>
+            <path d="M30,130 L130,130 L130,30 L230,30" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-dasharray="5 3"/>
+            <text x="200" y="55" font-size="11" fill="#1f6feb" font-family="sans-serif">Sigmoid</text>
+            <text x="160" y="25" font-size="11" fill="#0f766e" font-family="sans-serif">ReLU</text>
+          </svg>
+          <div class="cap">平滑饱和 vs 分段线性</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>常见激活长什么样、导数长什么样？</li>
+        <li>Softmax 如何把一组分数变成概率？温度 T 有什么用？</li>
+        <li>为什么深层网络里 Sigmoid 容易梯度消失，而 ReLU 好得多？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>每个隐藏神经元先算线性分 <code>z = w·x + b</code>，再经过 <code>a = f(z)</code> 才送给下一层。反向传播时，误差要乘上 <code>f'(z)</code>。</p>
+    <div class="callout danger"><strong>梯度消失</strong>若 <code>|f'(z)|</code> 经常远小于 1（Sigmoid 最大也只有 0.25），层层相乘会指数衰减，前面的层几乎改不动。</div>
+    <p>ReLU 在 z&gt;0 时导数是 1，正半轴上梯度可以原样传回去，所以深度网络默认从 ReLU 家族开始选。</p>
+
+    <h2 id="family">按家族理解，不必背所有公式</h2>
+    <table>
+      <tr><th>家族</th><th>代表</th><th>直觉</th><th>代价</th></tr>
+      <tr><td>S 形</td><td>Sigmoid, Tanh</td><td>压到有限区间，适合概率或门控</td><td>两端饱和，梯度≈0</td></tr>
+      <tr><td>分段线性</td><td>ReLU, Leaky ReLU</td><td>负的掐掉或留一小坡</td><td>ReLU 可能“死亡”</td></tr>
+      <tr><td>平滑新秀</td><td>GELU, SiLU, Mish</td><td>负半轴不是硬切；Transformer 常用 GELU</td><td>计算稍重</td></tr>
+      <tr><td>硬近似</td><td>HardSwish, HardSigmoid</td><td>折线换速度，方便移动端</td><td>精度换速度</td></tr>
+      <tr><td>输出专用</td><td>Softmax</td><td>多类互斥概率，和为 1</td><td>一般只放最后一层</td></tr>
+    </table>
+
+    <h2 id="formula">几条真正会写进代码的公式</h2>
+    <pre class="formula">Sigmoid(z) = 1 / (1 + e^{−z})
+Sigmoid'(z) = s(1−s)                 # 最大 0.25
+
+ReLU(z) = max(0, z)
+ReLU'(z) = 1 (z&gt;0) else 0
+
+GELU(z) ≈ 0.5 z (1 + tanh(√(2/π)(z + 0.044715 z³)))
+
+Softmax(z)_i = exp(z_i − max z) / Σ_j exp(z_j − max z)</pre>
+    <p>Softmax 先减最大值是为了数值稳定。温度 T 就是用 <code>z/T</code>：T 小更“独断”（接近 one-hot），T 大更平均。</p>
+
+    <h2 id="vanish">实验脚本画了三张图</h2>
+    <div class="card-grid">
+      <div class="card"><h4>16 个激活</h4><p>实线 f(z)，虚线 f'(z)，区间约 [-6, 6]。</p></div>
+      <div class="card"><h4>Softmax 温度</h4><p>同一组 logits 在不同 T 下的分布；T=1 时和应为 1。</p></div>
+      <div class="card"><h4>梯度连乘</h4><p>把某点上的 |f'| 连乘 15 层：Sigmoid 掉最快，ReLU 保持为 1。</p></div>
+    </div>
+
+    <div class="diagram">
+      <svg viewBox="0 0 640 180" width="640" height="180" xmlns="http://www.w3.org/2000/svg">
+        <text x="20" y="24" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">连乘示意（对数纵轴直觉）</text>
+        <line x1="50" y1="150" x2="600" y2="150" stroke="#94a3b8"/>
+        <line x1="50" y1="40" x2="50" y2="150" stroke="#94a3b8"/>
+        <path d="M50,50 L150,55 L250,70 L350,100 L450,135 L550,148" fill="none" stroke="#be123c" stroke-width="2.5"/>
+        <path d="M50,50 L550,50" fill="none" stroke="#0f766e" stroke-width="2.5" stroke-dasharray="6 4"/>
+        <text x="560" y="54" font-size="12" fill="#0f766e" font-family="sans-serif">ReLU</text>
+        <text x="430" y="120" font-size="12" fill="#be123c" font-family="sans-serif">Sigmoid 衰减</text>
+        <text x="300" y="170" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="sans-serif">层数 →</text>
+      </svg>
+      <div class="cap">跑完实验后对照 gradient_vanishing.png，曲线会更精确</div>
+    </div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 04
+# 或
+python lessons/04_activations.py</pre>
+    <p>结果在 <code>artifacts/04_activations/</code>：<code>activation_functions_all.png</code>、<code>softmax_demo.png</code>、<code>gradient_vanishing.png</code>。控制台还会打印 f(-2)/f(0)/f(2) 数值表。</p>
+
+    <h2 id="pick">怎么选用（实用口诀）</h2>
+    <table>
+      <tr><th>场景</th><th>建议</th></tr>
+      <tr><td>隐藏层默认</td><td>ReLU；不稳或死神经元再试 Leaky ReLU / GELU</td></tr>
+      <tr><td>二分类输出</td><td>Sigmoid + BCE</td></tr>
+      <tr><td>多分类输出</td><td>Softmax + 交叉熵（框架里常合并进 CrossEntropyLoss）</td></tr>
+      <tr><td>回归输出</td><td>常常直接线性（Linear）</td></tr>
+      <tr><td>不要做的事</td><td>不要在隐藏层乱堆 Softmax，通道会被强迫互斥</td></tr>
+    </table>
+
+    <div class="footer-nav">
+      <a href="03_backprop.html">← 03 反向传播</a>
+      <a href="05_mnist.html">下一课：MNIST →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

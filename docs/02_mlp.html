@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>02 多层感知机 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_mnist.html">05 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#arch">网络结构</a></li>
+      <li><a href="#loss">损失</a></li>
+      <li><a href="#train">训练步骤</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 02</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">从零实现</span>
+      </div>
+      <h1>多层感知机：把空间折一折再分类</h1>
+      <p class="lead">上一节的感知机只有一层，等价于一条直线。MLP 在中间插入隐藏层，先做非线性变换，再分类。XOR 和弯月牙形数据因此变得可解。</p>
+      <p class="meta">实现 <code>src/dllab/mlp.py</code> · 入口 <code>lessons/02_mlp.py</code></p>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>隐藏层到底在计算什么？</li>
+        <li>为什么必须加激活函数，而不能只堆线性层？</li>
+        <li>损失下降和准确率上升，在图上分别长什么样？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>XOR 的四团点：左下和右上是类 0，左上和右下是类 1。任何一条直线都会切错两团。</p>
+    <p>MLP 的办法：先用若干神经元把平面“扭”一下——例如让某一侧被 ReLU 压到 0，另一侧保持——扭完之后，两类在新空间里更容易用最后一层分开。</p>
+    <div class="callout warn"><strong>若没有非线性</strong>连续两个线性变换可以合并成一个：<code>(xW₁+b₁)W₂+b₂ = x(W₁W₂)+(b₁W₂+b₂)</code>。层数再多，整体仍是一条直线。非线性是深层网络有意义的前提。</div>
+
+    <h2 id="arch">本实验的网络结构</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 700 200" width="700" height="200" xmlns="http://www.w3.org/2000/svg">
+        <text x="60" y="24" text-anchor="middle" font-size="12" fill="#5a6a7d" font-family="sans-serif">输入 2</text>
+        <circle cx="60" cy="70" r="16" fill="#fff7e8" stroke="#b45309" stroke-width="2"/>
+        <circle cx="60" cy="130" r="16" fill="#fff7e8" stroke="#b45309" stroke-width="2"/>
+        <text x="60" y="74" text-anchor="middle" font-size="11" fill="#1a2332">x1</text>
+        <text x="60" y="134" text-anchor="middle" font-size="11" fill="#1a2332">x2</text>
+
+        <text x="220" y="24" text-anchor="middle" font-size="12" fill="#5a6a7d" font-family="sans-serif">隐藏 8 · ReLU</text>
+        <circle cx="220" cy="50" r="12" fill="#e8f0fe" stroke="#1f6feb"/><circle cx="220" cy="85" r="12" fill="#e8f0fe" stroke="#1f6feb"/>
+        <circle cx="220" cy="120" r="12" fill="#e8f0fe" stroke="#1f6feb"/><circle cx="220" cy="155" r="12" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="220" y="185" text-anchor="middle" font-size="10" fill="#5a6a7d">…</text>
+
+        <text x="380" y="24" text-anchor="middle" font-size="12" fill="#5a6a7d" font-family="sans-serif">隐藏 8 · ReLU</text>
+        <circle cx="380" cy="50" r="12" fill="#e8f0fe" stroke="#1f6feb"/><circle cx="380" cy="85" r="12" fill="#e8f0fe" stroke="#1f6feb"/>
+        <circle cx="380" cy="120" r="12" fill="#e8f0fe" stroke="#1f6feb"/><circle cx="380" cy="155" r="12" fill="#e8f0fe" stroke="#1f6feb"/>
+
+        <text x="540" y="24" text-anchor="middle" font-size="12" fill="#5a6a7d" font-family="sans-serif">输出 1 · Sigmoid</text>
+        <circle cx="540" cy="100" r="18" fill="#ffe8ee" stroke="#be123c" stroke-width="2"/>
+        <text x="540" y="104" text-anchor="middle" font-size="12" fill="#1a2332">ŷ</text>
+        <text x="620" y="104" font-size="12" fill="#5a6a7d" font-family="sans-serif">∈ (0,1)</text>
+
+        <line x1="76" y1="70" x2="208" y2="50" stroke="#94a3b8" opacity="0.6"/>
+        <line x1="76" y1="70" x2="208" y2="155" stroke="#94a3b8" opacity="0.6"/>
+        <line x1="76" y1="130" x2="208" y2="50" stroke="#94a3b8" opacity="0.6"/>
+        <line x1="76" y1="130" x2="208" y2="155" stroke="#94a3b8" opacity="0.6"/>
+        <line x1="232" y1="85" x2="368" y2="85" stroke="#94a3b8" opacity="0.7"/>
+        <line x1="232" y1="120" x2="368" y2="120" stroke="#94a3b8" opacity="0.7"/>
+        <line x1="392" y1="85" x2="522" y2="100" stroke="#94a3b8" opacity="0.7"/>
+        <line x1="392" y1="120" x2="522" y2="100" stroke="#94a3b8" opacity="0.7"/>
+      </svg>
+      <div class="cap">XOR 用 [2, 8, 8, 1]；月牙数据更弯，用更宽的 [2, 16, 16, 1]</div>
+    </div>
+
+    <pre class="formula">隐藏层:  z = a_prev @ W + b
+         a = ReLU(z) = max(0, z)
+
+输出层:  z_out = a @ W_out + b_out
+         ŷ = sigmoid(z_out) ∈ (0, 1)</pre>
+    <p>输出是“属于类 1 的概率”。标签用 0/1。预测时 <code>ŷ ≥ 0.5</code> 判为 1。</p>
+
+    <h2 id="loss">损失：二元交叉熵</h2>
+    <pre class="formula">L = − mean( y · log(ŷ) + (1−y) · log(1−ŷ) )</pre>
+    <p>真标签是 1 时希望 ŷ 靠近 1；是 0 时靠近 0。代码里加了极小的 <code>eps</code>，避免 <code>log(0)</code>。</p>
+    <p>参数初始化：ReLU 网络用 <strong>He 初始化</strong> <code>W ~ N(0, 2/n_in)</code>；Tanh 用 Xavier。偏置从 0 开始。</p>
+
+    <h2 id="train">训练在做什么</h2>
+    <div class="card-grid">
+      <div class="card"><h4>1. Forward</h4><p>算出每层 z、a，缓存下来给反向用。</p></div>
+      <div class="card"><h4>2. Loss / Acc</h4><p>交叉熵 + 阈值准确率。</p></div>
+      <div class="card"><h4>3. Backward</h4><p>从 (ŷ−y) 往回传，得到 dW、db。</p></div>
+      <div class="card"><h4>4. Update</h4><p>W ← W − lr·dW，b 同理。</p></div>
+    </div>
+    <p>输出层用了 Sigmoid + BCE，误差恰好是 <code>ŷ − y</code>（再除以样本数）。隐藏层误差再乘 ReLU 导数：z≤0 处梯度为 0。逐步推导见<a href="03_backprop.html">实验 03</a>。</p>
+
+    <table>
+      <tr><th>数据</th><th>难点</th><th>期望</th></tr>
+      <tr><td>XOR 四团噪声点</td><td>线性不可分</td><td>训练准确率接近 100%</td></tr>
+      <tr><td>Two Moons 月牙</td><td>边界弯曲</td><td>决策边界跟着月牙弯</td></tr>
+    </table>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 02
+# 或
+python lessons/02_mlp.py</pre>
+    <p>结果：<code>artifacts/02_mlp/mlp_result.png</code>。决策边界网格约 120×120，一般几十秒内结束。</p>
+
+    <h2 id="read">看图时注意什么</h2>
+    <ul>
+      <li>左图彩色背景是 ŷ 概率，黑虚线是 0.5 等高线；XOR 应出现“对角同色”分区。</li>
+      <li>中图损失总体下降；右图准确率升到接近 100%。</li>
+      <li>若损失下降但边界仍乱：轮数不够或学习率过大震荡。</li>
+    </ul>
+    <div class="callout ok"><strong>小实验</strong>把 <code>layer_sizes</code> 改成 <code>[2, 1]</code> 再跑 XOR，会退回单层，学不会——亲手验证“非线性 + 深度”的必要性。</div>
+
+    <div class="footer-nav">
+      <a href="01_perceptron.html">← 01 感知机</a>
+      <a href="03_backprop.html">下一课：反向传播 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

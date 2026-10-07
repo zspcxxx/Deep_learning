@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学习导读 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_mnist.html">05 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">验证看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#path">学习路径</a></li>
+      <li><a href="#setup">环境准备</a></li>
+      <li><a href="#run">单独运行</a></li>
+      <li><a href="#map">实验地图</a></li>
+      <li><a href="#code">对照代码</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">入门路径</span>
+        <span class="chip teal">5 个实验</span>
+        <span class="chip amber">可读 + 可跑</span>
+      </div>
+      <h1>从一条直线到识别手写数字</h1>
+      <p class="lead">这套实验刻意把深度学习里最容易被跳过的环节摊开：模型怎么预测、错了怎么改参数、非线性从哪里来、卷积为什么适合图像。你不需要先啃完一本书；每节都按「问题 → 直觉 → 公式 → 代码 → 跑通看图」推进。</p>
+    </div>
+
+    <h2 id="path">推荐学习路径</h2>
+    <div class="diagram">
+      <svg viewBox="0 0 760 120" width="760" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f6feb"/></marker>
+        </defs>
+        <rect x="10" y="30" width="120" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="70" y="52" text-anchor="middle" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">01 感知机</text>
+        <text x="70" y="70" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">线性边界</text>
+        <line x1="130" y1="57" x2="158" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="160" y="30" width="120" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="220" y="52" text-anchor="middle" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">02 MLP</text>
+        <text x="220" y="70" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">隐藏层</text>
+        <line x1="280" y1="57" x2="308" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="310" y="30" width="120" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
+        <text x="370" y="52" text-anchor="middle" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">03 反向传播</text>
+        <text x="370" y="70" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">梯度怎么来</text>
+        <line x1="430" y1="57" x2="458" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="460" y="30" width="120" height="54" rx="10" fill="#ffe8ee" stroke="#be123c"/>
+        <text x="520" y="52" text-anchor="middle" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">04 激活函数</text>
+        <text x="520" y="70" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">非线性/梯度</text>
+        <line x1="580" y1="57" x2="608" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="610" y="30" width="130" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="675" y="52" text-anchor="middle" font-size="13" fill="#1a2332" font-family="Noto Sans SC,sans-serif">05 MNIST</text>
+        <text x="675" y="70" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">真实图像</text>
+      </svg>
+      <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
+    </div>
+
+    <div class="lesson-cards">
+      <a class="lesson-card" href="01_perceptron.html">
+        <div class="num">EXPERIMENT 01</div>
+        <h3>单层感知机</h3>
+        <p>学会画一条直线；AND/OR 能收敛，XOR 永远学不会——这是模型能力边界，不是调参问题。</p>
+      </a>
+      <a class="lesson-card" href="02_mlp.html">
+        <div class="num">EXPERIMENT 02</div>
+        <h3>多层感知机</h3>
+        <p>隐藏层 + 非线性把空间折弯，XOR 与月牙形数据终于可分。</p>
+      </a>
+      <a class="lesson-card" href="03_backprop.html">
+        <div class="num">EXPERIMENT 03</div>
+        <h3>反向传播</h3>
+        <p>用链式法则把误差传回去；再用数值梯度检查证明实现没错。</p>
+      </a>
+      <a class="lesson-card" href="04_activations.html">
+        <div class="num">EXPERIMENT 04</div>
+        <h3>激活函数</h3>
+        <p>弯折从哪里来？为什么 Sigmoid 深层容易“梯度乘没”，ReLU 更常用？</p>
+      </a>
+      <a class="lesson-card" href="05_mnist.html">
+        <div class="num">EXPERIMENT 05</div>
+        <h3>MNIST</h3>
+        <p>把前面的积木接到真实图像：MLP 能用，CNN 更合适。</p>
+      </a>
+    </div>
+
+    <h2 id="setup">环境准备（只需一次）</h2>
+    <pre class="cmd">cd deep_learning
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -e .
+# 仅第 05 个实验需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132</pre>
+    <div class="callout ok"><strong>提示</strong>01–04 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
+
+    <h2 id="run">单独跑某一个实验</h2>
+    <div class="two-col">
+      <div class="panel">
+        <h4>推荐启动器</h4>
+        <pre class="cmd">python scripts/run_lesson.py --list
+python scripts/run_lesson.py 01
+python scripts/run_lesson.py 02
+python scripts/run_lesson.py 03-visual
+python scripts/run_lesson.py 03
+python scripts/run_lesson.py 04
+python scripts/run_lesson.py 05 --epochs 3</pre>
+      </div>
+      <div class="panel">
+        <h4>直接跑入口脚本</h4>
+        <pre class="cmd">python lessons/01_perceptron.py
+python lessons/02_mlp.py
+python lessons/03_backprop_visual.py
+python lessons/03_backpropagation.py
+python lessons/04_activations.py
+python lessons/05_mnist.py --epochs 3</pre>
+      </div>
+    </div>
+    <p>结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
+    <pre class="cmd">python web/app.py
+# 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
+
+    <h2 id="map">五个实验分别带走什么</h2>
+    <table>
+      <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
+      <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
+      <tr><td><a href="02_mlp.html">02</a></td><td>多层感知机</td><td>无激活函数时，多层仍等价于一层线性</td><td>约 1 分钟</td></tr>
+      <tr><td><a href="03_backprop.html">03</a></td><td>反向传播</td><td>BCE+Sigmoid 输出误差常化为 ŷ−y；必须做梯度检查</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="04_activations.html">04</a></td><td>激活函数</td><td>|f'|≪1 会层层衰减；隐藏层默认 ReLU 家族</td><td>约 30 秒</td></tr>
+      <tr><td><a href="05_mnist.html">05</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
+    </table>
+
+    <h2 id="code">阅读时怎么对照代码</h2>
+    <div class="card-grid">
+      <div class="card"><h4>src/dllab/</h4><p>模型、数据、画图——“零件库”。对着公式读类方法。</p></div>
+      <div class="card"><h4>lessons/</h4><p>组装一次完整实验并写 artifacts——“剧本”。</p></div>
+      <div class="card"><h4>docs/</h4><p>原理与实现说明。可直接用浏览器打开 HTML。</p></div>
+      <div class="card"><h4>web/app.py</h4><p>验证看板 + 挂载本学习页。</p></div>
+    </div>
+
+    <div class="footer-nav">
+      <span></span>
+      <a href="01_perceptron.html">开始第一课：单层感知机 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

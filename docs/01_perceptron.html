@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>01 单层感知机 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_mnist.html">05 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#math">公式</a></li>
+      <li><a href="#update">学习规则</a></li>
+      <li><a href="#worked">手算例子</a></li>
+      <li><a href="#code">代码对应</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 01</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">NumPy</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>单层感知机：一条会移动的直线</h1>
+          <p class="lead">感知机是神经网络的祖先。它只会做一件事：在平面上画一条直线，把点分成两边。先把这件事吃透，后面的“多层”“反向传播”才不会像黑盒。</p>
+          <p class="meta">实现 <code>src/dllab/perceptron.py</code> · 入口 <code>lessons/01_perceptron.py</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:10px;">
+          <svg viewBox="0 0 280 180" width="280" height="180" xmlns="http://www.w3.org/2000/svg">
+            <rect width="280" height="180" fill="#fafcff"/>
+            <line x1="30" y1="150" x2="250" y2="30" stroke="#1f6feb" stroke-width="3" stroke-dasharray="6 4"/>
+            <circle cx="70" cy="50" r="7" fill="#ef4444"/><circle cx="100" cy="40" r="7" fill="#ef4444"/>
+            <circle cx="80" cy="80" r="7" fill="#ef4444"/><circle cx="120" cy="60" r="7" fill="#ef4444"/>
+            <circle cx="190" cy="120" r="7" fill="#3b82f6"/><circle cx="210" cy="140" r="7" fill="#3b82f6"/>
+            <circle cx="170" cy="145" r="7" fill="#3b82f6"/><circle cx="230" cy="110" r="7" fill="#3b82f6"/>
+            <text x="40" y="170" font-size="11" fill="#5a6a7d" font-family="sans-serif">决策边界：w·x + b = 0</text>
+          </svg>
+          <div class="cap">红 / 蓝两类被一条直线分开</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>模型如何根据输入给出 <code>+1</code> 或 <code>-1</code>？</li>
+        <li>分错一个点时，权重应该往哪边改？</li>
+        <li>为什么 AND、OR 能学会，XOR 怎么学都学不会？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>把每个样本看成平面上的点 <code>(x₁, x₂)</code>。感知机保存一组参数：权重向量 <code>w</code> 和偏置 <code>b</code>。对一个点算得分：</p>
+    <pre class="formula">s = w₁·x₁ + w₂·x₂ + b</pre>
+    <div class="card-grid">
+      <div class="card"><h4>s ≥ 0</h4><p>模型预测正类 <strong>+1</strong></p></div>
+      <div class="card"><h4>s &lt; 0</h4><p>模型预测负类 <strong>-1</strong></p></div>
+      <div class="card"><h4>s = 0</h4><p>全体这样的点连成<strong>决策边界</strong>（二维时是直线）</p></div>
+    </div>
+    <div class="callout danger"><strong>关键限制</strong>一条直线没法把“对角是一类、另外对角是另一类”的 XOR 切开。这不是学习率没调好，是<strong>模型表达能力不够</strong>。</div>
+
+    <h2 id="math">预测公式</h2>
+    <pre class="formula">s = w · x + b
+ŷ = +1    若 s ≥ 0
+ŷ = -1    若 s &lt; 0</pre>
+    <p>本实验标签也用 <code>+1 / -1</code>（不是 0/1）。这样有一个方便的判错条件：若 <code>y · s ≤ 0</code>，说明标签与得分符号不一致，这个点分错了。</p>
+
+    <div class="diagram">
+      <svg viewBox="0 0 720 220" width="720" height="220" xmlns="http://www.w3.org/2000/svg">
+        <text x="60" y="28" font-size="14" font-weight="700" fill="#1a2332" font-family="Noto Sans SC,sans-serif">AND / OR：线性可分</text>
+        <rect x="20" y="40" width="200" height="160" rx="8" fill="#fff" stroke="#d5dee9"/>
+        <circle cx="60" cy="160" r="8" fill="#3b82f6"/><text x="60" y="185" text-anchor="middle" font-size="10" fill="#5a6a7d">(0,0)−</text>
+        <circle cx="60" cy="70" r="8" fill="#3b82f6"/><text x="60" y="55" text-anchor="middle" font-size="10" fill="#5a6a7d">(0,1)−</text>
+        <circle cx="160" cy="160" r="8" fill="#3b82f6"/><text x="160" y="185" text-anchor="middle" font-size="10" fill="#5a6a7d">(1,0)−</text>
+        <circle cx="160" cy="70" r="8" fill="#ef4444"/><text x="160" y="55" text-anchor="middle" font-size="10" fill="#5a6a7d">(1,1)+</text>
+        <line x1="40" y1="110" x2="190" y2="100" stroke="#1f6feb" stroke-width="2" stroke-dasharray="5 3"/>
+
+        <text x="310" y="28" font-size="14" font-weight="700" fill="#1a2332" font-family="Noto Sans SC,sans-serif">XOR：线性不可分</text>
+        <rect x="270" y="40" width="200" height="160" rx="8" fill="#fff" stroke="#d5dee9"/>
+        <circle cx="310" cy="160" r="8" fill="#3b82f6"/><text x="310" y="185" text-anchor="middle" font-size="10" fill="#5a6a7d">(0,0)−</text>
+        <circle cx="310" cy="70" r="8" fill="#ef4444"/><text x="310" y="55" text-anchor="middle" font-size="10" fill="#5a6a7d">(0,1)+</text>
+        <circle cx="410" cy="160" r="8" fill="#ef4444"/><text x="410" y="185" text-anchor="middle" font-size="10" fill="#5a6a7d">(1,0)+</text>
+        <circle cx="410" cy="70" r="8" fill="#3b82f6"/><text x="410" y="55" text-anchor="middle" font-size="10" fill="#5a6a7d">(1,1)−</text>
+        <line x1="290" y1="100" x2="450" y2="140" stroke="#be123c" stroke-width="2" stroke-dasharray="5 3"/>
+        <text x="370" y="120" text-anchor="middle" font-size="11" fill="#be123c" font-family="Noto Sans SC,sans-serif">怎么画都会切错</text>
+
+        <text x="560" y="28" font-size="14" font-weight="700" fill="#1a2332" font-family="Noto Sans SC,sans-serif">怎么办？</text>
+        <rect x="520" y="50" width="180" height="130" rx="8" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="610" y="90" text-anchor="middle" font-size="13" fill="#0f766e" font-family="Noto Sans SC,sans-serif">加隐藏层</text>
+        <text x="610" y="115" text-anchor="middle" font-size="13" fill="#0f766e" font-family="Noto Sans SC,sans-serif">→ 实验 02 MLP</text>
+        <text x="610" y="145" text-anchor="middle" font-size="11" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">先折空间再分类</text>
+      </svg>
+      <div class="cap">本实验故意留下 XOR 失败，作为进入多层网络的动机</div>
+    </div>
+
+    <h2 id="update">分错了怎么改参数</h2>
+    <p>感知机学习规则：<strong>只在分错时更新</strong>，分对就跳过。</p>
+    <pre class="formula">w ← w + lr · y · x
+b ← b + lr · y</pre>
+    <p>含义：把决策边界往“冤枉了这个点”的反方向推一把。学习率 <code>lr</code> 只是步子大小。</p>
+    <div class="callout ok"><strong>收敛定理</strong>若数据<strong>线性可分</strong>（存在某条直线能完美切开），该规则在有限步内会把误分类降到 0。XOR 不满足前提，所以会一直抖、不会收敛。</div>
+
+    <h2 id="worked">手算一个小例子</h2>
+    <div class="worked">
+      <h4>样本 x=(1, 1)，真标签 y=+1，当前 w=(0,0)，b=0，lr=0.1</h4>
+      <dl class="kv">
+        <dt>得分 s</dt><dd>0·1 + 0·1 + 0 = 0  →  ŷ=+1？边界上按 ≥0 判正，这里刚好临界</dd>
+        <dt>再换一例</dt><dd>若 y=+1 且当前 s=-0.5（判负），则 y·s&lt;0，触发更新</dd>
+        <dt>更新后</dt><dd>w ← (0,0) + 0.1·(+1)·(1,1) = (0.1, 0.1)；b ← 0.1</dd>
+        <dt>新得分</dt><dd>s' = 0.1+0.1+0.1 = 0.3 &gt; 0，同一个点被“纠正”</dd>
+      </dl>
+    </div>
+
+    <h2 id="code">代码如何对应</h2>
+    <p><code>Perceptron.fit</code> 里最核心的几行：</p>
+    <pre>for xi, yi in zip(X, y):
+    if yi * (np.dot(self.w, xi) + self.b) &lt;= 0:   # 分错
+        self.w += self.lr * yi * xi
+        self.b += self.lr * yi</pre>
+    <p>外层再套 epoch：把全部样本扫一遍算一轮。某一轮一个都没分错，就提前停。</p>
+    <p>数据用<strong>截断高斯</strong>：在逻辑门四个角附近撒点，但严格裁在小方块内，避免两类重叠。这样 AND/OR 理论上可分，图上又看起来散。</p>
+
+    <h2 id="run">实验脚本做了什么 · 如何运行</h2>
+    <ol class="steps">
+      <li>生成 AND、OR、XOR 各约 200 个点，分别训练一个感知机。</li>
+      <li>再生成两类中心在对角的二维点，训练第四个模型。</li>
+      <li>画出决策边界、每轮误分类数，以及误差曲线对比。</li>
+    </ol>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 01
+# 等价：
+python lessons/01_perceptron.py</pre>
+    <p>结果：<code>artifacts/01_perceptron/perceptron_result.png</code>、<code>metrics.json</code>。无需 PyTorch；XOR 故意不收敛，脚本把其轮数上限压到约 400。</p>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th>位置</th><th>正常现象</th><th>说明</th></tr>
+      <tr><td>第一行边界</td><td>AND/OR 黑虚线切开红蓝点</td><td>XOR 怎么画都会切错一批</td></tr>
+      <tr><td>第二行误差</td><td>可分模型误分类掉到 0</td><td>XOR 曲线长期抖动</td></tr>
+      <tr><td>metrics.json</td><td>AND/OR <code>converged=true</code></td><td>XOR <code>converged=false</code> 是<strong>预期结论</strong>，不是脚本失败</td></tr>
+    </table>
+
+    <h3>自己改一改</h3>
+    <ul>
+      <li>把 XOR 的 <code>n_iters</code> 加大，确认它仍然不收敛。</li>
+      <li>把 AND 的 <code>half_width</code> 加大到两类重叠，观察可分性破坏后准确率再也到不了 100%。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="index.html">← 导读</a>
+      <a href="02_mlp.html">下一课：多层感知机 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

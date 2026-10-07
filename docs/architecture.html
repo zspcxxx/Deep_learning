@@ -1,0 +1,1729 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MNIST 程序架构文档</title>
+<style>
+    /* ==================== 基础重置 ==================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+        --primary: #667eea;
+        --primary-dark: #5568d3;
+        --secondary: #764ba2;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --danger: #ef4444;
+        --info: #3b82f6;
+        --dark: #1e293b;
+        --gray: #64748b;
+        --light: #f1f5f9;
+        --border: #e2e8f0;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+        --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                     "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: #f5f7fa;
+        color: #2c3e50;
+        line-height: 1.7;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    /* ==================== 顶部标题栏 ==================== */
+    header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 60px 20px 50px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    header::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+            radial-gradient(circle at 20% 30%, rgba(255,255,255,0.15) 0%, transparent 40%),
+            radial-gradient(circle at 80% 70%, rgba(255,255,255,0.1) 0%, transparent 40%);
+        pointer-events: none;
+    }
+
+    header h1 {
+        font-size: 2.6rem;
+        font-weight: 700;
+        margin-bottom: 14px;
+        position: relative;
+        letter-spacing: -0.5px;
+    }
+
+    header p {
+        font-size: 1.1rem;
+        opacity: 0.95;
+        position: relative;
+    }
+
+    header .meta {
+        margin-top: 20px;
+        display: inline-flex;
+        gap: 18px;
+        font-size: 0.9rem;
+        background: rgba(255, 255, 255, 0.18);
+        padding: 8px 22px;
+        border-radius: 30px;
+        backdrop-filter: blur(10px);
+        position: relative;
+    }
+
+    /* ==================== 布局 ==================== */
+    .container {
+        display: flex;
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 30px 20px;
+        gap: 28px;
+    }
+
+    /* ==================== 侧边导航 ==================== */
+    nav {
+        flex: 0 0 250px;
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
+        background: white;
+        border-radius: 14px;
+        padding: 22px;
+        box-shadow: var(--shadow-md);
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+    }
+
+    nav h3 {
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        color: #94a3b8;
+        margin-bottom: 16px;
+        font-weight: 600;
+    }
+
+    nav ul { list-style: none; }
+
+    nav li { margin-bottom: 4px; }
+
+    nav a {
+        display: flex;
+        align-items: center;
+        padding: 9px 14px;
+        color: #475569;
+        text-decoration: none;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        transition: all 0.2s ease;
+        border-left: 3px solid transparent;
+        font-weight: 500;
+    }
+
+    nav a:hover {
+        background: linear-gradient(90deg, #eef2ff 0%, #f8fafc 100%);
+        border-left-color: var(--primary);
+        color: var(--primary);
+        transform: translateX(2px);
+    }
+
+    /* ==================== 主内容区 ==================== */
+    main { flex: 1; min-width: 0; }
+
+    section {
+        background: white;
+        border-radius: 14px;
+        padding: 32px;
+        margin-bottom: 26px;
+        box-shadow: var(--shadow-md);
+        scroll-margin-top: 20px;
+    }
+
+    section h2 {
+        font-size: 1.4rem;
+        color: var(--dark);
+        margin-bottom: 6px;
+        padding-bottom: 14px;
+        border-bottom: 3px solid var(--primary);
+        display: inline-block;
+        font-weight: 700;
+    }
+
+    section .desc {
+        color: var(--gray);
+        font-size: 0.95rem;
+        margin: 16px 0 24px 0;
+    }
+
+    /* ============================================================ */
+    /*                      架构图通用样式                          */
+    /* ============================================================ */
+
+    /* ---------- 图容器 ---------- */
+    .diagram-box {
+        background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+        border-radius: 12px;
+        padding: 32px 24px;
+        margin: 16px 0;
+        border: 1px solid var(--border);
+        position: relative;
+        overflow-x: auto;
+    }
+
+    /* ---------- 层/块基础样式 ---------- */
+    .layer {
+        background: white;
+        border-radius: 10px;
+        padding: 14px 18px;
+        border: 2px solid var(--border);
+        font-size: 0.88rem;
+        font-weight: 600;
+        text-align: center;
+        transition: all 0.25s ease;
+        box-shadow: var(--shadow-sm);
+        position: relative;
+    }
+
+    .layer:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+        border-color: var(--primary);
+    }
+
+    .layer .label {
+        font-size: 0.95rem;
+        color: var(--dark);
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .layer .sub {
+        font-size: 0.78rem;
+        color: var(--gray);
+        font-weight: 400;
+    }
+
+    /* ---------- 颜色主题 ---------- */
+    .layer.blue    { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-color: #60a5fa; }
+    .layer.green   { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border-color: #34d399; }
+    .layer.purple  { background: linear-gradient(135deg, #ede9fe, #ddd6fe); border-color: #a78bfa; }
+    .layer.orange  { background: linear-gradient(135deg, #fed7aa, #fdba74); border-color: #fb923c; }
+    .layer.pink    { background: linear-gradient(135deg, #fce7f3, #fbcfe8); border-color: #f472b6; }
+    .layer.yellow  { background: linear-gradient(135deg, #fef3c7, #fde68a); border-color: #fbbf24; }
+    .layer.red     { background: linear-gradient(135deg, #fee2e2, #fecaca); border-color: #f87171; }
+    .layer.gray    { background: linear-gradient(135deg, #f1f5f9, #e2e8f0); border-color: #94a3b8; }
+
+    /* ---------- 垂直箭头 ---------- */
+    .arrow-down {
+        width: 0;
+        height: 0;
+        border-left: 10px solid transparent;
+        border-right: 10px solid transparent;
+        border-top: 14px solid var(--primary);
+        margin: 10px auto;
+        filter: drop-shadow(0 2px 3px rgba(102, 126, 234, 0.3));
+    }
+
+    .arrow-down.green { border-top-color: var(--success); }
+    .arrow-down.orange { border-top-color: var(--warning); }
+
+    /* ---------- 垂直连接线（带箭头） ---------- */
+    .v-line {
+        width: 3px;
+        height: 24px;
+        background: linear-gradient(to bottom, var(--primary), var(--primary-dark));
+        margin: 0 auto;
+        position: relative;
+        border-radius: 2px;
+    }
+
+    .v-line::after {
+        content: '';
+        position: absolute;
+        bottom: -8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 9px solid var(--primary-dark);
+    }
+
+    /* ============================================================ */
+    /*             图 ①：模块架构图（4 层卡片）                     */
+    /* ============================================================ */
+    .module-arch {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+        margin: 24px 0;
+        position: relative;
+    }
+
+    .module-card {
+        background: white;
+        border-radius: 14px;
+        padding: 22px 18px;
+        text-align: center;
+        border: 2px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .module-card::after {
+        content: '▶';
+        position: absolute;
+        right: -16px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary);
+        font-size: 1.1rem;
+        opacity: 0.6;
+    }
+
+    .module-card:last-child::after { display: none; }
+
+    .module-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary);
+    }
+
+    .module-card .icon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .module-card .title {
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 6px;
+        color: var(--dark);
+    }
+
+    .module-card .en {
+        font-size: 0.72rem;
+        color: var(--gray);
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        margin-bottom: 10px;
+    }
+
+    .module-card .items {
+        font-size: 0.8rem;
+        color: #475569;
+        text-align: left;
+        line-height: 1.8;
+        padding-top: 10px;
+        border-top: 1px dashed var(--border);
+    }
+
+    .module-card .items code {
+        background: #eef2ff;
+        color: #4c5fd4;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+
+    .module-card.c1 { border-top: 4px solid #3b82f6; }
+    .module-card.c2 { border-top: 4px solid #8b5cf6; }
+    .module-card.c3 { border-top: 4px solid #10b981; }
+    .module-card.c4 { border-top: 4px solid #f59e0b; }
+
+    /* ============================================================ */
+    /*             图 ②：数据流图（垂直流程图）                     */
+    /* ============================================================ */
+    .dataflow {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        padding: 20px 0;
+    }
+
+    .df-node {
+        background: white;
+        border-radius: 12px;
+        padding: 14px 24px;
+        min-width: 320px;
+        max-width: 520px;
+        text-align: center;
+        border: 2px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.25s ease;
+        position: relative;
+    }
+
+    .df-node:hover {
+        transform: scale(1.03);
+        box-shadow: var(--shadow-md);
+    }
+
+    .df-node .title {
+        font-weight: 700;
+        color: var(--dark);
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+    }
+
+    .df-node .detail {
+        font-size: 0.78rem;
+        color: var(--gray);
+    }
+
+    .df-node.primary {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-color: transparent;
+    }
+
+    .df-node.primary .title,
+    .df-node.primary .detail { color: white; }
+
+    .df-node.success {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        border-color: transparent;
+    }
+
+    .df-node.success .title,
+    .df-node.success .detail { color: white; }
+
+    /* 双列并排 */
+    .df-row {
+        display: flex;
+        gap: 20px;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .df-row .df-node { min-width: 220px; }
+
+    /* ============================================================ */
+    /*             图 ③：CNN 模型结构                               */
+    /* ============================================================ */
+    .cnn-flow {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .cnn-block {
+        width: 100%;
+        max-width: 720px;
+        background: white;
+        border-radius: 12px;
+        padding: 18px 22px;
+        border-left: 6px solid var(--primary);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.25s ease;
+    }
+
+    .cnn-block:hover {
+        transform: translateX(4px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .cnn-block .block-title {
+        font-weight: 700;
+        color: var(--primary);
+        font-size: 0.9rem;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .cnn-block .block-title::before {
+        content: '';
+        width: 8px;
+        height: 8px;
+        background: var(--primary);
+        border-radius: 50%;
+    }
+
+    .cnn-layer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        background: #f8fafc;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+        border-left: 3px solid #cbd5e1;
+    }
+
+    .cnn-layer:hover { background: #eef2ff; border-left-color: var(--primary); }
+
+    .cnn-layer .op {
+        font-weight: 600;
+        color: var(--dark);
+    }
+
+    .cnn-layer .shape {
+        font-family: "Consolas", monospace;
+        font-size: 0.78rem;
+        color: var(--gray);
+        background: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid var(--border);
+    }
+
+    .cnn-layer.conv    { border-left-color: #3b82f6; }
+    .cnn-layer.relu    { border-left-color: #10b981; }
+    .cnn-layer.pool    { border-left-color: #f59e0b; }
+    .cnn-layer.dropout { border-left-color: #ef4444; }
+    .cnn-layer.linear  { border-left-color: #8b5cf6; }
+    .cnn-layer.flatten { border-left-color: #06b6d4; }
+
+    /* ============================================================ */
+    /*             图 ④：训练流程图（横向流程）                     */
+    /* ============================================================ */
+    .train-flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        justify-content: center;
+        align-items: center;
+        margin: 20px 0;
+    }
+
+    .tf-step {
+        background: white;
+        border-radius: 12px;
+        padding: 14px 18px;
+        min-width: 130px;
+        text-align: center;
+        border: 2px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.25s ease;
+        font-size: 0.85rem;
+        font-weight: 600;
+        position: relative;
+    }
+
+    .tf-step:hover {
+        transform: translateY(-3px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .tf-step .num {
+        display: inline-block;
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        background: var(--primary);
+        color: white;
+        border-radius: 50%;
+        font-size: 0.75rem;
+        margin-bottom: 6px;
+        font-weight: 700;
+    }
+
+    .tf-step .text {
+        color: var(--dark);
+        display: block;
+    }
+
+    .tf-step .code {
+        font-family: "Consolas", monospace;
+        font-size: 0.7rem;
+        color: var(--gray);
+        display: block;
+        margin-top: 4px;
+    }
+
+    .tf-step.blue    { border-top: 4px solid #3b82f6; }
+    .tf-step.green   { border-top: 4px solid #10b981; }
+    .tf-step.orange  { border-top: 4px solid #f59e0b; }
+    .tf-step.purple  { border-top: 4px solid #8b5cf6; }
+    .tf-step.red     { border-top: 4px solid #ef4444; }
+
+    .tf-arrow {
+        font-size: 1.3rem;
+        color: var(--primary);
+        opacity: 0.6;
+    }
+
+    /* ============================================================ */
+    /*             图 ⑤：可视化输出（卡片网格）                     */
+    /* ============================================================ */
+    .viz-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+        margin-top: 20px;
+    }
+
+    .viz-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        border: 2px solid var(--border);
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    .viz-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: linear-gradient(90deg, var(--primary), var(--secondary));
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.3s ease;
+    }
+
+    .viz-card:hover::before { transform: scaleX(1); }
+
+    .viz-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--shadow-lg);
+        border-color: var(--primary);
+    }
+
+    .viz-card .vicon {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .viz-card h4 {
+        color: var(--dark);
+        font-size: 0.95rem;
+        margin-bottom: 8px;
+        font-weight: 700;
+    }
+
+    .viz-card p {
+        color: var(--gray);
+        font-size: 0.85rem;
+        line-height: 1.6;
+    }
+
+    .viz-card .file {
+        display: inline-block;
+        margin-top: 10px;
+        font-family: "Consolas", monospace;
+        font-size: 0.72rem;
+        background: #eef2ff;
+        color: #4c5fd4;
+        padding: 3px 8px;
+        border-radius: 4px;
+    }
+
+    /* ============================================================ */
+    /*             图 ⑥：文件目录树                                 */
+    /* ============================================================ */
+    .file-tree {
+        background: #1e293b;
+        border-radius: 12px;
+        padding: 24px 28px;
+        font-family: "JetBrains Mono", "Consolas", monospace;
+        font-size: 0.88rem;
+        line-height: 2;
+        color: #e2e8f0;
+        overflow-x: auto;
+        box-shadow: var(--shadow-md);
+    }
+
+    .file-tree .folder { color: #fbbf24; font-weight: 600; }
+    .file-tree .file { color: #93c5fd; }
+    .file-tree .comment { color: #64748b; font-style: italic; }
+    .file-tree .line { color: #475569; }
+
+    /* ============================================================ */
+    /*             图 ⑦：调用关系树                                 */
+    /* ============================================================ */
+    .call-tree {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0;
+        padding: 20px 0;
+    }
+
+    .call-root {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 14px 36px;
+        border-radius: 12px;
+        font-weight: 700;
+        font-size: 1rem;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .call-branches {
+        display: flex;
+        gap: 30px;
+        margin-top: 10px;
+        position: relative;
+        padding-top: 30px;
+    }
+
+    .call-branches::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        width: 3px;
+        height: 30px;
+        background: var(--primary);
+        transform: translateX(-50%);
+    }
+
+    .call-branch {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        position: relative;
+    }
+
+    .call-branch::before {
+        content: '';
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        width: 2px;
+        height: 30px;
+        background: var(--primary);
+        opacity: 0.5;
+    }
+
+    .call-node {
+        background: white;
+        border: 2px solid var(--primary);
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--primary);
+        box-shadow: var(--shadow-sm);
+        transition: all 0.25s ease;
+    }
+
+    .call-node:hover {
+        background: var(--primary);
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .call-children {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 2px dashed var(--border);
+    }
+
+    .call-child {
+        background: #f8fafc;
+        border-left: 3px solid var(--primary);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        color: var(--gray);
+        font-family: "Consolas", monospace;
+    }
+
+    /* ============================================================ */
+    /*             图 ⑧：依赖关系图                                 */
+    /* ============================================================ */
+    .deps-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.2fr;
+        gap: 28px;
+        align-items: center;
+        margin-top: 20px;
+    }
+
+    .deps-source {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .dep-pill {
+        background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+        border: 2px solid #60a5fa;
+        border-radius: 30px;
+        padding: 10px 20px;
+        font-family: "Consolas", monospace;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #1e40af;
+        text-align: center;
+        transition: all 0.25s ease;
+        position: relative;
+    }
+
+    .dep-pill::after {
+        content: '→';
+        position: absolute;
+        right: -26px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--primary);
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+
+    .dep-pill:hover {
+        transform: translateX(4px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .deps-target {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+    }
+
+    .deps-target h4 {
+        font-size: 1.1rem;
+        margin-bottom: 14px;
+        font-weight: 700;
+    }
+
+    .deps-target .dep-group {
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 10px;
+        padding: 12px 16px;
+        margin-bottom: 10px;
+        backdrop-filter: blur(10px);
+        text-align: left;
+    }
+
+    .deps-target .dep-group .gt {
+        font-size: 0.75rem;
+        opacity: 0.85;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 6px;
+    }
+
+    .deps-target .dep-group .gi {
+        font-family: "Consolas", monospace;
+        font-size: 0.82rem;
+        line-height: 1.7;
+    }
+
+    /* ============================================================ */
+    /*             图 ⑨：时序图                                     */
+    /* ============================================================ */
+    .seq-container {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        overflow-x: auto;
+        border: 1px solid var(--border);
+    }
+
+    .seq-actors {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+        min-width: 720px;
+        margin-bottom: 16px;
+    }
+
+    .actor {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 10px 8px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 600;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .actor.orange { background: linear-gradient(135deg, #f59e0b, #d97706); }
+    .actor.green  { background: linear-gradient(135deg, #10b981, #059669); }
+    .actor.blue   { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+    .actor.pink   { background: linear-gradient(135deg, #ec4899, #db2777); }
+    .actor.purple { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+
+    .seq-lines {
+        display: grid;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 8px;
+        min-width: 720px;
+        position: relative;
+    }
+
+    .seq-lines::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-image: repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(16.666% - 1.5px),
+            #cbd5e1 calc(16.666% - 1.5px),
+            #cbd5e1 calc(16.666% - 0.5px)
+        );
+        pointer-events: none;
+    }
+
+    .seq-step {
+        grid-column: 1 / -1;
+        background: #f8fafc;
+        border-radius: 8px;
+        padding: 10px 16px;
+        margin-bottom: 6px;
+        font-size: 0.82rem;
+        color: var(--dark);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: relative;
+        z-index: 2;
+        border: 1px solid var(--border);
+        transition: all 0.2s ease;
+    }
+
+    .seq-step:hover {
+        background: #eef2ff;
+        border-color: var(--primary);
+        transform: translateX(4px);
+    }
+
+    .seq-step .step-num {
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        background: var(--primary);
+        color: white;
+        border-radius: 50%;
+        text-align: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+
+    .seq-step .step-text {
+        flex: 1;
+        font-family: "Consolas", monospace;
+    }
+
+    /* ============================================================ */
+    /*             其他样式                                         */
+    /* ============================================================ */
+    .highlight {
+        background: linear-gradient(135deg, #fff9e6 0%, #fff3cc 100%);
+        border-left: 4px solid var(--warning);
+        border-radius: 10px;
+        padding: 18px 22px;
+        margin: 18px 0;
+        font-size: 0.95rem;
+    }
+
+    .highlight strong { color: #d68910; }
+
+    code {
+        background: #eef2ff;
+        color: #4c5fd4;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "Consolas", monospace;
+        font-size: 0.88em;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 14px;
+        font-size: 0.9rem;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+    }
+
+    th, td {
+        padding: 11px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    th {
+        background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+        color: #4c5fd4;
+        font-weight: 600;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    tbody tr:hover { background: #f8fafc; }
+
+    /* 返回顶部 */
+    .back-top {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+        font-size: 1.3rem;
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.45);
+        transition: all 0.25s ease;
+        z-index: 100;
+    }
+
+    .back-top:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.6);
+    }
+
+    footer {
+        text-align: center;
+        padding: 30px 20px;
+        color: #94a3b8;
+        font-size: 0.88rem;
+    }
+
+    /* 响应式 */
+    @media (max-width: 1000px) {
+        .container { flex-direction: column; }
+        nav { position: static; flex: none; max-height: none; }
+        nav ul {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+        }
+        .module-arch { grid-template-columns: repeat(2, 1fr); }
+        .module-card::after { display: none; }
+        .deps-grid { grid-template-columns: 1fr; }
+        .dep-pill::after { display: none; }
+    }
+
+    @media (max-width: 600px) {
+        header h1 { font-size: 1.6rem; }
+        .module-arch { grid-template-columns: 1fr; }
+        section { padding: 20px; }
+    }
+</style>
+</head>
+<body>
+
+<a name="top"></a>
+
+<!-- ============================================================ -->
+<!-- 顶部标题 -->
+<!-- ============================================================ -->
+<header>
+    <h1>🧠 MNIST 手写数字识别程序</h1>
+    <p>完整架构文档 · 模块 · 数据流 · 模型 · 训练 · 可视化</p>
+    <div class="meta">
+        <span>⚡ PyTorch</span>
+        <span>🧩 MLP + CNN</span>
+        <span>🎯 10 类分类</span>
+    </div>
+</header>
+
+<div class="container">
+
+    <!-- ---------- 侧边导航 ---------- -->
+    <nav>
+        <h3>📑 目录导航</h3>
+        <ul>
+            <li><a href="#overview">① 项目总览</a></li>
+            <li><a href="#module">② 模块架构</a></li>
+            <li><a href="#dataflow">③ 数据流图</a></li>
+            <li><a href="#cnn">④ CNN 模型结构</a></li>
+            <li><a href="#training">⑤ 训练流程</a></li>
+            <li><a href="#visual">⑥ 可视化输出</a></li>
+            <li><a href="#tree">⑦ 文件目录</a></li>
+            <li><a href="#call">⑧ 调用关系</a></li>
+            <li><a href="#deps">⑨ 依赖组件</a></li>
+            <li><a href="#sequence">⑩ 训练时序</a></li>
+            <li><a href="#summary">⑪ 架构总结</a></li>
+        </ul>
+    </nav>
+
+    <main>
+
+        <!-- ============ ① 项目总览 ============ -->
+        <section id="overview">
+            <h2>① 项目总览</h2>
+            <p class="desc">
+                基于 PyTorch 实现的 MNIST 手写数字识别程序，涵盖数据、模型、
+                训练、可视化四大模块。
+            </p>
+
+            <div class="module-arch" style="margin-top: 24px;">
+                <div class="module-card c1">
+                    <span class="icon">📥</span>
+                    <div class="title">数据层</div>
+                    <div class="en">Data Layer</div>
+                    <div class="items">
+                        MNIST 下载<br>
+                        标准化处理<br>
+                        <code>DataLoader</code> 批量
+                    </div>
+                </div>
+                <div class="module-card c2">
+                    <span class="icon">🧩</span>
+                    <div class="title">模型层</div>
+                    <div class="en">Model Layer</div>
+                    <div class="items">
+                        <code>MLP</code> 全连接<br>
+                        <code>CNN</code> 卷积<br>
+                        前向传播
+                    </div>
+                </div>
+                <div class="module-card c3">
+                    <span class="icon">🏋️</span>
+                    <div class="title">训练层</div>
+                    <div class="en">Training Layer</div>
+                    <div class="items">
+                        Adam 优化器<br>
+                        StepLR 调度<br>
+                        最佳模型保存
+                    </div>
+                </div>
+                <div class="module-card c4">
+                    <span class="icon">📊</span>
+                    <div class="title">可视化层</div>
+                    <div class="en">Visualize Layer</div>
+                    <div class="items">
+                        训练曲线<br>
+                        混淆矩阵<br>
+                        误分类样本
+                    </div>
+                </div>
+            </div>
+
+            <div class="highlight">
+                <strong>核心指标：</strong>
+                MLP 测试准确率约 <code>98.5%</code>，
+                CNN 测试准确率约 <code>99.6%</code>。
+            </div>
+        </section>
+
+        <!-- ============ ② 模块架构图 ============ -->
+        <section id="module">
+            <h2>② 整体模块架构图</h2>
+            <p class="desc">
+                程序按四个层次划分，以 <code>main()</code> 为入口串联所有模块。
+            </p>
+
+            <div class="diagram-box">
+                <div class="module-arch">
+                    <div class="module-card c1">
+                        <span class="icon">📥</span>
+                        <div class="title">数据层</div>
+                        <div class="items">
+                            <code>get_data_loaders()</code><br>
+                            MNIST 数据集<br>
+                            标准化<br>
+                            DataLoader
+                        </div>
+                    </div>
+                    <div class="module-card c2">
+                        <span class="icon">🧩</span>
+                        <div class="title">模型层</div>
+                        <div class="items">
+                            <code>MLP</code> 类<br>
+                            <code>CNN</code> 类<br>
+                            nn.Module<br>
+                            前向传播
+                        </div>
+                    </div>
+                    <div class="module-card c3">
+                        <span class="icon">🏋️</span>
+                        <div class="title">训练层</div>
+                        <div class="items">
+                            <code>train_one_epoch()</code><br>
+                            <code>evaluate()</code><br>
+                            <code>train()</code><br>
+                            Adam + StepLR
+                        </div>
+                    </div>
+                    <div class="module-card c4">
+                        <span class="icon">📊</span>
+                        <div class="title">可视化层</div>
+                        <div class="items">
+                            <code>plot_training_history()</code><br>
+                            <code>plot_confusion_matrix()</code><br>
+                            <code>plot_misclassified()</code><br>
+                            <code>plot_sample_images()</code>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 24px;">
+                    <div style="display: inline-block; background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 12px 40px; border-radius: 12px; font-weight: 700; box-shadow: 0 6px 20px rgba(102,126,234,0.35);">
+                        🚀 main() &nbsp;—&nbsp; 串联所有模块
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ③ 数据流图 ============ -->
+        <section id="dataflow">
+            <h2>③ 数据流图</h2>
+            <p class="desc">
+                从原始 MNIST 图片到最终可视化结果，数据经过加载、标准化、
+                分批、训练、评估等环节。
+            </p>
+
+            <div class="diagram-box">
+                <div class="dataflow">
+
+                    <div class="df-node gray">
+                        <div class="title">📦 MNIST 原始数据</div>
+                        <div class="detail">60,000 训练 + 10,000 测试 · 28×28 灰度图</div>
+                    </div>
+                    <div class="arrow-down"></div>
+
+                    <div class="df-node blue">
+                        <div class="title">🔄 transforms.Compose</div>
+                        <div class="detail">
+                            ToTensor() &nbsp;→&nbsp; [0,255] 变 [0,1]<br>
+                            Normalize(0.1307, 0.3081) &nbsp;→&nbsp; 均值 0，标准差 1
+                        </div>
+                    </div>
+                    <div class="arrow-down"></div>
+
+                    <div class="df-row">
+                        <div class="df-node green">
+                            <div class="title">🚂 train_loader</div>
+                            <div class="detail">
+                                batch_size = 128<br>
+                                shuffle = True<br>
+                                60,000 样本
+                            </div>
+                        </div>
+                        <div class="df-node green">
+                            <div class="title">🧪 test_loader</div>
+                            <div class="detail">
+                                batch_size = 128<br>
+                                shuffle = False<br>
+                                10,000 样本
+                            </div>
+                        </div>
+                    </div>
+                    <div class="arrow-down green"></div>
+
+                    <div class="df-node orange">
+                        <div class="title">🔁 训练循环</div>
+                        <div class="detail">
+                            ① 前向传播 &nbsp;→&nbsp; ② 计算损失<br>
+                            ③ 反向传播 &nbsp;→&nbsp; ④ 更新参数<br>
+                            每轮在 test_loader 上评估 → 保存最佳模型
+                        </div>
+                    </div>
+                    <div class="arrow-down orange"></div>
+
+                    <div class="df-node purple">
+                        <div class="title">💾 保存 / 加载模型</div>
+                        <div class="detail">
+                            torch.save(model.state_dict(), 'cnn_best.pth')<br>
+                            model.load_state_dict(torch.load(...))
+                        </div>
+                    </div>
+                    <div class="arrow-down"></div>
+
+                    <div class="df-row">
+                        <div class="df-node pink">
+                            <div class="title">📈 训练曲线</div>
+                        </div>
+                        <div class="df-node pink">
+                            <div class="title">🎯 混淆矩阵</div>
+                        </div>
+                        <div class="df-node pink">
+                            <div class="title">❌ 误分类样本</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ④ CNN 模型结构 ============ -->
+        <section id="cnn">
+            <h2>④ CNN 模型结构</h2>
+            <p class="desc">
+                卷积神经网络由两个卷积块 + 一个全连接分类头组成，
+                总计约 46 万参数。
+            </p>
+
+            <div class="diagram-box">
+                <div class="cnn-flow">
+
+                    <div class="cnn-block">
+                        <div class="block-title">输入 Input</div>
+                        <div class="cnn-layer">
+                            <span class="op">输入图像</span>
+                            <span class="shape">(batch, 1, 28, 28)</span>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down"></div>
+
+                    <div class="cnn-block">
+                        <div class="block-title">Block 1 · 特征提取</div>
+                        <div class="cnn-layer conv">
+                            <span class="op">Conv2d(1 → 32, 3×3, pad=1)</span>
+                            <span class="shape">32 × 28 × 28</span>
+                        </div>
+                        <div class="cnn-layer relu">
+                            <span class="op">ReLU</span>
+                            <span class="shape">激活</span>
+                        </div>
+                        <div class="cnn-layer conv">
+                            <span class="op">Conv2d(32 → 32, 3×3, pad=1)</span>
+                            <span class="shape">32 × 28 × 28</span>
+                        </div>
+                        <div class="cnn-layer relu">
+                            <span class="op">ReLU</span>
+                            <span class="shape">激活</span>
+                        </div>
+                        <div class="cnn-layer pool">
+                            <span class="op">MaxPool2d(2)</span>
+                            <span class="shape">32 × 14 × 14</span>
+                        </div>
+                        <div class="cnn-layer dropout">
+                            <span class="op">Dropout(0.25)</span>
+                            <span class="shape">正则化</span>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down"></div>
+
+                    <div class="cnn-block">
+                        <div class="block-title">Block 2 · 深层特征</div>
+                        <div class="cnn-layer conv">
+                            <span class="op">Conv2d(32 → 64, 3×3, pad=1)</span>
+                            <span class="shape">64 × 14 × 14</span>
+                        </div>
+                        <div class="cnn-layer relu">
+                            <span class="op">ReLU</span>
+                            <span class="shape">激活</span>
+                        </div>
+                        <div class="cnn-layer conv">
+                            <span class="op">Conv2d(64 → 64, 3×3, pad=1)</span>
+                            <span class="shape">64 × 14 × 14</span>
+                        </div>
+                        <div class="cnn-layer relu">
+                            <span class="op">ReLU</span>
+                            <span class="shape">激活</span>
+                        </div>
+                        <div class="cnn-layer pool">
+                            <span class="op">MaxPool2d(2)</span>
+                            <span class="shape">64 × 7 × 7</span>
+                        </div>
+                        <div class="cnn-layer dropout">
+                            <span class="op">Dropout(0.25)</span>
+                            <span class="shape">正则化</span>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down"></div>
+
+                    <div class="cnn-block">
+                        <div class="block-title">Classifier · 分类头</div>
+                        <div class="cnn-layer flatten">
+                            <span class="op">Flatten</span>
+                            <span class="shape">3136 = 64 × 7 × 7</span>
+                        </div>
+                        <div class="cnn-layer linear">
+                            <span class="op">Linear(3136 → 128)</span>
+                            <span class="shape">128</span>
+                        </div>
+                        <div class="cnn-layer relu">
+                            <span class="op">ReLU</span>
+                            <span class="shape">激活</span>
+                        </div>
+                        <div class="cnn-layer dropout">
+                            <span class="op">Dropout(0.5)</span>
+                            <span class="shape">正则化</span>
+                        </div>
+                        <div class="cnn-layer linear">
+                            <span class="op">Linear(128 → 10)</span>
+                            <span class="shape">10 类 logits</span>
+                        </div>
+                    </div>
+
+                    <div class="arrow-down green"></div>
+
+                    <div class="df-node success" style="max-width: 400px;">
+                        <div class="title">🎯 CrossEntropyLoss</div>
+                        <div class="detail">内部含 LogSoftmax</div>
+                    </div>
+
+                </div>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>层</th>
+                        <th>输入 → 输出</th>
+                        <th>参数数量</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Conv1</td><td>1×28×28 → 32×28×28</td><td>320</td></tr>
+                    <tr><td>Conv2</td><td>32×28×28 → 32×28×28</td><td>9,248</td></tr>
+                    <tr><td>Conv3</td><td>32×14×14 → 64×14×14</td><td>18,496</td></tr>
+                    <tr><td>Conv4</td><td>64×14×14 → 64×14×14</td><td>36,928</td></tr>
+                    <tr><td>FC1</td><td>3136 → 128</td><td>401,536</td></tr>
+                    <tr><td>FC2</td><td>128 → 10</td><td>1,290</td></tr>
+                    <tr style="background:#eef2ff;font-weight:700;">
+                        <td colspan="2">合计</td><td>467,818</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <!-- ============ ⑤ 训练流程 ============ -->
+        <section id="training">
+            <h2>⑤ 训练流程图</h2>
+            <p class="desc">
+                <code>train()</code> 函数负责完整训练循环，包含前向、反向、
+                评估和最佳模型保存。
+            </p>
+
+            <div class="diagram-box">
+                <div class="train-flow">
+                    <div class="tf-step blue">
+                        <span class="num">1</span>
+                        <span class="text">取 batch</span>
+                        <span class="code">DataLoader</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step green">
+                        <span class="num">2</span>
+                        <span class="text">前向传播</span>
+                        <span class="code">model(x)</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step orange">
+                        <span class="num">3</span>
+                        <span class="text">计算损失</span>
+                        <span class="code">criterion</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step red">
+                        <span class="num">4</span>
+                        <span class="text">反向传播</span>
+                        <span class="code">loss.backward()</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step purple">
+                        <span class="num">5</span>
+                        <span class="text">更新参数</span>
+                        <span class="code">optimizer.step()</span>
+                    </div>
+                </div>
+
+                <div class="arrow-down"></div>
+
+                <div class="train-flow">
+                    <div class="tf-step blue">
+                        <span class="text">📊 评估</span>
+                        <span class="code">test_loader</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step green">
+                        <span class="text">📉 调整学习率</span>
+                        <span class="code">scheduler.step()</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step orange">
+                        <span class="text">💾 保存最佳</span>
+                        <span class="code">torch.save()</span>
+                    </div>
+                    <span class="tf-arrow">▶</span>
+                    <div class="tf-step purple">
+                        <span class="text">🔁 下一轮</span>
+                        <span class="code">next epoch</span>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px; color: var(--gray); font-size: 0.9rem;">
+                    重复直到达到 <code>EPOCHS</code> 或收敛
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ⑥ 可视化输出 ============ -->
+        <section id="visual">
+            <h2>⑥ 可视化输出</h2>
+            <p class="desc">
+                可视化层包含 5 个绘图函数，输出样本图、训练曲线、
+                混淆矩阵、误分类样本和单张预测。
+            </p>
+
+            <div class="viz-grid">
+                <div class="viz-card">
+                    <span class="vicon">🖼️</span>
+                    <h4>样本展示</h4>
+                    <p>展示 16 张 MNIST 样本图，每张带真实标签。</p>
+                    <span class="file">samples.png</span>
+                </div>
+                <div class="viz-card">
+                    <span class="vicon">📈</span>
+                    <h4>训练曲线</h4>
+                    <p>MLP / CNN 的损失与准确率曲线，双图并列。</p>
+                    <span class="file">*_history.png</span>
+                </div>
+                <div class="viz-card">
+                    <span class="vicon">🎯</span>
+                    <h4>混淆矩阵</h4>
+                    <p>10×10 混淆矩阵，行列分别表示真实/预测标签。</p>
+                    <span class="file">confusion_matrix.png</span>
+                </div>
+                <div class="viz-card">
+                    <span class="vicon">❌</span>
+                    <h4>误分类样本</h4>
+                    <p>20 张误分类样本，标出真实标签与预测标签。</p>
+                    <span class="file">misclassified.png</span>
+                </div>
+                <div class="viz-card">
+                    <span class="vicon">🔍</span>
+                    <h4>单张预测</h4>
+                    <p>对单张图片预测，返回类别与 10 类概率分布。</p>
+                    <span class="file">predict_single_image()</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ⑦ 文件目录 ============ -->
+        <section id="tree">
+            <h2>⑦ 文件目录结构</h2>
+            <p class="desc">项目根目录下包含主程序、数据目录和结果目录。</p>
+
+            <div class="file-tree">
+<span class="folder">04-MNIST/</span>
+<span class="line">│</span>
+<span class="line">├──</span> <span class="file">mnist.py</span>                    <span class="comment"># 主程序</span>
+<span class="line">│</span>
+<span class="line">├──</span> <span class="folder">data/</span>                       <span class="comment"># MNIST 数据集（自动下载）</span>
+<span class="line">│   └──</span> <span class="folder">MNIST/</span>
+<span class="line">│       └──</span> <span class="folder">raw/</span>
+<span class="line">│           ├──</span> <span class="file">train-images-idx3-ubyte</span>
+<span class="line">│           ├──</span> <span class="file">train-labels-idx1-ubyte</span>
+<span class="line">│           ├──</span> <span class="file">t10k-images-idx3-ubyte</span>
+<span class="line">│           └──</span> <span class="file">t10k-labels-idx1-ubyte</span>
+<span class="line">│</span>
+<span class="line">└──</span> <span class="folder">results/</span>                    <span class="comment"># 输出结果</span>
+<span class="line">    ├──</span> <span class="file">samples.png</span>             <span class="comment"># 样本展示</span>
+<span class="line">    ├──</span> <span class="file">mlp_history.png</span>         <span class="comment"># MLP 训练曲线</span>
+<span class="line">    ├──</span> <span class="file">cnn_history.png</span>         <span class="comment"># CNN 训练曲线</span>
+<span class="line">    ├──</span> <span class="file">confusion_matrix.png</span>    <span class="comment"># 混淆矩阵</span>
+<span class="line">    ├──</span> <span class="file">misclassified.png</span>       <span class="comment"># 误分类样本</span>
+<span class="line">    ├──</span> <span class="file">mlp_best.pth</span>            <span class="comment"># MLP 最佳模型</span>
+<span class="line">    └──</span> <span class="file">cnn_best.pth</span>            <span class="comment"># CNN 最佳模型</span>
+            </div>
+        </section>
+
+        <!-- ============ ⑧ 调用关系 ============ -->
+        <section id="call">
+            <h2>⑧ 类与函数调用关系</h2>
+            <p class="desc">
+                <code>main()</code> 是程序入口，向下调用数据加载、训练和
+                可视化三组函数。
+            </p>
+
+            <div class="diagram-box">
+                <div class="call-tree">
+                    <div class="call-root">🚀 main()</div>
+                    <div class="call-branches">
+                        <div class="call-branch">
+                            <div class="call-node">📥 get_data_loaders()</div>
+                            <div class="call-children">
+                                <div class="call-child">DataLoader</div>
+                                <div class="call-child">MNIST 数据集</div>
+                            </div>
+                        </div>
+                        <div class="call-branch">
+                            <div class="call-node">🏋️ train()</div>
+                            <div class="call-children">
+                                <div class="call-child">train_one_epoch()</div>
+                                <div class="call-child">evaluate()</div>
+                                <div class="call-child">torch.save()</div>
+                            </div>
+                        </div>
+                        <div class="call-branch">
+                            <div class="call-node">📊 plot_*()</div>
+                            <div class="call-children">
+                                <div class="call-child">plot_training_history</div>
+                                <div class="call-child">plot_confusion_matrix</div>
+                                <div class="call-child">plot_misclassified</div>
+                                <div class="call-child">plot_sample_images</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ⑨ 依赖组件 ============ -->
+        <section id="deps">
+            <h2>⑨ 关键组件依赖</h2>
+            <p class="desc">
+                程序依赖 PyTorch 生态与基础科学计算库。
+            </p>
+
+            <div class="deps-grid">
+                <div class="deps-source">
+                    <div class="dep-pill">torch</div>
+                    <div class="dep-pill">torchvision</div>
+                    <div class="dep-pill">numpy</div>
+                    <div class="dep-pill">matplotlib</div>
+                    <div class="dep-pill">os</div>
+                </div>
+                <div class="deps-target">
+                    <h4>🧠 MNIST 程序</h4>
+                    <div class="dep-group">
+                        <div class="gt">核心依赖</div>
+                        <div class="gi">
+                            torch.nn · torch.optim<br>
+                            torch.utils.data<br>
+                            torchvision.datasets · transforms
+                        </div>
+                    </div>
+                    <div class="dep-group">
+                        <div class="gt">辅助依赖</div>
+                        <div class="gi">
+                            os（路径管理）<br>
+                            numpy（混淆矩阵）<br>
+                            matplotlib（可视化）
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ⑩ 训练时序 ============ -->
+        <section id="sequence">
+            <h2>⑩ 训练时序图</h2>
+            <p class="desc">
+                一次完整训练中，各组件之间的交互顺序。
+            </p>
+
+            <div class="seq-container">
+                <div class="seq-actors">
+                    <div class="actor">main</div>
+                    <div class="actor orange">DataLoader</div>
+                    <div class="actor green">Model</div>
+                    <div class="actor blue">Optimizer</div>
+                    <div class="actor pink">Criterion</div>
+                    <div class="actor purple">Scheduler</div>
+                </div>
+                <div class="seq-lines">
+                    <div class="seq-step">
+                        <span class="step-num">1</span>
+                        <span class="step-text">加载 MNIST 数据集 → 创建 train_loader / test_loader</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">2</span>
+                        <span class="step-text">创建模型 MLP / CNN</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">3</span>
+                        <span class="step-text">创建 Adam 优化器（lr = 1e-3）</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">4</span>
+                        <span class="step-text">创建 CrossEntropyLoss</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">5</span>
+                        <span class="step-text">创建 StepLR 学习率调度器（每 3 轮 × 0.5）</span>
+                    </div>
+                    <div class="seq-step" style="background:linear-gradient(90deg,#eef2ff,#f8fafc);">
+                        <span class="step-num" style="background:var(--secondary);">🔁</span>
+                        <span class="step-text"><strong>Epoch 循环</strong>：取 batch → 前向 → 损失 → 反向 → 更新 → 评估 → 保存</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">6</span>
+                        <span class="step-text">scheduler.step() 调整学习率</span>
+                    </div>
+                    <div class="seq-step">
+                        <span class="step-num">7</span>
+                        <span class="step-text">torch.save() 保存最佳模型</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============ ⑪ 架构总结 ============ -->
+        <section id="summary">
+            <h2>⑪ 架构总结</h2>
+            <p class="desc">一句话概括整个程序的架构设计。</p>
+
+            <div class="highlight">
+                <strong>数据层</strong>（加载 → 标准化 → DataLoader）
+                → <strong>模型层</strong>（MLP / CNN）
+                → <strong>训练层</strong>（前向 → 损失 → 反向 → 更新 → 评估 → 保存）
+                → <strong>可视化层</strong>（样本 / 曲线 / 混淆矩阵 / 误分类）。
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>层次</th>
+                        <th>主要函数 / 类</th>
+                        <th>职责</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>数据层</td><td><code>get_data_loaders()</code></td><td>加载、标准化、批量封装</td></tr>
+                    <tr><td>模型层</td><td><code>MLP</code> / <code>CNN</code></td><td>定义网络结构与前向传播</td></tr>
+                    <tr><td>训练层</td><td><code>train()</code> / <code>evaluate()</code></td><td>训练循环、评估、保存最佳模型</td></tr>
+                    <tr><td>可视化层</td><td><code>plot_*()</code></td><td>样本、曲线、混淆矩阵、误分类</td></tr>
+                    <tr><td>入口</td><td><code>main()</code></td><td>串联四个层次，输出最终结果</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+    </main>
+</div>
+
+<a href="#top" class="back-top" title="返回顶部">↑</a>
+
+<footer>
+    MNIST 程序架构文档 · 基于 PyTorch · MLP + CNN
+</footer>
+
+</body>
+</html>
