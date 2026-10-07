@@ -12,7 +12,8 @@
 | 03 反向传播 | [docs/03_backprop.html](docs/03_backprop.html) | `/learn/03` | `03-visual` / `03` |
 | 04 激活函数 | [docs/04_activations.html](docs/04_activations.html) | `/learn/04` | `python scripts/run_lesson.py 04` |
 | 05 学习率 | [docs/05_learning_rate.html](docs/05_learning_rate.html) | `/learn/05` | `python scripts/run_lesson.py 05` |
-| 06 MNIST | [docs/06_mnist.html](docs/06_mnist.html) | `/learn/06` | `python scripts/run_lesson.py 06 --epochs 3` |
+| 06 参数初始化 | [docs/06_weight_init.html](docs/06_weight_init.html) | `/learn/06` | `python scripts/run_lesson.py 06` |
+| 07 MNIST | [docs/07_mnist.html](docs/07_mnist.html) | `/learn/07` | `python scripts/run_lesson.py 07 --epochs 3` |
 
 ## 环境（一次）
 
@@ -21,7 +22,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 06 个实验需要。Jetson Orin CUDA 13.2：
+# 仅第 07 个实验需要。Jetson Orin CUDA 13.2：
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 ```
 
@@ -36,7 +37,8 @@ python scripts/run_lesson.py 03-visual
 python scripts/run_lesson.py 03
 python scripts/run_lesson.py 04
 python scripts/run_lesson.py 05              # 学习率对比
-python scripts/run_lesson.py 06 --epochs 3 --batch-size 256
+python scripts/run_lesson.py 06              # 参数初始化
+python scripts/run_lesson.py 07 --epochs 3 --batch-size 256
 ```
 
 也可以直接调用入口：
@@ -48,10 +50,11 @@ python lessons/03_backprop_visual.py
 python lessons/03_backpropagation.py
 python lessons/04_activations.py
 python lessons/05_learning_rate.py
-python lessons/06_mnist.py --epochs 3
+python lessons/06_weight_init.py
+python lessons/07_mnist.py --epochs 3
 ```
 
-图片和指标写到 `artifacts/`。01–05 只需 NumPy；06 需要 PyTorch（有 GPU 会自动用）。
+图片和指标写到 `artifacts/`。01–06 只需 NumPy；07 需要 PyTorch（有 GPU 会自动用）。
 
 ## 全部跑一遍 + 看板
 

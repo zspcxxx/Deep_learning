@@ -98,7 +98,8 @@ DOC_FILES = {
     "03-visual": "03_backprop.html",
     "04": "04_activations.html",
     "05": "05_learning_rate.html",
-    "06": "06_mnist.html",
+    "06": "06_weight_init.html",
+    "07": "07_mnist.html",
 }
 
 

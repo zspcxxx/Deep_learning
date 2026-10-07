@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>06 参数初始化 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_mnist.html">07 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#schemes">四种初始化</a></li>
+      <li><a href="#he">He / Xavier 公式</a></li>
+      <li><a href="#xor">XOR 对比实验</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+      <li><a href="#tips">实践建议</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 06</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">训练起点</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>参数初始化：训练从哪里起步</h1>
+          <p class="lead">梯度告诉你往哪走，学习率决定迈多大步；但第一步落在损失曲面的哪里，取决于权重怎么初始化。全零会让神经元“长成同一个样子”，过小信号会层层衰减，过大则容易爆炸。本实验用更深一点的 MLP，只改初始化方案，把四种典型结局画出来。</p>
+          <p class="meta">入口 <code>lessons/06_weight_init.py</code> · 复用 <code>src/dllab/mlp.py</code> 的 <code>init=</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+            <text x="20" y="28" font-size="12" fill="#64748b" font-family="sans-serif">W ~ N(0, σ²)</text>
+            <line x1="40" y1="50" x2="40" y2="130" stroke="#cbd5e1" stroke-width="2"/>
+            <line x1="40" y1="130" x2="240" y2="130" stroke="#cbd5e1" stroke-width="2"/>
+            <path d="M50,120 Q80,40 110,90 T170,70 T230,100" fill="none" stroke="#0f766e" stroke-width="2.5"/>
+            <circle cx="70" cy="70" r="4" fill="#be123c"/>
+            <text x="78" y="66" font-size="11" fill="#be123c" font-family="sans-serif">σ 太大</text>
+            <circle cx="200" cy="85" r="4" fill="#3b82f6"/>
+            <text x="175" y="110" font-size="11" fill="#3b82f6" font-family="sans-serif">σ 太小</text>
+            <circle cx="140" cy="78" r="5" fill="#0f766e"/>
+            <text x="120" y="145" font-size="11" fill="#0f766e" font-family="sans-serif">He 尺度</text>
+          </svg>
+          <div class="cap">同一优化器，不同起点</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>为什么不能把所有权重都初始化成 0？</li>
+        <li>σ 太小 / 太大时，前向激活的尺度会怎样随层数变化？</li>
+        <li>ReLU 网络为什么常用 He（Kaiming）初始化？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>深层网络是“一层缩放下一层”。若每层把信号乘得太小，传到输出几乎没信息；乘得太大，激活和梯度都会爆炸。好的初始化让每一层的激活方差大致稳住，梯度才能有效流动。</p>
+    <div class="card-grid">
+      <div class="card"><h4>全零</h4><p>同一层所有神经元收到相同输入、算出相同梯度 → 对称性永远破不开，等价于“宽度=1”。</p></div>
+      <div class="card"><h4>过小</h4><p>信号层层变弱；深层几乎“看不见”输入，学得很慢甚至学不会。</p></div>
+      <div class="card"><h4>过大</h4><p>激活饱和或数值爆炸；损失抖动、发散，准确率卡住。</p></div>
+      <div class="card"><h4>He / Xavier</h4><p>按 fan-in 缩放方差，让层间尺度匹配激活函数，通常能稳定开训。</p></div>
+    </div>
+    <div class="callout warn"><strong>注意</strong>偏置 <code>b</code> 仍可初始化为 0（本库就是这样做的）；关键是权重矩阵要打破对称，并控制尺度。</div>
+
+    <h2 id="schemes">本实验对比的四种方案</h2>
+    <table>
+      <tr><th>方案</th><th><code>init=</code></th><th>权重怎么采</th><th>预期现象</th></tr>
+      <tr><td>全零</td><td><code>zeros</code></td><td>W = 0</td><td>准确率卡在约 50%，学不会 XOR</td></tr>
+      <tr><td>过小</td><td><code>small</code></td><td>N(0, 0.01²)</td><td>激活 std 随深度变小；同样轮数里偏慢/偏低</td></tr>
+      <tr><td>过大</td><td><code>large</code></td><td>N(0, 2.0²)</td><td>激活巨大；易发散或远差于 He</td></tr>
+      <tr><td>He</td><td><code>he</code></td><td>N(0, 2/n<sub>in</sub>)</td><td>ReLU 默认推荐；应最快到高准确率</td></tr>
+    </table>
+    <p>库里还有 <code>xavier</code>（≈ N(0, 1/n<sub>in</sub>)）和 <code>auto</code>（ReLU→He，否则 Xavier）。实验 02 起默认就是 <code>auto</code>。</p>
+
+    <h2 id="he">He / Xavier 在写什么</h2>
+    <pre class="formula">He (ReLU):     W ∼ N(0, 2 / n_in)
+Xavier (tanh):  W ∼ N(0, 1 / n_in)</pre>
+    <p><code>n_in</code> 是该层输入维度（fan-in）。直观上：输入维数越大，每个权重就该更小，否则点积方差会随维数线性爆炸。ReLU 大约“掐掉一半”正负对称信号，所以 He 比 Xavier 多一个因子 2。</p>
+    <p>代码对应 <code>MLP(..., init="he")</code>；看 <code>src/dllab/mlp.py</code> 的 <code>_init_params</code>。</p>
+
+    <h2 id="xor">XOR 上的受控对比</h2>
+    <p>固定条件（只改 <code>init</code>）：</p>
+    <ul>
+      <li>数据：与实验 02 / 05 相同的 XOR 噪声点</li>
+      <li>结构：<code>[2, 32, 32, 32, 1]</code>（三层隐藏，故意加深以放大初始化效应）</li>
+      <li>激活 ReLU，lr=0.5，800 轮，seed=42</li>
+    </ul>
+    <div class="callout ok"><strong>实验结论预期</strong>He 接近 100%；全零卡在随机猜测；过小明显慢/差；过大发散或远低于 He。激活 std 柱状图上，He 各层尺度更平稳，过大则一开始就炸开。</div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 06
+# 或
+python lessons/06_weight_init.py</pre>
+    <p>结果在 <code>artifacts/06_weight_init/</code>：</p>
+    <ul>
+      <li><code>init_curves.png</code> — 四种方案的损失 / 准确率曲线</li>
+      <li><code>init_act_std.png</code> — 初始化瞬间各隐藏层激活标准差</li>
+      <li><code>init_act_hist.png</code> — 中间隐藏层激活直方图</li>
+      <li><code>metrics.json</code> — 最终准确率、初始尺度、是否发散</li>
+    </ul>
+    <p>不需要 PyTorch，通常一两分钟内结束。</p>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th>图</th><th>zeros</th><th>small</th><th>large</th><th>he</th></tr>
+      <tr><td>Loss / Acc</td><td>几乎不动</td><td>爬升慢</td><td>抖动 / 发散</td><td>平滑升到高位</td></tr>
+      <tr><td>激活 std</td><td>全 0</td><td>随深度衰减</td><td>层间暴涨</td><td>大致稳住</td></tr>
+      <tr><td>直方图</td><td>全挤在 0</td><td>很窄的峰</td><td>极宽 / 溢出</td><td>有合理宽度</td></tr>
+    </table>
+
+    <h2 id="tips">实践建议</h2>
+    <ul>
+      <li>ReLU / LeakyReLU 家族：默认用 He（Kaiming）；tanh / sigmoid 隐藏层可试 Xavier。</li>
+      <li>现代框架（PyTorch 等）的 <code>Linear</code> / <code>Conv</code> 默认已按扇入做了合理初始化；自己手写层时别忘了。</li>
+      <li>开训几步损失就 NaN：先查 lr，再查是否权重尺度过大或输入没标准化。</li>
+      <li>BatchNorm 会减轻对初始化的敏感度，但好的起点仍然重要。</li>
+    </ul>
+    <div class="callout ok"><strong>自己改一改</strong>把结构改成 <code>[2, 8, 1]</code> 浅网，对比“深度放大初始化差异”有多明显；或把 <code>large</code> 的 σ 改成 0.5 / 1.0，找爆炸边界。</div>
+
+    <div class="footer-nav">
+      <a href="05_learning_rate.html">← 05 学习率</a>
+      <a href="07_mnist.html">下一课：MNIST →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

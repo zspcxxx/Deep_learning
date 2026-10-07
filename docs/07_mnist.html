@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>06 MNIST · Deep Learning Lab</title>
+<title>07 MNIST · Deep Learning Lab</title>
 <link rel="stylesheet" href="learn.css">
 </head>
 <body>
@@ -15,7 +15,8 @@
   <a href="03_backprop.html">03 反向传播</a>
   <a href="04_activations.html">04 激活函数</a>
   <a href="05_learning_rate.html">05 学习率</a>
-  <a href="06_mnist.html">06 MNIST</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_mnist.html">07 MNIST</a>
   <span class="spacer"></span>
   <a href="/">看板</a>
 </nav>
@@ -38,13 +39,13 @@
   <article class="doc">
     <div class="hero">
       <div class="badge-row">
-        <span class="chip">实验 06</span>
+        <span class="chip">实验 07</span>
         <span class="chip rose">需要 PyTorch</span>
         <span class="chip teal">可用 GPU</span>
       </div>
       <h1>MNIST：把前面的积木接到真实图像</h1>
       <p class="lead">MNIST 是 28×28 灰度手写数字，10 类。本实验用框架完成完整闭环：读数据、定义 MLP 与 CNN、训练、测试集评估、混淆矩阵与误分类可视化。</p>
-      <p class="meta">实现 <code>src/dllab/mnist.py</code> · 入口 <code>lessons/06_mnist.py</code> · 架构图见 <a href="architecture.html">architecture.html</a></p>
+      <p class="meta">实现 <code>src/dllab/mnist.py</code> · 入口 <code>lessons/07_mnist.py</code> · 架构图见 <a href="architecture.html">architecture.html</a></p>
     </div>
 
     <h2 id="goals">这个实验要回答什么</h2>
@@ -126,12 +127,12 @@ Flatten 64×7×7 → Linear 128 → ReLU → Dropout → Linear 10</pre>
     <h2 id="run">如何单独运行</h2>
     <pre class="cmd">source .venv/bin/activate
 # 默认 3 轮、batch 256，够看出 MLP 与 CNN 差距
-python scripts/run_lesson.py 06
-python scripts/run_lesson.py 06 --epochs 10 --batch-size 128
+python scripts/run_lesson.py 07
+python scripts/run_lesson.py 07 --epochs 10 --batch-size 128
 
 # 或
-python lessons/06_mnist.py --epochs 3 --batch-size 256</pre>
-    <p>有 CUDA 会打印 <code>Using device: cuda</code>。结果在 <code>artifacts/06_mnist/</code>。通过标准（脚本内）：MLP ≥95%，CNN ≥97%（3 epoch 在 GPU 上通常可达）。</p>
+python lessons/07_mnist.py --epochs 3 --batch-size 256</pre>
+    <p>有 CUDA 会打印 <code>Using device: cuda</code>。结果在 <code>artifacts/07_mnist/</code>。通过标准（脚本内）：MLP ≥95%，CNN ≥97%（3 epoch 在 GPU 上通常可达）。</p>
 
     <h2 id="link">和前四节的对应关系</h2>
     <div class="card-grid">
@@ -141,10 +142,10 @@ python lessons/06_mnist.py --epochs 3 --batch-size 256</pre>
       <div class="card"><h4>← 04</h4><p>隐藏层 ReLU + 交叉熵（隐含 Softmax），正是推荐组合。</p></div>
     </div>
 
-    <div class="callout warn"><strong>自己改一改</strong>去掉 MaxPool 看参数量变化；Dropout 全改 0 观察是否过拟合；在 <code>lessons/06_mnist.py</code> 注释掉 MLP 或 CNN 其中一段可省时间。</div>
+    <div class="callout warn"><strong>自己改一改</strong>去掉 MaxPool 看参数量变化；Dropout 全改 0 观察是否过拟合；在 <code>lessons/07_mnist.py</code> 注释掉 MLP 或 CNN 其中一段可省时间。</div>
 
     <div class="footer-nav">
-      <a href="05_learning_rate.html">← 05 学习率</a>
+      <a href="06_weight_init.html">← 06 参数初始化</a>
       <a href="index.html">回到导读</a>
     </div>
   </article>

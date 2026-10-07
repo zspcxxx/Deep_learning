@@ -14,7 +14,8 @@
   <a href="03_backprop.html">03 反向传播</a>
   <a href="04_activations.html">04 激活函数</a>
   <a href="05_learning_rate.html">05 学习率</a>
-  <a href="06_mnist.html">06 MNIST</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_mnist.html">07 MNIST</a>
   <span class="spacer"></span>
   <a href="/">验证看板</a>
 </nav>
@@ -101,8 +102,13 @@
         <h3>学习率</h3>
         <p>步子太小学得慢，太大震荡发散；同一模型只改 lr 就能看到三种结局。</p>
       </a>
-      <a class="lesson-card" href="06_mnist.html">
+      <a class="lesson-card" href="06_weight_init.html">
         <div class="num">EXPERIMENT 06</div>
+        <h3>参数初始化</h3>
+        <p>全零对称崩溃，过小信号消失，过大容易爆炸；He 让深层 ReLU 稳住开训。</p>
+      </a>
+      <a class="lesson-card" href="07_mnist.html">
+        <div class="num">EXPERIMENT 07</div>
         <h3>MNIST</h3>
         <p>把前面的积木接到真实图像：MLP 能用，CNN 更合适。</p>
       </a>
@@ -114,9 +120,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 06 个实验（MNIST）需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
+# 仅第 07 个实验（MNIST）需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132</pre>
-    <div class="callout ok"><strong>提示</strong>01–05 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
+    <div class="callout ok"><strong>提示</strong>01–06 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
 
     <h2 id="run">单独跑某一个实验</h2>
     <div class="two-col">
@@ -129,7 +135,8 @@ python scripts/run_lesson.py 03-visual
 python scripts/run_lesson.py 03
 python scripts/run_lesson.py 04
 python scripts/run_lesson.py 05
-python scripts/run_lesson.py 06 --epochs 3</pre>
+python scripts/run_lesson.py 06
+python scripts/run_lesson.py 07 --epochs 3</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -139,14 +146,15 @@ python lessons/03_backprop_visual.py
 python lessons/03_backpropagation.py
 python lessons/04_activations.py
 python lessons/05_learning_rate.py
-python lessons/06_mnist.py --epochs 3</pre>
+python lessons/06_weight_init.py
+python lessons/07_mnist.py --epochs 3</pre>
       </div>
     </div>
     <p>结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">六个实验分别带走什么</h2>
+    <h2 id="map">七个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -154,7 +162,8 @@ python lessons/06_mnist.py --epochs 3</pre>
       <tr><td><a href="03_backprop.html">03</a></td><td>反向传播</td><td>BCE+Sigmoid 输出误差常化为 ŷ−y；必须做梯度检查</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="04_activations.html">04</a></td><td>激活函数</td><td>|f'|≪1 会层层衰减；隐藏层默认 ReLU 家族</td><td>约 30 秒</td></tr>
       <tr><td><a href="05_learning_rate.html">05</a></td><td>学习率</td><td>太小学得慢；合适稳定下降；太大震荡/发散</td><td>约 1 分钟</td></tr>
-      <tr><td><a href="06_mnist.html">06</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
+      <tr><td><a href="06_weight_init.html">06</a></td><td>参数初始化</td><td>全零对称崩溃；过小衰减；过大爆炸；He 稳住尺度</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="07_mnist.html">07</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

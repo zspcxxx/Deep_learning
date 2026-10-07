@@ -6,12 +6,22 @@ import numpy as np
 class MLP:
     """From-scratch multilayer perceptron for binary classification."""
 
-    def __init__(self, layer_sizes, learning_rate: float = 0.1, n_iters: int = 5000, activation: str = "relu", seed: int = 42):
+    def __init__(
+        self,
+        layer_sizes,
+        learning_rate: float = 0.1,
+        n_iters: int = 5000,
+        activation: str = "relu",
+        seed: int = 42,
+        init: str = "auto",
+    ):
         self.layer_sizes = layer_sizes
         self.lr = learning_rate
         self.n_iters = n_iters
         self.activation_name = activation
         self.seed = seed
+        # auto | he | xavier | zeros | small | large
+        self.init = init
         self.loss_: list[float] = []
         self.accuracy_: list[float] = []
         self._init_params()
@@ -19,10 +29,23 @@ class MLP:
     def _init_params(self):
         rng = np.random.RandomState(self.seed)
         self.W, self.b = [], []
+        scheme = self.init
+        if scheme == "auto":
+            scheme = "he" if self.activation_name == "relu" else "xavier"
         for i in range(len(self.layer_sizes) - 1):
             n_in, n_out = self.layer_sizes[i], self.layer_sizes[i + 1]
-            scale = np.sqrt(2.0 / n_in) if self.activation_name == "relu" else np.sqrt(1.0 / n_in)
-            self.W.append(rng.randn(n_in, n_out) * scale)
+            if scheme == "zeros":
+                self.W.append(np.zeros((n_in, n_out)))
+            elif scheme == "small":
+                self.W.append(rng.randn(n_in, n_out) * 0.01)
+            elif scheme == "large":
+                self.W.append(rng.randn(n_in, n_out) * 2.0)
+            elif scheme == "he":
+                self.W.append(rng.randn(n_in, n_out) * np.sqrt(2.0 / n_in))
+            elif scheme == "xavier":
+                self.W.append(rng.randn(n_in, n_out) * np.sqrt(1.0 / n_in))
+            else:
+                raise ValueError(f"Unknown init scheme: {self.init!r}")
             self.b.append(np.zeros(n_out))
 
     @staticmethod
