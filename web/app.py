@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import json
 
-from flask import Flask, Response, abort, render_template_string, send_from_directory
+from flask import Flask, abort, render_template_string, send_from_directory
 
-from dllab.catalog import LESSONS, find_lesson
+from dllab.catalog import find_lesson
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT
 
 app = Flask(__name__)
 DOCS = PROJECT_ROOT / "docs"
-ARCH_DOC = DOCS / "architecture.html"
 
 PAGE = r"""
 <!DOCTYPE html>
@@ -55,8 +54,7 @@ a { color:var(--accent); }
     <a href="/learn/06">参数初始化</a>
     <a href="/learn/07">归一化</a>
     <a href="/learn/08">正则化</a>
-    <a href="/learn/09">MNIST</a>
-    <a href="/docs/architecture">MNIST 架构图</a>
+    <a href="/learn/09">综合实战</a>
   </div>
 </header>
 <div class="wrap">
@@ -70,8 +68,7 @@ a { color:var(--accent); }
     <h2>单独运行</h2>
     <pre>python scripts/run_lesson.py --list
 python scripts/run_lesson.py 01
-python scripts/run_lesson.py 08
-python scripts/run_lesson.py 09 --epochs 3</pre>
+python scripts/run_lesson.py 09</pre>
   </section>
   {% for lesson in summary.lessons %}
   {% set images = (lesson.metrics or {}).get('images') or lesson.get('images') or [] %}
@@ -107,7 +104,7 @@ DOC_FILES = {
     "06": "06_weight_init.html",
     "07": "07_normalization.html",
     "08": "08_regularization.html",
-    "09": "09_mnist.html",
+    "09": "09_full_pipeline.html",
 }
 
 
@@ -169,13 +166,6 @@ def artifact_file(rel: str):
     if not target.exists():
         abort(404)
     return send_from_directory(target.parent, target.name)
-
-
-@app.get("/docs/architecture")
-def architecture():
-    if not ARCH_DOC.exists():
-        abort(404)
-    return Response(ARCH_DOC.read_text(encoding="utf-8"), mimetype="text/html")
 
 
 def main():

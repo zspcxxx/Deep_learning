@@ -4,17 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dllab"
-version = "0.2.0"
-description = "Deep learning tutorial lab: perceptron, MLP, backprop, activations, MNIST"
+version = "0.3.0"
+description = "Deep learning tutorial lab: perceptron to a full training pipeline"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.26",
     "matplotlib>=3.8",
     "flask>=3.0",
 ]
-
-[project.optional-dependencies]
-torch = ["torch>=2.2", "torchvision>=0.17"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

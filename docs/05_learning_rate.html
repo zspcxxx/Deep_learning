@@ -18,7 +18,7 @@
   <a href="06_weight_init.html">06 参数初始化</a>
   <a href="07_normalization.html">07 归一化</a>
   <a href="08_regularization.html">08 正则化</a>
-  <a href="09_mnist.html">09 MNIST</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
   <span class="spacer"></span>
   <a href="/">看板</a>
 </nav>
@@ -88,7 +88,7 @@
       <div class="card"><h4>合适</h4><p>稳步靠近谷底；损失平滑下降，准确率升到高位。</p></div>
       <div class="card"><h4>太大</h4><p>一步跨到对面山坡，来回震荡，甚至数值爆炸（NaN）。</p></div>
     </div>
-    <div class="callout warn"><strong>注意</strong>没有放之四海皆准的“最佳 lr”。它和损失形状、批量大小、网络深度、是否用 Adam 都有关。本实验先建立固定步长（SGD 风格）的直觉；MNIST 课里用的 Adam 会自适应缩放，但对初始 lr 仍然敏感。</div>
+    <div class="callout warn"><strong>注意</strong>没有放之四海皆准的“最佳 lr”。它和损失形状、批量大小、网络深度、是否用 Adam 都有关。本实验先建立固定步长（SGD 风格）的直觉；自适应优化器（如 Adam）会缩放更新，但对初始 lr 仍然敏感。</div>
 
     <h2 id="formula">更新公式里的 lr</h2>
     <pre class="formula">W ← W − lr · ∂L/∂W

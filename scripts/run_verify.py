@@ -8,7 +8,6 @@ import time
 import traceback
 from datetime import datetime, timezone
 from importlib import import_module
-from pathlib import Path
 
 from dllab.io_utils import dump_metrics
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT, ensure_artifacts
@@ -23,11 +22,11 @@ LESSONS = [
     ("06_weight_init", "lessons.06_weight_init"),
     ("07_normalization", "lessons.07_normalization"),
     ("08_regularization", "lessons.08_regularization"),
-    ("09_mnist", "lessons.09_mnist"),
+    ("09_full_pipeline", "lessons.09_full_pipeline"),
 ]
 
 
-def run_all(mnist_epochs: int = 10) -> dict:
+def run_all() -> dict:
     sys.path.insert(0, str(PROJECT_ROOT))
     ensure_artifacts()
     summary = {
@@ -43,10 +42,7 @@ def run_all(mnist_epochs: int = 10) -> dict:
         entry = {"name": name, "status": "running"}
         try:
             mod = import_module(module_name)
-            if name == "09_mnist":
-                metrics = mod.run(epochs=mnist_epochs)
-            else:
-                metrics = mod.run()
+            metrics = mod.run()
             elapsed = time.time() - t0
             passed = bool(metrics.get("passed", True))
             entry.update({
@@ -81,7 +77,6 @@ def run_all(mnist_epochs: int = 10) -> dict:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run all deep-learning lab verifications")
-    parser.add_argument("--mnist-epochs", type=int, default=3)
-    args = parser.parse_args()
-    result = run_all(mnist_epochs=args.mnist_epochs)
+    parser.parse_args()
+    result = run_all()
     sys.exit(0 if result["passed"] else 1)

@@ -7,7 +7,6 @@ LESSONS = [
         "title": "单层感知机",
         "module": "lessons.01_perceptron",
         "doc": "01_perceptron.html",
-        "needs_torch": False,
         "help": "线性分类：AND / OR 能学会，XOR 学不会",
     },
     {
@@ -16,7 +15,6 @@ LESSONS = [
         "title": "多层感知机",
         "module": "lessons.02_mlp",
         "doc": "02_mlp.html",
-        "needs_torch": False,
         "help": "用隐藏层解决 XOR 和月牙形分类",
     },
     {
@@ -25,7 +23,6 @@ LESSONS = [
         "title": "反向传播（数值走一遍）",
         "module": "lessons.03_backprop_visual",
         "doc": "03_backprop.html",
-        "needs_torch": False,
         "help": "用一组固定数字手算前向 / 反向",
     },
     {
@@ -34,7 +31,6 @@ LESSONS = [
         "title": "反向传播（训练 + 梯度检查）",
         "module": "lessons.03_backpropagation",
         "doc": "03_backprop.html",
-        "needs_torch": False,
         "help": "手写梯度，并用数值梯度核对",
     },
     {
@@ -43,7 +39,6 @@ LESSONS = [
         "title": "激活函数",
         "module": "lessons.04_activations",
         "doc": "04_activations.html",
-        "needs_torch": False,
         "help": "常见激活函数、导数与梯度消失",
     },
     {
@@ -52,7 +47,6 @@ LESSONS = [
         "title": "学习率",
         "module": "lessons.05_learning_rate",
         "doc": "05_learning_rate.html",
-        "needs_torch": False,
         "help": "对比太小 / 合适 / 太大的学习率对训练的影响",
     },
     {
@@ -61,7 +55,6 @@ LESSONS = [
         "title": "参数初始化",
         "module": "lessons.06_weight_init",
         "doc": "06_weight_init.html",
-        "needs_torch": False,
         "help": "对比全零 / 过小 / 过大 / He 初始化对训练的影响",
     },
     {
@@ -70,7 +63,6 @@ LESSONS = [
         "title": "归一化",
         "module": "lessons.07_normalization",
         "doc": "07_normalization.html",
-        "needs_torch": False,
         "help": "对比无归一化 / 输入标准化 / BatchNorm",
     },
     {
@@ -79,17 +71,15 @@ LESSONS = [
         "title": "正则化",
         "module": "lessons.08_regularization",
         "doc": "08_regularization.html",
-        "needs_torch": False,
         "help": "对比 L1/L2/Dropout/组合/早停/过强 L2 等多种正则",
     },
     {
         "id": "09",
-        "keys": ("09", "9", "mnist", "09_mnist"),
-        "title": "MNIST 手写数字",
-        "module": "lessons.09_mnist",
-        "doc": "09_mnist.html",
-        "needs_torch": True,
-        "help": "PyTorch 训练 MLP 与 CNN",
+        "keys": ("09", "9", "pipeline", "full-pipeline", "capstone", "09_full_pipeline"),
+        "title": "综合实战",
+        "module": "lessons.09_full_pipeline",
+        "doc": "09_full_pipeline.html",
+        "help": "naive vs tuned 流水线，串起 01–08 的训练实践",
     },
 ]
 

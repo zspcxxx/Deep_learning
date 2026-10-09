@@ -17,7 +17,7 @@
   <a href="06_weight_init.html">06 参数初始化</a>
   <a href="07_normalization.html">07 归一化</a>
   <a href="08_regularization.html">08 正则化</a>
-  <a href="09_mnist.html">09 MNIST</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
   <span class="spacer"></span>
   <a href="/">验证看板</a>
 </nav>
@@ -72,7 +72,7 @@
         <text x="599" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">步长影响</text>
         <line x1="654" y1="57" x2="676" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
         <rect x="678" y="30" width="120" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
-        <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">08 MNIST</text>
+        <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">09 综合</text>
         <text x="738" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">真实图像</text>
       </svg>
       <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
@@ -119,11 +119,6 @@
         <h3>正则化</h3>
         <p>并排验证 L1/L2/Dropout/组合/早停：看 gap、||W||、稀疏度与欠拟合。</p>
       </a>
-      <a class="lesson-card" href="09_mnist.html">
-        <div class="num">EXPERIMENT 09</div>
-        <h3>MNIST</h3>
-        <p>把前面的积木接到真实图像：MLP 能用，CNN 更合适。</p>
-      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -132,9 +127,8 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 09 个实验（MNIST）需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132</pre>
-    <div class="callout ok"><strong>提示</strong>01–08 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
+# 本课程仅需 NumPy / Matplotlib / Flask</pre>
+    <div class="callout ok"><strong>提示</strong>全部实验只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
 
     <h2 id="run">单独跑某一个实验</h2>
     <div class="two-col">
@@ -150,7 +144,7 @@ python scripts/run_lesson.py 05
 python scripts/run_lesson.py 06
 python scripts/run_lesson.py 07
 python scripts/run_lesson.py 08
-python scripts/run_lesson.py 09 --epochs 3</pre>
+python scripts/run_lesson.py 09</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -163,7 +157,7 @@ python lessons/05_learning_rate.py
 python lessons/06_weight_init.py
 python lessons/07_normalization.py
 python lessons/08_regularization.py
-python lessons/09_mnist.py --epochs 3</pre>
+python lessons/09_full_pipeline.py</pre>
       </div>
     </div>
     <p>结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
@@ -181,7 +175,7 @@ python lessons/09_mnist.py --epochs 3</pre>
       <tr><td><a href="06_weight_init.html">06</a></td><td>参数初始化</td><td>全零对称崩溃；过小衰减；过大爆炸；He 稳住尺度</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="07_normalization.html">07</a></td><td>归一化</td><td>尺度悬殊难学；输入标准化 / BatchNorm 稳住训练</td><td>约 1 分钟</td></tr>
       <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>L1/L2/Dropout/组合/早停对照；过强 L2 欠拟合</td><td>约 1–2 分钟</td></tr>
-      <tr><td><a href="09_mnist.html">09</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
+      <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战</td><td>naive vs tuned：串起 lr/init/归一化/正则</td><td>约 1–2 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

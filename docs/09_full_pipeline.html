@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>09 综合实战 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#recipe">知识清单</a></li>
+      <li><a href="#pipelines">两条流水线</a></li>
+      <li><a href="#data">数据设定</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+      <li><a href="#tips">下一步</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 09</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">串课实战</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>综合实战：把 01–08 串成一次训练</h1>
+          <p class="lead">前面每课只拧一颗螺丝。这一课用同一份“有点别扭”的数据，训练一个更深的 MLP：一条故意踩坑的 naive 流水线，一条把学习率、初始化、归一化、正则与早停装齐的 tuned 流水线。看测试集差距，就是前面知识有没有真正接上。</p>
+          <p class="meta">入口 <code>lessons/09_full_pipeline.py</code> · 复用 <code>src/dllab/mlp.py</code> 全部开关</p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 300 170" width="300" height="170" xmlns="http://www.w3.org/2000/svg">
+            <rect x="10" y="20" width="60" height="28" rx="4" fill="#e2e8f0"/><text x="40" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">数据</text>
+            <rect x="90" y="20" width="60" height="28" rx="4" fill="#ccfbf1"/><text x="120" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">标准化</text>
+            <rect x="170" y="20" width="50" height="28" rx="4" fill="#dbeafe"/><text x="195" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">He</text>
+            <rect x="240" y="20" width="50" height="28" rx="4" fill="#ede9fe"/><text x="265" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">BN</text>
+            <rect x="50" y="70" width="70" height="28" rx="4" fill="#fef3c7"/><text x="85" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">ReLU MLP</text>
+            <rect x="140" y="70" width="50" height="28" rx="4" fill="#fee2e2"/><text x="165" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">L2</text>
+            <rect x="210" y="70" width="70" height="28" rx="4" fill="#ffedd5"/><text x="245" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">Dropout</text>
+            <rect x="100" y="120" width="100" height="28" rx="4" fill="#d1fae5"/><text x="150" y="138" text-anchor="middle" font-size="11" font-family="sans-serif">早停 → 评估</text>
+          </svg>
+          <div class="cap">tuned 流水线积木</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>一次完整训练里，前面各课的“旋钮”分别拧在哪？</li>
+        <li>为什么 naive（坏 lr / 坏 init / 无归一化 / 无正则）会学崩或学不好？</li>
+        <li>tuned 流水线能否在同一数据上拿到明显更高的测试准确率？</li>
+      </ol>
+    </div>
+
+    <h2 id="recipe">知识清单（对照前面课程）</h2>
+    <table>
+      <tr><th>课</th><th>用在本实验哪里</th></tr>
+      <tr><td>02 / 04</td><td>多层感知机 + ReLU 隐藏层</td></tr>
+      <tr><td>03</td><td>反向传播、全批量 SGD 更新</td></tr>
+      <tr><td>05</td><td>tuned：lr=0.4；naive：lr=6.0（过大）</td></tr>
+      <tr><td>06</td><td>tuned：He；naive：large 高斯</td></tr>
+      <tr><td>07</td><td>tuned：输入标准化 + BatchNorm；naive：原始极端尺度</td></tr>
+      <tr><td>08</td><td>tuned：L2 + Dropout + 验证集早停；naive：无正则、跑满轮数</td></tr>
+    </table>
+
+    <h2 id="pipelines">两条流水线</h2>
+    <div class="card-grid">
+      <div class="card"><h4>naive</h4><p>large 初始化、过大学习率、不标准化、无 BN / L2 / Dropout / 早停。用来复现“没串课”时的惨状。</p></div>
+      <div class="card"><h4>tuned</h4><p>He + lr=0.4 + 标准化 + BN + L2=0.06 + Dropout=0.25 + patience=100。把 05–08 的结论一次装上。</p></div>
+    </div>
+
+    <h2 id="data">数据设定</h2>
+    <ul>
+      <li>Two Moons，噪声 0.22，再乘尺度 <code>[12, 0.12]</code> 并平移（制造量纲问题）</li>
+      <li>训练 80（其中翻转 6 个标签）/ 验证 80 / 其余测试</li>
+      <li>网络 <code>[2, 32, 32, 32, 1]</code>，最多 1200 轮</li>
+    </ul>
+    <div class="callout ok"><strong>通过标准</strong>tuned 测试准确率 ≥85%，且比 naive 高出至少 15 个百分点（naive 学崩或明显更差也算）。</div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 09
+# 或
+python lessons/09_full_pipeline.py</pre>
+    <p>结果在 <code>artifacts/09_full_pipeline/</code>：</p>
+    <ul>
+      <li><code>pipeline_curves.png</code> — 两条流水线的损失 / 训练准确率</li>
+      <li><code>pipeline_metrics.png</code> — train / val / test 柱状对比</li>
+      <li><code>pipeline_boundaries.png</code> — 决策边界</li>
+      <li><code>pipeline_recipe.png</code> — 知识清单图示</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th>图</th><th>naive</th><th>tuned</th></tr>
+      <tr><td>Loss</td><td>可能不降 / 发散</td><td>稳定下降</td></tr>
+      <tr><td>test 柱</td><td>偏低或失败</td><td>明显更高</td></tr>
+      <tr><td>边界</td><td>糊或画不出</td><td>月牙结构清晰</td></tr>
+    </table>
+
+    <h2 id="tips">下一步</h2>
+    <ul>
+      <li>在 <code>PIPELINES["tuned"]</code> 里关掉 BN 或标准化，看测试掉多少——复习第 07 课。</li>
+      <li>把结构改浅 <code>[2, 8, 1]</code>，naive 与 tuned 差距会缩小——深度放大了坏超参的伤害。</li>
+      <li>试着只改 <code>PIPELINES</code> 里一颗螺丝（例如关掉 BN），观察测试准确率掉多少。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="08_regularization.html">← 08 正则化</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

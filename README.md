@@ -1,6 +1,6 @@
 # Deep Learning Lab
 
-从感知机到 MNIST 的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
+从感知机到综合训练流水线的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
 
 详细介绍是带侧栏目录、示意图和手算示例的 HTML（`docs/`）。**可直接双击本地打开**（相对路径样式），也可通过看板 `/learn/` 阅读：
 
@@ -15,7 +15,7 @@
 | 06 参数初始化 | [docs/06_weight_init.html](docs/06_weight_init.html) | `/learn/06` | `python scripts/run_lesson.py 06` |
 | 07 归一化 | [docs/07_normalization.html](docs/07_normalization.html) | `/learn/07` | `python scripts/run_lesson.py 07` |
 | 08 正则化 | [docs/08_regularization.html](docs/08_regularization.html) | `/learn/08` | `python scripts/run_lesson.py 08` |
-| 09 MNIST | [docs/09_mnist.html](docs/09_mnist.html) | `/learn/09` | `python scripts/run_lesson.py 09 --epochs 3` |
+| 09 综合实战 | [docs/09_full_pipeline.html](docs/09_full_pipeline.html) | `/learn/09` | `python scripts/run_lesson.py 09` |
 
 ## 环境（一次）
 
@@ -24,8 +24,6 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 09 个实验需要。Jetson Orin CUDA 13.2：
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132
 ```
 
 ## 单独跑某一个实验
@@ -42,7 +40,7 @@ python scripts/run_lesson.py 05              # 学习率对比
 python scripts/run_lesson.py 06              # 参数初始化
 python scripts/run_lesson.py 07              # 归一化
 python scripts/run_lesson.py 08              # 正则化
-python scripts/run_lesson.py 09 --epochs 3 --batch-size 256
+python scripts/run_lesson.py 09              # 综合实战（串起 01–08）
 ```
 
 也可以直接调用入口：
@@ -57,10 +55,10 @@ python lessons/05_learning_rate.py
 python lessons/06_weight_init.py
 python lessons/07_normalization.py
 python lessons/08_regularization.py
-python lessons/09_mnist.py --epochs 3
+python lessons/09_full_pipeline.py
 ```
 
-图片和指标写到 `artifacts/`。01–08 只需 NumPy；09 需要 PyTorch（有 GPU 会自动用）。
+图片和指标写到 `artifacts/`。全部实验只需 NumPy / Matplotlib。
 
 ## 全部跑一遍 + 看板
 
