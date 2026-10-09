@@ -52,7 +52,10 @@ a { color:var(--accent); }
     <a href="/learn/03">反向传播</a>
     <a href="/learn/04">激活函数</a>
     <a href="/learn/05">学习率</a>
-    <a href="/learn/06">MNIST</a>
+    <a href="/learn/06">参数初始化</a>
+    <a href="/learn/07">归一化</a>
+    <a href="/learn/08">正则化</a>
+    <a href="/learn/09">MNIST</a>
     <a href="/docs/architecture">MNIST 架构图</a>
   </div>
 </header>
@@ -67,18 +70,21 @@ a { color:var(--accent); }
     <h2>单独运行</h2>
     <pre>python scripts/run_lesson.py --list
 python scripts/run_lesson.py 01
-python scripts/run_lesson.py 05
-python scripts/run_lesson.py 06 --epochs 3</pre>
+python scripts/run_lesson.py 08
+python scripts/run_lesson.py 09 --epochs 3</pre>
   </section>
   {% for lesson in summary.lessons %}
+  {% set images = (lesson.metrics or {}).get('images') or lesson.get('images') or [] %}
   <section class="card lesson">
-    <h2>{{ lesson.name }} <span class="badge {{ 'ok' if lesson.status=='passed' else ('run' if lesson.status=='running' else 'bad') }}">{{ lesson.status }}</span></h2>
-    <p class="sub">耗时 {{ lesson.elapsed_sec }} s · <a href="/learn/{{ lesson.name.split('_')[0] }}">阅读原理</a></p>
+    <h2>{{ lesson.name }} <span class="badge {{ 'ok' if lesson.status=='passed' else ('run' if lesson.status=='running' else 'bad') }}">{{ lesson.status or ('passed' if lesson.passed else 'unknown') }}</span></h2>
+    <p class="sub">耗时 {{ lesson.elapsed_sec or '-' }} s · <a href="/learn/{{ lesson.name.split('_')[0] }}">阅读原理</a></p>
     {% if lesson.error %}<pre>{{ lesson.error }}</pre>{% endif %}
     {% if lesson.metrics %}
       <pre>{{ lesson.metrics | tojson(indent=2) }}</pre>
+    {% endif %}
+    {% if images %}
       <div class="images">
-        {% for img in lesson.metrics.get('images', []) %}
+        {% for img in images %}
           <a href="/file/{{ img }}"><img src="/file/{{ img }}" alt="{{ img }}"></a>
         {% endfor %}
       </div>
@@ -99,7 +105,9 @@ DOC_FILES = {
     "04": "04_activations.html",
     "05": "05_learning_rate.html",
     "06": "06_weight_init.html",
-    "07": "07_mnist.html",
+    "07": "07_normalization.html",
+    "08": "08_regularization.html",
+    "09": "09_mnist.html",
 }
 
 

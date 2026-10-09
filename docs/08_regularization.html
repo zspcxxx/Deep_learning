@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 正则化 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_mnist.html">09 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#l2">L2 权重衰减</a></li>
+      <li><a href="#dropout">Dropout</a></li>
+      <li><a href="#exp">受控对比实验</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+      <li><a href="#tips">实践建议</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 08</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">泛化</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>正则化：别把噪声也学进去</h1>
+          <p class="lead">模型太“自由”时，会把训练集里的标签噪声和偶然起伏一并记住，训练集准确率虚高、测试集掉下去——这叫过拟合。正则化给参数加约束：适量 L2 让权重变小、边界更平滑；过强则会欠拟合。本实验用小样本 + 故意翻转的标签，把三种结局画出来。</p>
+          <p class="meta">入口 <code>lessons/08_regularization.py</code> · <code>MLP(..., l2=..., dropout=...)</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30,120 C60,20 90,140 120,40 S180,130 210,50 S250,110 260,80" fill="none" stroke="#be123c" stroke-width="2"/>
+            <text x="40" y="150" font-size="11" fill="#be123c" font-family="sans-serif">过拟合</text>
+            <path d="M30,100 Q100,40 160,70 T260,90" fill="none" stroke="#0f766e" stroke-width="2.5"/>
+            <text x="150" y="150" font-size="11" fill="#0f766e" font-family="sans-serif">适量</text>
+            <line x1="30" y1="85" x2="260" y2="85" stroke="#64748b" stroke-width="2"/>
+            <text x="210" y="150" font-size="11" fill="#64748b" font-family="sans-serif">欠拟合</text>
+          </svg>
+          <div class="cap">容量太大 / 刚好 / 被勒太紧</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>过拟合长什么样？为什么训练准确率高不等于泛化好？</li>
+        <li>L2 正则如何进入损失与梯度？它如何改变 ||W||？</li>
+        <li>正则太强时会发生什么？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>考试前把练习册答案背下来，遇到换题就懵——模型也会这样。正则化像限制“背诵细节”的自由度：偏好更简单的解（更小的权重、更平滑的边界）。</p>
+    <div class="card-grid">
+      <div class="card"><h4>无正则</h4><p>训练集（含噪声标签）几乎记满；权重大；决策边界弯绕；训练≫测试。</p></div>
+      <div class="card"><h4>适量 L2</h4><p>权重被压小；边界更顺；仍能学到主结构。</p></div>
+      <div class="card"><h4>过强 L2</h4><p>权重几乎被压成 0；学不动，训练/测试都差 → 欠拟合。</p></div>
+    </div>
+
+    <h2 id="l2">L2 权重衰减</h2>
+    <pre class="formula">L = L_data + (λ/2m) Σ ||W||²
+∂L/∂W ← ∂L_data/∂W + (λ/m) W</pre>
+    <p>等价于每次更新把权重往 0 拉一点（weight decay）。偏置通常不衰减；本实现只正则化 <code>W</code>。代码：<code>MLP(..., l2=0.15)</code>。</p>
+
+    <h2 id="dropout">Dropout（库已支持）</h2>
+    <p>训练时随机将隐藏单元置零（本库用 inverted dropout，推理时不改尺度）。全批量小数据上效果不如 L2 直观，故本实验主对比 L2 强度；可自行改 <code>dropout=0.3</code> 观察。接口：<code>MLP(..., dropout=0.3)</code>。</p>
+
+    <h2 id="exp">受控对比实验</h2>
+    <ul>
+      <li>数据：Two Moons，噪声 0.32；只用 28 个训练点，并<strong>翻转 8 个训练标签</strong></li>
+      <li>结构：<code>[2, 64, 64, 1]</code>，ReLU，He，lr=0.5，1600 轮</li>
+      <li>三种 <code>l2</code>：<code>0</code>（无）/ <code>0.15</code>（适量）/ <code>2.0</code>（过强）</li>
+    </ul>
+    <div class="callout ok"><strong>实验结论预期</strong>无正则训练准确率很高、权重很大、训练-测试差距大；适量 L2 明显缩小 ||W||；过强 L2 训练准确率垮掉（欠拟合）。</div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 08
+# 或
+python lessons/08_regularization.py</pre>
+    <p>结果在 <code>artifacts/08_regularization/</code>：</p>
+    <ul>
+      <li><code>reg_curves.png</code> — 训练损失 / 训练准确率</li>
+      <li><code>reg_train_test.png</code> — 训练 vs 测试准确率，以及 ||W||</li>
+      <li><code>reg_boundaries.png</code> — 三种决策边界</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th></th><th>none</th><th>l2</th><th>strong</th></tr>
+      <tr><td>Train acc</td><td>很高（可能背噪声）</td><td>略降或仍高</td><td>明显偏低</td></tr>
+      <tr><td>||W||</td><td>大</td><td>明显更小</td><td>接近 0</td></tr>
+      <tr><td>边界</td><td>弯绕、贴噪声点</td><td>更平滑</td><td>几乎分不开</td></tr>
+    </table>
+
+    <h2 id="tips">实践建议</h2>
+    <ul>
+      <li>先保证模型能过拟合训练集，再加正则——否则分不清是正则太强还是模型太弱。</li>
+      <li>L2 / weight decay 与学习率、批量大小联动；现代优化器里 AdamW 把 decay 解耦得更干净。</li>
+      <li>Dropout 多用于较大网络与 mini-batch；推理务必关闭（本库 <code>predict</code> 已关闭）。</li>
+      <li>数据增强、早停、更多数据往往比死拧 λ 更有效。</li>
+    </ul>
+    <div class="callout ok"><strong>自己改一改</strong>把 <code>N_FLIP</code> 改成 0，看“没有标签噪声时”三种设置差距是否变小；或加上 <code>dropout=0.4</code> 与 L2 组合。</div>
+
+    <div class="footer-nav">
+      <a href="07_normalization.html">← 07 归一化</a>
+      <a href="09_mnist.html">下一课：MNIST →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

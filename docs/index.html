@@ -15,7 +15,9 @@
   <a href="04_activations.html">04 激活函数</a>
   <a href="05_learning_rate.html">05 学习率</a>
   <a href="06_weight_init.html">06 参数初始化</a>
-  <a href="07_mnist.html">07 MNIST</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_mnist.html">09 MNIST</a>
   <span class="spacer"></span>
   <a href="/">验证看板</a>
 </nav>
@@ -70,7 +72,7 @@
         <text x="599" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">步长影响</text>
         <line x1="654" y1="57" x2="676" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
         <rect x="678" y="30" width="120" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
-        <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">06 MNIST</text>
+        <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">08 MNIST</text>
         <text x="738" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">真实图像</text>
       </svg>
       <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
@@ -107,8 +109,18 @@
         <h3>参数初始化</h3>
         <p>全零对称崩溃，过小信号消失，过大容易爆炸；He 让深层 ReLU 稳住开训。</p>
       </a>
-      <a class="lesson-card" href="07_mnist.html">
+      <a class="lesson-card" href="07_normalization.html">
         <div class="num">EXPERIMENT 07</div>
+        <h3>归一化</h3>
+        <p>特征尺度悬殊时难学；输入标准化与 BatchNorm 把信号拉回好学区间。</p>
+      </a>
+      <a class="lesson-card" href="08_regularization.html">
+        <div class="num">EXPERIMENT 08</div>
+        <h3>正则化</h3>
+        <p>小样本加噪声标签易过拟合；适量 L2 压权重，过强则欠拟合。</p>
+      </a>
+      <a class="lesson-card" href="09_mnist.html">
+        <div class="num">EXPERIMENT 09</div>
         <h3>MNIST</h3>
         <p>把前面的积木接到真实图像：MLP 能用，CNN 更合适。</p>
       </a>
@@ -120,9 +132,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -e .
-# 仅第 07 个实验（MNIST）需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
+# 仅第 09 个实验（MNIST）需要 PyTorch。Jetson Orin / CUDA 13.2 示例：
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu132</pre>
-    <div class="callout ok"><strong>提示</strong>01–06 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
+    <div class="callout ok"><strong>提示</strong>01–08 只依赖 NumPy / Matplotlib，没有 GPU 也能完整学习。本地双击打开本目录下的 HTML 也能正常显示样式（相对路径）。</div>
 
     <h2 id="run">单独跑某一个实验</h2>
     <div class="two-col">
@@ -136,7 +148,9 @@ python scripts/run_lesson.py 03
 python scripts/run_lesson.py 04
 python scripts/run_lesson.py 05
 python scripts/run_lesson.py 06
-python scripts/run_lesson.py 07 --epochs 3</pre>
+python scripts/run_lesson.py 07
+python scripts/run_lesson.py 08
+python scripts/run_lesson.py 09 --epochs 3</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -147,14 +161,16 @@ python lessons/03_backpropagation.py
 python lessons/04_activations.py
 python lessons/05_learning_rate.py
 python lessons/06_weight_init.py
-python lessons/07_mnist.py --epochs 3</pre>
+python lessons/07_normalization.py
+python lessons/08_regularization.py
+python lessons/09_mnist.py --epochs 3</pre>
       </div>
     </div>
     <p>结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">七个实验分别带走什么</h2>
+    <h2 id="map">九个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -163,7 +179,9 @@ python lessons/07_mnist.py --epochs 3</pre>
       <tr><td><a href="04_activations.html">04</a></td><td>激活函数</td><td>|f'|≪1 会层层衰减；隐藏层默认 ReLU 家族</td><td>约 30 秒</td></tr>
       <tr><td><a href="05_learning_rate.html">05</a></td><td>学习率</td><td>太小学得慢；合适稳定下降；太大震荡/发散</td><td>约 1 分钟</td></tr>
       <tr><td><a href="06_weight_init.html">06</a></td><td>参数初始化</td><td>全零对称崩溃；过小衰减；过大爆炸；He 稳住尺度</td><td>约 1–2 分钟</td></tr>
-      <tr><td><a href="07_mnist.html">07</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
+      <tr><td><a href="07_normalization.html">07</a></td><td>归一化</td><td>尺度悬殊难学；输入标准化 / BatchNorm 稳住训练</td><td>约 1 分钟</td></tr>
+      <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>无正则易背噪声；适量 L2 压权重；过强欠拟合</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="09_mnist.html">09</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

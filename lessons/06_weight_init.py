@@ -31,7 +31,7 @@ COLORS = {
 
 def activation_stats(model: MLP, X: np.ndarray) -> list[dict]:
     """Mean / std of each hidden activation right after init (or current weights)."""
-    acts, _ = model._forward(X)
+    acts, _, _, _ = model._forward(X)
     rows = []
     # acts[0]=input, acts[1..-2]=hidden, acts[-1]=sigmoid out
     for i, a in enumerate(acts[1:-1], start=1):
@@ -134,7 +134,7 @@ def run() -> dict:
         model = results[scheme]["model"]
         # Re-init a fresh model to histogram true initial activations
         fresh = MLP(LAYER_SIZES, learning_rate=LR, n_iters=1, activation="relu", seed=SEED, init=scheme)
-        acts, _ = fresh._forward(X)
+        acts, _, _, _ = fresh._forward(X)
         # middle hidden layer
         mid = acts[2].ravel()
         ax.hist(mid, bins=40, color=COLORS[scheme], alpha=0.85, density=True)

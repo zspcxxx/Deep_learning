@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 归一化 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_mnist.html">09 MNIST</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#intuition">直觉</a></li>
+      <li><a href="#input">输入标准化</a></li>
+      <li><a href="#bn">Batch Normalization</a></li>
+      <li><a href="#exp">受控对比实验</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#read">看图要点</a></li>
+      <li><a href="#tips">实践建议</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 07</span>
+        <span class="chip teal">无需 GPU</span>
+        <span class="chip amber">训练稳定</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>归一化：把尺度拉回“好学”的区间</h1>
+          <p class="lead">特征数量级差几个数量级时，同一组学习率 / 初始化往往学得很慢甚至学不会。输入标准化把特征拉到相近尺度；BatchNorm 在网络内部对每一层的预激活做标准化，让深层训练更稳。本实验用故意拉歪尺度的月牙数据，对比三种设置。</p>
+          <p class="meta">入口 <code>lessons/07_normalization.py</code> · <code>MLP(..., batch_norm=True)</code></p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="70" cy="90" rx="55" ry="12" fill="none" stroke="#be123c" stroke-width="2"/>
+            <text x="30" y="130" font-size="11" fill="#be123c" font-family="sans-serif">尺度悬殊</text>
+            <path d="M130,90 L160,90" stroke="#94a3b8" stroke-width="2" marker-end="url(#arrow)"/>
+            <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#94a3b8"/></marker></defs>
+            <circle cx="210" cy="90" r="35" fill="none" stroke="#0f766e" stroke-width="2"/>
+            <text x="175" y="130" font-size="11" fill="#0f766e" font-family="sans-serif">均值≈0 方差≈1</text>
+          </svg>
+          <div class="cap">把特征“揉圆”再喂给网络</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>为什么特征尺度差很多时，训练会变难？</li>
+        <li>输入标准化（零均值、单位方差）解决了什么？</li>
+        <li>BatchNorm 和输入标准化有何不同？它放在网络哪一层？</li>
+      </ol>
+    </div>
+
+    <h2 id="intuition">用人话建立直觉</h2>
+    <p>把两个特征想成地图上的东西向：一个以公里计、一个以毫米计。梯度下降沿两个轴走，步长却共用一个学习率——结果往往是一条轴上抖得厉害，另一条几乎不动。归一化就是先统一单位，再学地图。</p>
+    <div class="card-grid">
+      <div class="card"><h4>无归一化</h4><p>损失下降慢或卡住；决策边界糊；大尺度特征主导更新。</p></div>
+      <div class="card"><h4>输入标准化</h4><p>训练前把每个特征减均值除标准差；对表格 / 坐标数据几乎是标配。</p></div>
+      <div class="card"><h4>BatchNorm</h4><p>每个 mini-batch（本实验为全批量）上，对隐藏层预激活做标准化，再乘 γ、加 β。</p></div>
+    </div>
+
+    <h2 id="input">输入标准化</h2>
+    <pre class="formula">x' = (x − μ) / σ
+μ, σ 按训练集每个特征统计</pre>
+    <p>注意：测试时要用<strong>训练集</strong>上的 μ、σ，不能在测试集上重新估（本实验只在训练集上对比，重点看训练动态）。</p>
+
+    <h2 id="bn">Batch Normalization（隐藏层）</h2>
+    <pre class="formula">ẑ = (z − μ_B) / √(σ_B² + ε)
+y = γ ⊙ ẑ + β</pre>
+    <p>本库放在线性层之后、激活之前：<code>Linear → BN → ReLU</code>。γ、β 可学习，避免“标准化后表达能力被锁死”。推理时用训练中滑动平均的均值 / 方差。</p>
+    <div class="callout warn"><strong>和输入标准化的差别</strong>输入标准化只做一次、在网络入口；BN 在每一层内部、随训练动态变化，还能减轻 Internal Covariate Shift、允许更大学习率。现代架构里 LayerNorm（按样本而非按 batch）也很常见——本课先把 BN 直觉建立起来。</div>
+
+    <h2 id="exp">受控对比实验</h2>
+    <p>固定条件（只改归一化设置）：</p>
+    <ul>
+      <li>数据：Two Moons，再乘尺度 <code>[10, 0.15]</code> 并平移，制造极端量纲</li>
+      <li>结构：<code>[2, 16, 16, 1]</code>，ReLU，He 初始化，lr=0.35，700 轮</li>
+      <li>三种设置：无归一化 / 仅输入标准化 / 仅 BatchNorm（原始尺度输入）</li>
+    </ul>
+    <div class="callout ok"><strong>实验结论预期</strong>无归一化准确率明显偏低；输入标准化与 BatchNorm 都能到高准确率，损失曲线更干净。</div>
+
+    <h2 id="run">如何单独运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 07
+# 或
+python lessons/07_normalization.py</pre>
+    <p>结果在 <code>artifacts/07_normalization/</code>：</p>
+    <ul>
+      <li><code>norm_features.png</code> — 归一化前后特征散点</li>
+      <li><code>norm_curves.png</code> — 损失 / 准确率曲线</li>
+      <li><code>norm_boundaries.png</code> — 三种设置的决策边界</li>
+      <li><code>metrics.json</code> — 最终准确率等</li>
+    </ul>
+    <p>不需要 PyTorch，通常一分钟内结束。</p>
+
+    <h2 id="read">看图时注意什么</h2>
+    <table>
+      <tr><th>图</th><th>无归一化</th><th>输入标准化</th><th>BatchNorm</th></tr>
+      <tr><td>特征散点</td><td>扁成长条 / 尺度悬殊</td><td>近似圆形、尺度≈1</td><td>（输入仍悬殊，内部被 BN 拉回）</td></tr>
+      <tr><td>Loss / Acc</td><td>慢、终值偏低</td><td>较快升到高位</td><td>较快升到高位</td></tr>
+      <tr><td>边界</td><td>分区差</td><td>月牙清晰</td><td>月牙清晰</td></tr>
+    </table>
+
+    <h2 id="tips">实践建议</h2>
+    <ul>
+      <li>图像像素常先缩放到 [0,1] 或 ImageNet 均值方差；表格特征优先 StandardScaler / 稳健缩放。</li>
+      <li>BN 对 batch size 敏感：batch 太小时统计不稳，可考虑 GroupNorm / LayerNorm。</li>
+      <li>BN 与 Dropout 同用时注意顺序与模式（train/eval）；推理务必 <code>model.eval()</code>。</li>
+      <li>本课全批量 SGD 是为了看清效应；真实训练里 BN 几乎总在 mini-batch 上算。</li>
+    </ul>
+    <div class="callout ok"><strong>自己改一改</strong>把 <code>SCALE</code> 改成 <code>[1, 1]</code>，三种设置差距会缩小——说明归一化的价值在“尺度病态”时最大；或同时打开输入标准化 + BN，观察是否还有增益。</div>
+
+    <div class="footer-nav">
+      <a href="06_weight_init.html">← 06 参数初始化</a>
+      <a href="08_regularization.html">下一课：正则化 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>
