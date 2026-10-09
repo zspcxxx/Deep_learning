@@ -15,6 +15,7 @@ class MLP:
         seed: int = 42,
         init: str = "auto",
         batch_norm: bool = False,
+        l1: float = 0.0,
         l2: float = 0.0,
         dropout: float = 0.0,
     ):
@@ -26,12 +27,15 @@ class MLP:
         # auto | he | xavier | zeros | small | large
         self.init = init
         self.batch_norm = batch_norm
+        self.l1 = float(l1)
         self.l2 = float(l2)
         self.dropout = float(dropout)
         if not 0.0 <= self.dropout < 1.0:
             raise ValueError(f"dropout must be in [0, 1), got {dropout!r}")
         self.loss_: list[float] = []
         self.accuracy_: list[float] = []
+        self.val_loss_: list[float] = []
+        self.best_epoch_: int | None = None
         self._bn_eps = 1e-5
         self._bn_momentum = 0.9
         self._rng = np.random.RandomState(self.seed + 17)
@@ -173,6 +177,9 @@ class MLP:
         if self.l2 > 0.0:
             for i in range(n_layers):
                 dW[i] = dW[i] + (self.l2 / m) * self.W[i]
+        if self.l1 > 0.0:
+            for i in range(n_layers):
+                dW[i] = dW[i] + (self.l1 / m) * np.sign(self.W[i])
         return dW, db, dgamma, dbeta
 
     def _sync_bn_stats(self, X):
@@ -186,17 +193,57 @@ class MLP:
             out = self.gamma[i] * (z - self.running_mean[i]) * inv_std + self.beta[i]
             a = self._activate(out)
 
-    def fit(self, X, y, verbose: bool = False, print_every: int = 500):
+    def _data_loss(self, X, y) -> float:
+        a_out = self._forward(X, training=False)[0][-1].ravel()
+        eps = 1e-12
+        return float(-np.mean(y * np.log(a_out + eps) + (1 - y) * np.log(1 - a_out + eps)))
+
+    def _snapshot_weights(self):
+        snap = {
+            "W": [w.copy() for w in self.W],
+            "b": [b.copy() for b in self.b],
+            "gamma": [g.copy() for g in self.gamma],
+            "beta": [b.copy() for b in self.beta],
+            "running_mean": [m.copy() for m in self.running_mean],
+            "running_var": [v.copy() for v in self.running_var],
+        }
+        return snap
+
+    def _restore_weights(self, snap):
+        self.W = [w.copy() for w in snap["W"]]
+        self.b = [b.copy() for b in snap["b"]]
+        self.gamma = [g.copy() for g in snap["gamma"]]
+        self.beta = [b.copy() for b in snap["beta"]]
+        self.running_mean = [m.copy() for m in snap["running_mean"]]
+        self.running_var = [v.copy() for v in snap["running_var"]]
+
+    def fit(
+        self,
+        X,
+        y,
+        verbose: bool = False,
+        print_every: int = 500,
+        X_val=None,
+        y_val=None,
+        early_stop_patience: int | None = None,
+    ):
+        best_val = float("inf")
+        best_snap = None
+        wait = 0
+        self.val_loss_ = []
+        self.best_epoch_ = None
         for epoch in range(self.n_iters):
             activations, pre_acts, bn_caches, drop_masks = self._forward(X, training=True)
             a_out = activations[-1].ravel()
             eps = 1e-12
             data_loss = float(-np.mean(y * np.log(a_out + eps) + (1 - y) * np.log(1 - a_out + eps)))
+            reg = 0.0
+            m = X.shape[0]
             if self.l2 > 0.0:
-                reg = 0.5 * self.l2 * sum(float(np.sum(w * w)) for w in self.W) / X.shape[0]
-                loss = data_loss + reg
-            else:
-                loss = data_loss
+                reg += 0.5 * self.l2 * sum(float(np.sum(w * w)) for w in self.W) / m
+            if self.l1 > 0.0:
+                reg += self.l1 * sum(float(np.sum(np.abs(w))) for w in self.W) / m
+            loss = data_loss + reg
             self.loss_.append(loss)
             acc = float(np.mean((a_out >= 0.5).astype(int) == y) * 100)
             self.accuracy_.append(acc)
@@ -208,8 +255,29 @@ class MLP:
                 for i in range(len(self.gamma)):
                     self.gamma[i] -= self.lr * dgamma[i]
                     self.beta[i] -= self.lr * dbeta[i]
+
+            if X_val is not None and y_val is not None:
+                vloss = self._data_loss(X_val, y_val)
+                self.val_loss_.append(vloss)
+                if early_stop_patience is not None:
+                    if vloss < best_val - 1e-6:
+                        best_val = vloss
+                        best_snap = self._snapshot_weights()
+                        self.best_epoch_ = epoch
+                        wait = 0
+                    else:
+                        wait += 1
+                        if wait >= early_stop_patience:
+                            if verbose:
+                                print(f"    Early stop at epoch {epoch + 1} (best={self.best_epoch_ + 1})")
+                            break
+
             if verbose and (epoch + 1) % print_every == 0:
-                print(f"    Epoch {epoch + 1:5d} | loss = {loss:.6f} | accuracy = {acc:6.2f}%")
+                extra = f" | val = {self.val_loss_[-1]:.6f}" if self.val_loss_ else ""
+                print(f"    Epoch {epoch + 1:5d} | loss = {loss:.6f} | accuracy = {acc:6.2f}%{extra}")
+
+        if best_snap is not None:
+            self._restore_weights(best_snap)
         if self.batch_norm:
             self._sync_bn_stats(X)
         return self

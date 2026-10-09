@@ -117,7 +117,7 @@
       <a class="lesson-card" href="08_regularization.html">
         <div class="num">EXPERIMENT 08</div>
         <h3>正则化</h3>
-        <p>小样本加噪声标签易过拟合；适量 L2 压权重，过强则欠拟合。</p>
+        <p>并排验证 L1/L2/Dropout/组合/早停：看 gap、||W||、稀疏度与欠拟合。</p>
       </a>
       <a class="lesson-card" href="09_mnist.html">
         <div class="num">EXPERIMENT 09</div>
@@ -180,7 +180,7 @@ python lessons/09_mnist.py --epochs 3</pre>
       <tr><td><a href="05_learning_rate.html">05</a></td><td>学习率</td><td>太小学得慢；合适稳定下降；太大震荡/发散</td><td>约 1 分钟</td></tr>
       <tr><td><a href="06_weight_init.html">06</a></td><td>参数初始化</td><td>全零对称崩溃；过小衰减；过大爆炸；He 稳住尺度</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="07_normalization.html">07</a></td><td>归一化</td><td>尺度悬殊难学；输入标准化 / BatchNorm 稳住训练</td><td>约 1 分钟</td></tr>
-      <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>无正则易背噪声；适量 L2 压权重；过强欠拟合</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>L1/L2/Dropout/组合/早停对照；过强 L2 欠拟合</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="09_mnist.html">09</a></td><td>MNIST</td><td>CNN 保留空间结构，通常比 Flatten+MLP 更准</td><td>GPU 数分钟</td></tr>
     </table>
 

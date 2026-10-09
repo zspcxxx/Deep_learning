@@ -29,8 +29,9 @@
     <ol>
       <li><a href="#goals">要回答什么</a></li>
       <li><a href="#intuition">直觉</a></li>
-      <li><a href="#l2">L2 权重衰减</a></li>
-      <li><a href="#dropout">Dropout</a></li>
+      <li><a href="#methods">八种设置</a></li>
+      <li><a href="#l2">L1 / L2</a></li>
+      <li><a href="#dropout">Dropout 与早停</a></li>
       <li><a href="#exp">受控对比实验</a></li>
       <li><a href="#run">如何运行</a></li>
       <li><a href="#read">看图要点</a></li>
@@ -47,20 +48,20 @@
       </div>
       <div class="hero-grid">
         <div>
-          <h1>正则化：别把噪声也学进去</h1>
-          <p class="lead">模型太“自由”时，会把训练集里的标签噪声和偶然起伏一并记住，训练集准确率虚高、测试集掉下去——这叫过拟合。正则化给参数加约束：适量 L2 让权重变小、边界更平滑；过强则会欠拟合。本实验用小样本 + 故意翻转的标签，把三种结局画出来。</p>
-          <p class="meta">入口 <code>lessons/08_regularization.py</code> · <code>MLP(..., l2=..., dropout=...)</code></p>
+          <h1>正则化：多种手段一起对照</h1>
+          <p class="lead">过拟合时训练集（含噪声）背得很熟，测试却掉下去。本课在同一小样本 + 标签噪声设定下，并排验证无正则、L2、L1、Dropout、L1+L2、L2+Dropout、早停、以及过强 L2，看权重大小、稀疏度、训练/测试差距如何变化。</p>
+          <p class="meta">入口 <code>lessons/08_regularization.py</code> · <code>MLP(..., l1=, l2=, dropout=)</code> · 早停用验证集</p>
         </div>
         <div class="diagram" style="margin:0;padding:8px;">
           <svg viewBox="0 0 280 160" width="280" height="160" xmlns="http://www.w3.org/2000/svg">
             <path d="M30,120 C60,20 90,140 120,40 S180,130 210,50 S250,110 260,80" fill="none" stroke="#be123c" stroke-width="2"/>
             <text x="40" y="150" font-size="11" fill="#be123c" font-family="sans-serif">过拟合</text>
             <path d="M30,100 Q100,40 160,70 T260,90" fill="none" stroke="#0f766e" stroke-width="2.5"/>
-            <text x="150" y="150" font-size="11" fill="#0f766e" font-family="sans-serif">适量</text>
+            <text x="130" y="150" font-size="11" fill="#0f766e" font-family="sans-serif">正则 / 早停</text>
             <line x1="30" y1="85" x2="260" y2="85" stroke="#64748b" stroke-width="2"/>
             <text x="210" y="150" font-size="11" fill="#64748b" font-family="sans-serif">欠拟合</text>
           </svg>
-          <div class="cap">容量太大 / 刚好 / 被勒太紧</div>
+          <div class="cap">同一数据，不同约束</div>
         </div>
       </div>
     </div>
@@ -68,35 +69,44 @@
     <h2 id="goals">这个实验要回答什么</h2>
     <div class="goals">
       <ol class="steps">
-        <li>过拟合长什么样？为什么训练准确率高不等于泛化好？</li>
-        <li>L2 正则如何进入损失与梯度？它如何改变 ||W||？</li>
-        <li>正则太强时会发生什么？</li>
+        <li>无正则时过拟合长什么样（train/test gap、||W||）？</li>
+        <li>L2 压幅度、L1 促稀疏、Dropout / 早停分别改了训练的哪一步？</li>
+        <li>正则太强为什么会欠拟合？</li>
       </ol>
     </div>
 
     <h2 id="intuition">用人话建立直觉</h2>
-    <p>考试前把练习册答案背下来，遇到换题就懵——模型也会这样。正则化像限制“背诵细节”的自由度：偏好更简单的解（更小的权重、更平滑的边界）。</p>
-    <div class="card-grid">
-      <div class="card"><h4>无正则</h4><p>训练集（含噪声标签）几乎记满；权重大；决策边界弯绕；训练≫测试。</p></div>
-      <div class="card"><h4>适量 L2</h4><p>权重被压小；边界更顺；仍能学到主结构。</p></div>
-      <div class="card"><h4>过强 L2</h4><p>权重几乎被压成 0；学不动，训练/测试都差 → 欠拟合。</p></div>
-    </div>
+    <p>把模型想成写作文：字数不限就会堆砌细节（背噪声）；限制字数（L2）、强迫多用短句（L1 稀疏）、随机遮住一半草稿纸再写（Dropout）、写到老师说“够了”就停（早停），都会减少过拟合风险——但限制过头就写不出完整论点。</p>
 
-    <h2 id="l2">L2 权重衰减</h2>
-    <pre class="formula">L = L_data + (λ/2m) Σ ||W||²
-∂L/∂W ← ∂L_data/∂W + (λ/m) W</pre>
-    <p>等价于每次更新把权重往 0 拉一点（weight decay）。偏置通常不衰减；本实现只正则化 <code>W</code>。代码：<code>MLP(..., l2=0.15)</code>。</p>
+    <h2 id="methods">本实验对比的八种设置</h2>
+    <table>
+      <tr><th>key</th><th>手段</th><th>参数</th><th>预期信号</th></tr>
+      <tr><td><code>none</code></td><td>无正则</td><td>—</td><td>train 很高，||W|| 大，gap 大</td></tr>
+      <tr><td><code>l2</code></td><td>L2</td><td>λ₂=0.15</td><td>||W|| 明显变小</td></tr>
+      <tr><td><code>l1</code></td><td>L1</td><td>λ₁=0.04</td><td>大量 |w|≈0（稀疏）</td></tr>
+      <tr><td><code>dropout</code></td><td>Dropout</td><td>p=0.4</td><td>训练曲线更抖，抑制共适应</td></tr>
+      <tr><td><code>elastic</code></td><td>L1+L2</td><td>0.02+0.08</td><td>既缩小又稀疏</td></tr>
+      <tr><td><code>l2_drop</code></td><td>L2+Dropout</td><td>0.08+0.35</td><td>组合约束</td></tr>
+      <tr><td><code>early</code></td><td>早停</td><td>patience=80</td><td>在验证损失变差前还原最佳权重</td></tr>
+      <tr><td><code>strong</code></td><td>过强 L2</td><td>λ₂=2.0</td><td>欠拟合，train 很低</td></tr>
+    </table>
 
-    <h2 id="dropout">Dropout（库已支持）</h2>
-    <p>训练时随机将隐藏单元置零（本库用 inverted dropout，推理时不改尺度）。全批量小数据上效果不如 L2 直观，故本实验主对比 L2 强度；可自行改 <code>dropout=0.3</code> 观察。接口：<code>MLP(..., dropout=0.3)</code>。</p>
+    <h2 id="l2">L1 / L2</h2>
+    <pre class="formula">L = L_data + (λ₂/2m) Σ||W||² + (λ₁/m) Σ|W|
+∂L/∂W ← ∂L_data/∂W + (λ₂/m) W + (λ₁/m) sign(W)</pre>
+    <p>L2 倾向把权重均匀压小；L1 的次梯度含 <code>sign(W)</code>，更容易把权重推到精确的 0。代码：<code>MLP(..., l1=0.04, l2=0.15)</code>。</p>
+
+    <h2 id="dropout">Dropout 与早停</h2>
+    <p><strong>Dropout</strong>：训练时按概率 p 将隐藏激活置零（inverted dropout）；<code>predict</code> 时关闭。接口 <code>dropout=0.4</code>。</p>
+    <p><strong>早停</strong>：另留验证集，监控验证 BCE；连续 <code>patience</code> 轮无提升则停止，并恢复验证最优权重。<code>fit(..., X_val=, y_val=, early_stop_patience=80)</code>。</p>
 
     <h2 id="exp">受控对比实验</h2>
     <ul>
-      <li>数据：Two Moons，噪声 0.32；只用 28 个训练点，并<strong>翻转 8 个训练标签</strong></li>
-      <li>结构：<code>[2, 64, 64, 1]</code>，ReLU，He，lr=0.5，1600 轮</li>
-      <li>三种 <code>l2</code>：<code>0</code>（无）/ <code>0.15</code>（适量）/ <code>2.0</code>（过强）</li>
+      <li>数据：Two Moons，噪声 0.32；训练 28 点（翻转 8 个标签）；验证 60；其余测试</li>
+      <li>结构：<code>[2, 64, 64, 1]</code>，ReLU，He，lr=0.5，最多 1600 轮</li>
+      <li>八种设置如上表，其它条件固定</li>
     </ul>
-    <div class="callout ok"><strong>实验结论预期</strong>无正则训练准确率很高、权重很大、训练-测试差距大；适量 L2 明显缩小 ||W||；过强 L2 训练准确率垮掉（欠拟合）。</div>
+    <div class="callout ok"><strong>通过标准（脚本内）</strong>无正则高 train + 大 gap；L2 缩小 ||W||；L1 稀疏度明显高于 none；过强 L2 欠拟合；早停提前结束；Dropout / 组合方法权重或训练表现符合约束。</div>
 
     <h2 id="run">如何单独运行</h2>
     <pre class="cmd">source .venv/bin/activate
@@ -105,28 +115,31 @@ python scripts/run_lesson.py 08
 python lessons/08_regularization.py</pre>
     <p>结果在 <code>artifacts/08_regularization/</code>：</p>
     <ul>
-      <li><code>reg_curves.png</code> — 训练损失 / 训练准确率</li>
-      <li><code>reg_train_test.png</code> — 训练 vs 测试准确率，以及 ||W||</li>
-      <li><code>reg_boundaries.png</code> — 三种决策边界</li>
+      <li><code>reg_curves.png</code> — 各方法训练损失 / 训练准确率</li>
+      <li><code>reg_train_test.png</code> — train/test、||W||、稀疏度柱状图</li>
+      <li><code>reg_boundaries.png</code> — 八种决策边界</li>
+      <li><code>reg_early_stop.png</code> — 早停验证损失曲线</li>
       <li><code>metrics.json</code></li>
     </ul>
 
     <h2 id="read">看图时注意什么</h2>
     <table>
-      <tr><th></th><th>none</th><th>l2</th><th>strong</th></tr>
-      <tr><td>Train acc</td><td>很高（可能背噪声）</td><td>略降或仍高</td><td>明显偏低</td></tr>
-      <tr><td>||W||</td><td>大</td><td>明显更小</td><td>接近 0</td></tr>
-      <tr><td>边界</td><td>弯绕、贴噪声点</td><td>更平滑</td><td>几乎分不开</td></tr>
+      <tr><th>信号</th><th>看哪里</th></tr>
+      <tr><td>是否背噪声</td><td>none 的 train≫test、边界贴翻转点</td></tr>
+      <tr><td>L2 是否生效</td><td>||W|| 柱：l2 / elastic / l2_drop ≪ none</td></tr>
+      <tr><td>L1 是否稀疏</td><td>稀疏度柱：l1 / elastic 很高</td></tr>
+      <tr><td>早停</td><td>epochs≪1600，验证曲线在停点附近</td></tr>
+      <tr><td>欠拟合</td><td>strong 的 train/test 都接近随机</td></tr>
     </table>
 
     <h2 id="tips">实践建议</h2>
     <ul>
-      <li>先保证模型能过拟合训练集，再加正则——否则分不清是正则太强还是模型太弱。</li>
-      <li>L2 / weight decay 与学习率、批量大小联动；现代优化器里 AdamW 把 decay 解耦得更干净。</li>
-      <li>Dropout 多用于较大网络与 mini-batch；推理务必关闭（本库 <code>predict</code> 已关闭）。</li>
-      <li>数据增强、早停、更多数据往往比死拧 λ 更有效。</li>
+      <li>先做出明显过拟合，再加正则，否则分不清“太强”还是“没学会”。</li>
+      <li>表格数据常用 L2 / weight decay；大网络常用 Dropout / DropPath；都要配合验证集调强度。</li>
+      <li>早停几乎零成本，应作为默认习惯；最终报告用验证选出的模型在测试集上只评估一次。</li>
+      <li>数据增强与更多干净数据，往往比死拧 λ 更有效。</li>
     </ul>
-    <div class="callout ok"><strong>自己改一改</strong>把 <code>N_FLIP</code> 改成 0，看“没有标签噪声时”三种设置差距是否变小；或加上 <code>dropout=0.4</code> 与 L2 组合。</div>
+    <div class="callout ok"><strong>自己改一改</strong>改 <code>SETUPS</code> 里的 λ / dropout；把 <code>N_FLIP</code> 设为 0 看差距是否缩小；或把早停 <code>patience</code> 调大，观察停得更晚时 test 如何变化。</div>
 
     <div class="footer-nav">
       <a href="07_normalization.html">← 07 归一化</a>

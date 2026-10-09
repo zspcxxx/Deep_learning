@@ -80,7 +80,7 @@ LESSONS = [
         "module": "lessons.08_regularization",
         "doc": "08_regularization.html",
         "needs_torch": False,
-        "help": "对比无正则 / 适量 L2 / 过强 L2（过拟合与欠拟合）",
+        "help": "对比 L1/L2/Dropout/组合/早停/过强 L2 等多种正则",
     },
     {
         "id": "09",
