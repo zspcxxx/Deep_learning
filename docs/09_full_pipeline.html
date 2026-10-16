@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>09 综合实战 · Deep Learning Lab</title>
+<title>09 综合实战：MNIST 数字识别 · Deep Learning Lab</title>
 <link rel="stylesheet" href="learn.css">
 </head>
 <body>
@@ -28,12 +28,13 @@
     <h3>本页目录</h3>
     <ol>
       <li><a href="#goals">要回答什么</a></li>
-      <li><a href="#recipe">知识清单</a></li>
-      <li><a href="#pipelines">两条流水线</a></li>
-      <li><a href="#data">数据设定</a></li>
+      <li><a href="#recipe">总结：11 项核心知识</a></li>
+      <li><a href="#math">核心技术公式与原理</a></li>
+      <li><a href="#pipelines">三条对比流水线</a></li>
+      <li><a href="#data">MNIST 数据与网络结构</a></li>
       <li><a href="#run">如何运行</a></li>
       <li><a href="#read">看图要点</a></li>
-      <li><a href="#tips">下一步</a></li>
+      <li><a href="#tips">自己动手改一改</a></li>
     </ol>
   </aside>
 
@@ -41,27 +42,30 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">实验 09</span>
-        <span class="chip teal">无需 GPU</span>
-        <span class="chip amber">串课实战</span>
+        <span class="chip teal">MNIST 手写数字识别</span>
+        <span class="chip amber">11 项核心技术全景</span>
       </div>
       <div class="hero-grid">
         <div>
-          <h1>综合实战：把 01–08 串成一次训练</h1>
-          <p class="lead">前面每课只拧一颗螺丝。这一课用同一份“有点别扭”的数据，训练一个更深的 MLP：一条故意踩坑的 naive 流水线，一条把学习率、初始化、归一化、正则与早停装齐的 tuned 流水线。看测试集差距，就是前面知识有没有真正接上。</p>
-          <p class="meta">入口 <code>lessons/09_full_pipeline.py</code> · 复用 <code>src/dllab/mlp.py</code> 全部开关</p>
+          <h1>综合实战：集齐 11 项核心技术识别 MNIST 手写数字</h1>
+          <p class="lead">前面每课拆解了一个独立环节。本节作为收官实战，在经典的 <strong>MNIST 手写数字识别（28×28 灰度图，0–9 十分类）</strong>任务上，将参数初始化、激活函数、Dropout、归一化（BN / LN / RMSNorm）、损失函数（MSE / Cross-Entropy）、L1/L2 正则化、反向传播、优化器（SGD+Momentum / AdamW）、学习率调度（Warmup + Cosine）、权重衰减、Early Stopping 全部组装进同一个纯 NumPy 深度网络。</p>
+          <p class="meta">入口 <code>lessons/09_full_pipeline.py</code> · 多分类实现 <code>src/dllab/mlp.py:MulticlassMLP</code> · 数据集 <code>src/dllab/datasets.py:load_mnist_dataset</code></p>
         </div>
         <div class="diagram" style="margin:0;padding:8px;">
-          <svg viewBox="0 0 300 170" width="300" height="170" xmlns="http://www.w3.org/2000/svg">
-            <rect x="10" y="20" width="60" height="28" rx="4" fill="#e2e8f0"/><text x="40" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">数据</text>
-            <rect x="90" y="20" width="60" height="28" rx="4" fill="#ccfbf1"/><text x="120" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">标准化</text>
-            <rect x="170" y="20" width="50" height="28" rx="4" fill="#dbeafe"/><text x="195" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">He</text>
-            <rect x="240" y="20" width="50" height="28" rx="4" fill="#ede9fe"/><text x="265" y="38" text-anchor="middle" font-size="11" font-family="sans-serif">BN</text>
-            <rect x="50" y="70" width="70" height="28" rx="4" fill="#fef3c7"/><text x="85" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">ReLU MLP</text>
-            <rect x="140" y="70" width="50" height="28" rx="4" fill="#fee2e2"/><text x="165" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">L2</text>
-            <rect x="210" y="70" width="70" height="28" rx="4" fill="#ffedd5"/><text x="245" y="88" text-anchor="middle" font-size="11" font-family="sans-serif">Dropout</text>
-            <rect x="100" y="120" width="100" height="28" rx="4" fill="#d1fae5"/><text x="150" y="138" text-anchor="middle" font-size="11" font-family="sans-serif">早停 → 评估</text>
+          <svg viewBox="0 0 320 185" width="320" height="185" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="14" width="68" height="28" rx="4" fill="#e2e8f0"/><text x="42" y="32" text-anchor="middle" font-size="10" font-family="sans-serif">MNIST 28×28</text>
+            <rect x="86" y="14" width="68" height="28" rx="4" fill="#dbeafe"/><text x="120" y="32" text-anchor="middle" font-size="10" font-family="sans-serif">He / Xavier</text>
+            <rect x="164" y="14" width="68" height="28" rx="4" fill="#ede9fe"/><text x="198" y="32" text-anchor="middle" font-size="10" font-family="sans-serif">BN/LN/RMS</text>
+            <rect x="242" y="14" width="70" height="28" rx="4" fill="#fef3c7"/><text x="277" y="32" text-anchor="middle" font-size="10" font-family="sans-serif">ReLU/GELU</text>
+            <rect x="18" y="58" width="84" height="28" rx="4" fill="#ffedd5"/><text x="60" y="76" text-anchor="middle" font-size="10" font-family="sans-serif">Dropout + L1/L2</text>
+            <rect x="114" y="58" width="90" height="28" rx="4" fill="#fce7f3"/><text x="159" y="76" text-anchor="middle" font-size="10" font-family="sans-serif">Cross-Entropy</text>
+            <rect x="216" y="58" width="86" height="28" rx="4" fill="#e0e7ff"/><text x="259" y="76" text-anchor="middle" font-size="10" font-family="sans-serif">链式反向传播</text>
+            <rect x="18" y="102" width="96" height="28" rx="4" fill="#ccfbf1"/><text x="66" y="120" text-anchor="middle" font-size="10" font-family="sans-serif">AdamW 解耦衰减</text>
+            <rect x="124" y="102" width="100" height="28" rx="4" fill="#d1fae5"/><text x="174" y="120" text-anchor="middle" font-size="10" font-family="sans-serif">Warmup + Cosine</text>
+            <rect x="234" y="102" width="74" height="28" rx="4" fill="#dcfce7"/><text x="271" y="120" text-anchor="middle" font-size="10" font-family="sans-serif">早停监控</text>
+            <rect x="85" y="144" width="150" height="26" rx="5" fill="#0f766e"/><text x="160" y="161" text-anchor="middle" font-size="11" fill="#ffffff" font-family="sans-serif">0–9 数字识别 (&gt;95% Acc)</text>
           </svg>
-          <div class="cap">tuned 流水线积木</div>
+          <div class="cap">MNIST 现代训练流水线全貌</div>
         </div>
       </div>
     </div>
@@ -69,64 +73,93 @@
     <h2 id="goals">这个实验要回答什么</h2>
     <div class="goals">
       <ol class="steps">
-        <li>一次完整训练里，前面各课的“旋钮”分别拧在哪？</li>
-        <li>为什么 naive（坏 lr / 坏 init / 无归一化 / 无正则）会学崩或学不好？</li>
-        <li>tuned 流水线能否在同一数据上拿到明显更高的测试准确率？</li>
+        <li>深度学习的 <strong>11 个核心环节</strong>分别解决什么问题？如何在一个真实图像多分类任务里协同工作？</li>
+        <li>为什么用 <code>Large Init + Sigmoid + MSE + 固定步长 SGD</code>（<code>naive</code>）在深层手写数字识别上收敛极慢、精度低下？</li>
+        <li>换上 <code>He/Xavier + GELU/ReLU + RMSNorm/BN + Cross-Entropy + AdamW/Momentum + WarmupCosine + 解耦权重衰减 + Early Stopping</code> 后，测试集准确率与收敛速度提升多少？</li>
       </ol>
     </div>
 
-    <h2 id="recipe">知识清单（对照前面课程）</h2>
+    <h2 id="recipe">总结：核心知识（11 项关键技术对照表）</h2>
     <table>
-      <tr><th>课</th><th>用在本实验哪里</th></tr>
-      <tr><td>02 / 04</td><td>多层感知机 + ReLU 隐藏层</td></tr>
-      <tr><td>03</td><td>反向传播、全批量 SGD 更新</td></tr>
-      <tr><td>05</td><td>tuned：lr=0.4；naive：lr=6.0（过大）</td></tr>
-      <tr><td>06</td><td>tuned：He；naive：large 高斯</td></tr>
-      <tr><td>07</td><td>tuned：输入标准化 + BatchNorm；naive：原始极端尺度</td></tr>
-      <tr><td>08</td><td>tuned：L2 + Dropout + 验证集早停；naive：无正则、跑满轮数</td></tr>
+      <tr><th>环节</th><th>关键技术</th><th>解决的问题</th><th>代码位置（<code>MulticlassMLP</code>）</th></tr>
+      <tr><td>参数初始化</td><td><code>He / Xavier</code></td><td>信号尺度稳定，梯度可传播</td><td><code>_init_params()</code>：隐藏层 He，输出层 Xavier</td></tr>
+      <tr><td>激活函数</td><td><code>Sigmoid / ReLU / GELU / SiLU</code></td><td>引入非线性，保持梯度通畅</td><td><code>_activate()</code> 与 <code>_activate_grad()</code></td></tr>
+      <tr><td>Dropout</td><td>随机关闭神经元</td><td>防止过拟合，特征冗余</td><td><code>_forward()</code> 中 Inverted Dropout 掩码</td></tr>
+      <tr><td>归一化</td><td><code>BN / LN / RMSNorm</code></td><td>稳定激活分布，加速收敛</td><td><code>_norm_forward()</code> 与 <code>_norm_backward()</code></td></tr>
+      <tr><td>损失函数</td><td><code>MSE / Cross-Entropy</code></td><td>量化误差，提供梯度信号</td><td><code>_compute_loss_and_delta()</code> + Softmax</td></tr>
+      <tr><td>L1 / L2 正则化</td><td>损失加惩罚项</td><td>限制模型复杂度</td><td>损失项与梯度项 <code>+ (λ₂/m)W + (λ₁/m)sign(W)</code></td></tr>
+      <tr><td>反向传播</td><td>链式法则</td><td>计算每个参数的梯度</td><td><code>_backward()</code> 逐层解析求导</td></tr>
+      <tr><td>优化器</td><td><code>SGD+Momentum / AdamW</code></td><td>高效稳定地更新参数</td><td><code>_apply_gradients()</code> 一阶/二阶动量自适应</td></tr>
+      <tr><td>学习率调度</td><td><code>Warmup + Cosine</code></td><td>不同阶段适配不同步长</td><td><code>_get_lr(epoch)</code> 线性预热 + 余弦退火</td></tr>
+      <tr><td>权重衰减</td><td><code>AdamW</code> 解耦衰减</td><td>参数持续向零收缩，提升泛化</td><td><code>W *= (1 - lr_t * weight_decay)</code></td></tr>
+      <tr><td>Early Stopping</td><td>监控验证集</td><td>在过拟合之前停止训练</td><td><code>fit()</code> 追踪最优 <code>val_loss</code> 并回滚最佳参数</td></tr>
     </table>
 
-    <h2 id="pipelines">两条流水线</h2>
+    <h2 id="math">核心技术公式与实现要点</h2>
+    <ul>
+      <li><strong>归一化（BN / LN / RMSNorm）</strong>：
+        <ul>
+          <li><code>BatchNorm</code>：按 batch 维求均值方差，推理时用滑动平均统计量。</li>
+          <li><code>LayerNorm</code>：按样本特征维标准化，不依赖 batch 大小。</li>
+          <li><code>RMSNorm</code>：省去均值中心化，仅按均方根缩放 \(\hat{z} = \frac{z}{\sqrt{\frac{1}{d}\sum z_i^2 + \epsilon}}\)，现代大模型与深层网络常用。</li>
+        </ul>
+      </li>
+      <li><strong>损失函数（Cross-Entropy vs MSE）</strong>：配合 Softmax 输出概率 \(p_k = \frac{e^{z_k}}{\sum_j e^{z_j}}\)，交叉熵损失 \(L = -\frac{1}{m}\sum \log p_{y_i}\) 对 logits 的梯度直接简化为 \(\frac{1}{m}(p - y_{\text{onehot}})\)，误差越大梯度越强，不会像 Sigmoid+MSE 那样在饱和区梯度消失。</li>
+      <li><strong>优化器与解耦权重衰减（AdamW vs SGD+Momentum）</strong>：AdamW 在更新一阶动量 \(m_t\) 和二阶动量 \(v_t\) 之前，先执行解耦权重衰减 \(W \leftarrow (1 - \eta_t \lambda_{\text{wd}})W\)，避免 L2 正则项被自适应梯度平方根缩放稀释。</li>
+      <li><strong>学习率调度（Warmup + Cosine）</strong>：前 <code>warmup_epochs</code> 轮从 0 线性升温至峰值学习率（防止训练初期统计量未稳时梯度爆炸），随后按余弦曲线平滑退火至 <code>min_lr</code>。</li>
+    </ul>
+
+    <h2 id="pipelines">三条对比流水线</h2>
     <div class="card-grid">
-      <div class="card"><h4>naive</h4><p>large 初始化、过大学习率、不标准化、无 BN / L2 / Dropout / 早停。用来复现“没串课”时的惨状。</p></div>
-      <div class="card"><h4>tuned</h4><p>He + lr=0.4 + 标准化 + BN + L2=0.06 + Dropout=0.25 + patience=100。把 05–08 的结论一次装上。</p></div>
+      <div class="card">
+        <h4>1. naive（反面教材）</h4>
+        <p><code>large</code> 初始化 + <code>Sigmoid</code> + 无归一化 + <code>MSE</code> 损失 + 固定学习率 <code>SGD</code>，无正则与早停。梯度饱和且信号失衡，准确率停留在很低水平。</p>
+      </div>
+      <div class="card">
+        <h4>2. momentum_bn（经典进阶）</h4>
+        <p>输入标准化 + <code>He</code> 初始化 + <code>ReLU</code> + <code>BatchNorm</code> + <code>Cross-Entropy</code> + <code>SGD+Momentum</code> + <code>Warmup+Cosine</code> + <code>L1/L2</code> + <code>Dropout</code> + 早停。</p>
+      </div>
+      <div class="card">
+        <h4>3. tuned（现代全套配置）</h4>
+        <p>输入标准化 + <code>He/Xavier</code> + <code>GELU</code> + <code>RMSNorm</code> + <code>Cross-Entropy</code> + <code>AdamW</code>（含解耦权重衰减）+ <code>Warmup+Cosine</code> + <code>Dropout/L2</code> + 早停。</p>
+      </div>
     </div>
 
-    <h2 id="data">数据设定</h2>
+    <h2 id="data">MNIST 数据设定与网络结构</h2>
     <ul>
-      <li>Two Moons，噪声 0.22，再乘尺度 <code>[12, 0.12]</code> 并平移（制造量纲问题）</li>
-      <li>训练 80（其中翻转 6 个标签）/ 验证 80 / 其余测试</li>
-      <li>网络 <code>[2, 32, 32, 32, 1]</code>，最多 1200 轮</li>
+      <li><strong>数据集</strong>：MNIST 手写数字（\(28 \times 28 = 784\) 维特征，类别 \(0\text{–}9\)）。首次运行自动下载并缓存至 <code>data/mnist.npz</code>（若处于完全无网环境，自动启用内置 28×28 手写笔画生成器兜底）。</li>
+      <li><strong>划分</strong>：训练集 <code>4000</code> 张 / 验证集 <code>800</code> 张 / 测试集 <code>1200</code> 张。</li>
+      <li><strong>网络结构</strong>：<code>[784, 128, 64, 10]</code>（两层隐藏层 + 10 分类输出头），Mini-batch 大小 <code>128</code>，训练最多 <code>35</code> 个 Epoch。</li>
     </ul>
-    <div class="callout ok"><strong>通过标准</strong>tuned 测试准确率 ≥85%，且比 naive 高出至少 15 个百分点（naive 学崩或明显更差也算）。</div>
+    <div class="callout ok"><strong>通过标准</strong><code>tuned</code> 与 <code>momentum_bn</code> 数值稳定（无 NaN），<code>tuned</code> 测试集准确率 \(\ge 90\%\)（通常可达 \(94\%\sim 96\%\)），且显著领先 <code>naive</code> 至少 25 个百分点。</div>
 
     <h2 id="run">如何单独运行</h2>
     <pre class="cmd">source .venv/bin/activate
 python scripts/run_lesson.py 09
 # 或
 python lessons/09_full_pipeline.py</pre>
-    <p>结果在 <code>artifacts/09_full_pipeline/</code>：</p>
+    <p>结果保存在 <code>artifacts/09_full_pipeline/</code>：</p>
     <ul>
-      <li><code>pipeline_curves.png</code> — 两条流水线的损失 / 训练准确率</li>
-      <li><code>pipeline_metrics.png</code> — train / val / test 柱状对比</li>
-      <li><code>pipeline_boundaries.png</code> — 决策边界</li>
-      <li><code>pipeline_recipe.png</code> — 知识清单图示</li>
-      <li><code>metrics.json</code></li>
+      <li><code>pipeline_curves.png</code> — 训练损失曲线、验证集准确率曲线、Warmup + Cosine 学习率调度曲线</li>
+      <li><code>pipeline_metrics.png</code> — 三条流水线 Train/Val/Test 准确率对比 + <code>tuned</code> 在 MNIST 测试集上的 10×10 混淆矩阵</li>
+      <li><code>pipeline_boundaries.png</code> — 16 张测试集手写数字样本预测对比（真实标签 vs <code>tuned</code> 预测与置信度 vs <code>naive</code> 预测）</li>
+      <li><code>pipeline_recipe.png</code> — 11 项核心知识体系汇总卡与实验得分</li>
+      <li><code>metrics.json</code> — 完整指标与配置记录</li>
     </ul>
 
     <h2 id="read">看图时注意什么</h2>
     <table>
-      <tr><th>图</th><th>naive</th><th>tuned</th></tr>
-      <tr><td>Loss</td><td>可能不降 / 发散</td><td>稳定下降</td></tr>
-      <tr><td>test 柱</td><td>偏低或失败</td><td>明显更高</td></tr>
-      <tr><td>边界</td><td>糊或画不出</td><td>月牙结构清晰</td></tr>
+      <tr><th>图</th><th>观察重点</th></tr>
+      <tr><td><code>pipeline_curves.png</code></td><td>右图展示学习率前 4 轮线性 Warmup 再按 Cosine 衰减；中图可见 <code>tuned</code> 与 <code>momentum_bn</code> 在几个 Epoch 内迅速突破 90% 准确率，而 <code>naive</code> 爬升缓慢。</td></tr>
+      <tr><td><code>pipeline_metrics.png</code></td><td>左图对比三套方案的泛化差距；右图混淆矩阵主对角线深蓝，偶发的误判集中在字形相近的数字（如 4 与 9、3 与 8）。</td></tr>
+      <tr><td><code>pipeline_boundaries.png</code></td><td>直观看到 28×28 手写数字图像、<code>tuned</code> 模型给出的高置信度正确分类，以及 <code>naive</code> 模型的错误预测。</td></tr>
     </table>
 
-    <h2 id="tips">下一步</h2>
+    <h2 id="tips">下一步：自己动手改一改</h2>
     <ul>
-      <li>在 <code>PIPELINES["tuned"]</code> 里关掉 BN 或标准化，看测试掉多少——复习第 07 课。</li>
-      <li>把结构改浅 <code>[2, 8, 1]</code>，naive 与 tuned 差距会缩小——深度放大了坏超参的伤害。</li>
-      <li>试着只改 <code>PIPELINES</code> 里一颗螺丝（例如关掉 BN），观察测试准确率掉多少。</li>
+      <li>在 <code>lessons/09_full_pipeline.py</code> 中把 <code>norm="rmsnorm"</code> 改为 <code>"ln"</code>（LayerNorm）或 <code>"bn"</code>（BatchNorm），对比收敛速度。</li>
+      <li>把激活函数在 <code>"gelu"</code>、<code>"silu"</code>、<code>"relu"</code> 之间切换，验证现代平滑激活函数的表现。</li>
+      <li>把 <code>loss_type</code> 在 <code>"ce"</code>（Cross-Entropy）与 <code>"mse"</code> 之间切换，直观体会分类任务为什么首选交叉熵。</li>
     </ul>
 
     <div class="footer-nav">

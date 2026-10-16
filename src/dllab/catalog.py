@@ -75,11 +75,11 @@ LESSONS = [
     },
     {
         "id": "09",
-        "keys": ("09", "9", "pipeline", "full-pipeline", "capstone", "09_full_pipeline"),
-        "title": "综合实战",
+        "keys": ("09", "9", "pipeline", "full-pipeline", "capstone", "mnist", "09_full_pipeline"),
+        "title": "综合实战：MNIST 数字识别",
         "module": "lessons.09_full_pipeline",
         "doc": "09_full_pipeline.html",
-        "help": "naive vs tuned 流水线，串起 01–08 的训练实践",
+        "help": "集齐 11 项核心技术（He/Xavier、GELU、RMSNorm/BN、CE、AdamW、Warmup+Cosine、早停等）实现 MNIST 手写数字识别",
     },
 ]
 

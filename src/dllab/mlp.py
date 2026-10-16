@@ -287,3 +287,517 @@ class MLP:
 
     def predict(self, X):
         return (self.predict_proba(X) >= 0.5).astype(int)
+
+
+class MulticlassMLP:
+    """Multi-class deep neural network implementing all 11 core techniques:
+    - Parameter Init: He / Xavier (plus zeros / small / large for ablation)
+    - Activations: ReLU / GELU / SiLU / Sigmoid / Tanh
+    - Normalization: BatchNorm (BN) / LayerNorm (LN) / RMSNorm
+    - Dropout: Inverted dropout on hidden activations
+    - Loss Function: Cross-Entropy (Softmax) / MSE
+    - L1 / L2 Regularization: Explicit penalty added to loss & gradients
+    - Backpropagation: Exact analytical chain-rule through all layers/norms
+    - Optimizers: SGD, SGD+Momentum, AdamW
+    - LR Schedule: Warmup + Cosine Annealing (or constant)
+    - Weight Decay: Decoupled weight decay in AdamW
+    - Early Stopping: Validation loss monitoring with best-checkpoint restore
+    """
+
+    def __init__(
+        self,
+        layer_sizes: list[int],
+        learning_rate: float = 3e-3,
+        min_lr: float = 1e-4,
+        n_epochs: int = 40,
+        batch_size: int = 128,
+        warmup_epochs: int = 5,
+        lr_schedule: str = "warmup_cosine",  # "constant" | "warmup_cosine"
+        activation: str = "gelu",            # "relu" | "gelu" | "silu" | "sigmoid" | "tanh"
+        init: str = "he",                    # "he" | "xavier" | "zeros" | "small" | "large"
+        norm: str | None = "rmsnorm",        # None | "bn" | "ln" | "rmsnorm"
+        loss_type: str = "ce",               # "ce" (Cross-Entropy) | "mse"
+        optimizer: str = "adamw",            # "sgd" | "momentum" | "adamw"
+        momentum: float = 0.9,
+        beta1: float = 0.9,
+        beta2: float = 0.999,
+        weight_decay: float = 1e-2,          # AdamW decoupled weight decay
+        l1: float = 0.0,
+        l2: float = 0.0,
+        dropout: float = 0.15,
+        seed: int = 42,
+    ):
+        self.layer_sizes = list(layer_sizes)
+        self.lr = float(learning_rate)
+        self.min_lr = float(min_lr)
+        self.n_epochs = int(n_epochs)
+        self.batch_size = int(batch_size)
+        self.warmup_epochs = int(warmup_epochs)
+        self.lr_schedule = lr_schedule
+        self.activation_name = activation.lower()
+        self.init = init.lower()
+        self.norm = norm.lower() if norm else None
+        self.loss_type = loss_type.lower()
+        self.optimizer = optimizer.lower()
+        self.momentum = float(momentum)
+        self.beta1 = float(beta1)
+        self.beta2 = float(beta2)
+        self.weight_decay = float(weight_decay)
+        self.l1 = float(l1)
+        self.l2 = float(l2)
+        self.dropout = float(dropout)
+        self.seed = int(seed)
+
+        self.loss_: list[float] = []
+        self.val_loss_: list[float] = []
+        self.accuracy_: list[float] = []
+        self.val_accuracy_: list[float] = []
+        self.lr_history_: list[float] = []
+        self.best_epoch_: int | None = None
+
+        self._eps = 1e-5
+        self._bn_momentum = 0.9
+        self._rng = np.random.RandomState(self.seed + 19)
+        self._step = 0
+        self._init_params()
+
+    def _init_params(self):
+        rng = np.random.RandomState(self.seed)
+        self.W, self.b = [], []
+        self.gamma, self.beta = [], []
+        self.running_mean, self.running_var = [], []
+        n_hidden = len(self.layer_sizes) - 2
+
+        for i in range(len(self.layer_sizes) - 1):
+            n_in, n_out = self.layer_sizes[i], self.layer_sizes[i + 1]
+            # Use Xavier on the output classification head when hidden layers use He
+            scheme = "xavier" if (i == n_hidden and self.init == "he") else self.init
+            if scheme == "zeros":
+                w = np.zeros((n_in, n_out), dtype=np.float64)
+            elif scheme == "small":
+                w = rng.randn(n_in, n_out) * 0.01
+            elif scheme == "large":
+                w = rng.randn(n_in, n_out) * 1.2
+            elif scheme == "he":
+                w = rng.randn(n_in, n_out) * np.sqrt(2.0 / n_in)
+            elif scheme == "xavier":
+                w = rng.randn(n_in, n_out) * np.sqrt(2.0 / (n_in + n_out))
+            else:
+                raise ValueError(f"Unknown init scheme: {self.init!r}")
+            self.W.append(w)
+            self.b.append(np.zeros(n_out, dtype=np.float64))
+
+            if self.norm and i < n_hidden:
+                self.gamma.append(np.ones(n_out, dtype=np.float64))
+                self.beta.append(np.zeros(n_out, dtype=np.float64))
+                if self.norm == "bn":
+                    self.running_mean.append(np.zeros(n_out, dtype=np.float64))
+                    self.running_var.append(np.ones(n_out, dtype=np.float64))
+
+        # Optimizer state
+        self._mW = [np.zeros_like(w) for w in self.W]
+        self._vW = [np.zeros_like(w) for w in self.W]
+        self._mb = [np.zeros_like(b) for b in self.b]
+        self._vb = [np.zeros_like(b) for b in self.b]
+        self._mgamma = [np.zeros_like(g) for g in self.gamma]
+        self._vgamma = [np.zeros_like(g) for g in self.gamma]
+        self._mbeta = [np.zeros_like(bt) for bt in self.beta]
+        self._vbeta = [np.zeros_like(bt) for bt in self.beta]
+
+    def _activate(self, z):
+        name = self.activation_name
+        if name == "relu":
+            return np.maximum(0.0, z)
+        if name == "gelu":
+            c = np.sqrt(2.0 / np.pi)
+            return 0.5 * z * (1.0 + np.tanh(c * (z + 0.044715 * z ** 3)))
+        if name == "silu":
+            s = 1.0 / (1.0 + np.exp(-np.clip(z, -500.0, 500.0)))
+            return z * s
+        if name == "sigmoid":
+            return 1.0 / (1.0 + np.exp(-np.clip(z, -500.0, 500.0)))
+        if name == "tanh":
+            return np.tanh(z)
+        raise ValueError(f"Unknown activation: {name!r}")
+
+    def _activate_grad(self, z):
+        name = self.activation_name
+        if name == "relu":
+            return (z > 0.0).astype(np.float64)
+        if name == "gelu":
+            c = np.sqrt(2.0 / np.pi)
+            inner = c * (z + 0.044715 * z ** 3)
+            t = np.tanh(inner)
+            cdf = 0.5 * (1.0 + t)
+            pdf = 0.5 * z * (1.0 - t * t) * c * (1.0 + 3.0 * 0.044715 * z * z)
+            return cdf + pdf
+        if name == "silu":
+            s = 1.0 / (1.0 + np.exp(-np.clip(z, -500.0, 500.0)))
+            return s + z * s * (1.0 - s)
+        if name == "sigmoid":
+            s = 1.0 / (1.0 + np.exp(-np.clip(z, -500.0, 500.0)))
+            return s * (1.0 - s)
+        if name == "tanh":
+            return 1.0 - np.tanh(z) ** 2
+        raise ValueError(f"Unknown activation: {name!r}")
+
+    @staticmethod
+    def _softmax(z):
+        z_shift = z - np.max(z, axis=1, keepdims=True)
+        exp_z = np.exp(np.clip(z_shift, -500.0, 500.0))
+        return exp_z / np.sum(exp_z, axis=1, keepdims=True)
+
+    def _norm_forward(self, z, layer_idx: int, training: bool):
+        eps = self._eps
+        if self.norm == "bn":
+            if training:
+                mu = np.mean(z, axis=0)
+                var = np.var(z, axis=0)
+                self.running_mean[layer_idx] = (
+                    self._bn_momentum * self.running_mean[layer_idx]
+                    + (1.0 - self._bn_momentum) * mu
+                )
+                self.running_var[layer_idx] = (
+                    self._bn_momentum * self.running_var[layer_idx]
+                    + (1.0 - self._bn_momentum) * var
+                )
+            else:
+                mu = self.running_mean[layer_idx]
+                var = self.running_var[layer_idx]
+            inv_std = 1.0 / np.sqrt(var + eps)
+            z_hat = (z - mu) * inv_std
+            out = self.gamma[layer_idx] * z_hat + self.beta[layer_idx]
+            return out, ("bn", z_hat, inv_std)
+
+        if self.norm == "ln":
+            mu = np.mean(z, axis=1, keepdims=True)
+            var = np.var(z, axis=1, keepdims=True)
+            inv_std = 1.0 / np.sqrt(var + eps)
+            z_hat = (z - mu) * inv_std
+            out = self.gamma[layer_idx] * z_hat + self.beta[layer_idx]
+            return out, ("ln", z_hat, inv_std)
+
+        if self.norm == "rmsnorm":
+            ms = np.mean(z * z, axis=1, keepdims=True)
+            inv_rms = 1.0 / np.sqrt(ms + eps)
+            z_hat = z * inv_rms
+            out = self.gamma[layer_idx] * z_hat
+            return out, ("rmsnorm", z_hat, inv_rms)
+
+        return z, None
+
+    def _norm_backward(self, dout, cache, layer_idx: int):
+        kind = cache[0]
+        gamma = self.gamma[layer_idx]
+        if kind == "bn":
+            _, z_hat, inv_std = cache
+            m = dout.shape[0]
+            dgamma = np.sum(dout * z_hat, axis=0)
+            dbeta = np.sum(dout, axis=0)
+            dz_hat = dout * gamma
+            dz = (1.0 / m) * inv_std * (
+                m * dz_hat
+                - np.sum(dz_hat, axis=0)
+                - z_hat * np.sum(dz_hat * z_hat, axis=0)
+            )
+            return dz, dgamma, dbeta
+
+        if kind == "ln":
+            _, z_hat, inv_std = cache
+            d = dout.shape[1]
+            dgamma = np.sum(dout * z_hat, axis=0)
+            dbeta = np.sum(dout, axis=0)
+            dz_hat = dout * gamma
+            dz = (1.0 / d) * inv_std * (
+                d * dz_hat
+                - np.sum(dz_hat, axis=1, keepdims=True)
+                - z_hat * np.sum(dz_hat * z_hat, axis=1, keepdims=True)
+            )
+            return dz, dgamma, dbeta
+
+        if kind == "rmsnorm":
+            _, z_hat, inv_rms = cache
+            dgamma = np.sum(dout * z_hat, axis=0)
+            dbeta = np.zeros_like(gamma)
+            dz_hat = dout * gamma
+            dz = inv_rms * (
+                dz_hat - z_hat * np.mean(dz_hat * z_hat, axis=1, keepdims=True)
+            )
+            return dz, dgamma, dbeta
+
+        raise ValueError(f"Unknown norm cache kind: {kind!r}")
+
+    def _forward(self, X, training: bool = True):
+        activations = [X]
+        pre_acts = []
+        norm_caches = []
+        drop_masks = []
+        a = X
+        n_hidden = len(self.W) - 1
+
+        for i in range(n_hidden):
+            z = a @ self.W[i] + self.b[i]
+            if self.norm:
+                z, ncache = self._norm_forward(z, i, training=training)
+                norm_caches.append(ncache)
+            else:
+                norm_caches.append(None)
+            pre_acts.append(z)
+            a = self._activate(z)
+            if self.dropout > 0.0 and training:
+                mask = (self._rng.rand(*a.shape) >= self.dropout).astype(np.float64)
+                a = a * mask / (1.0 - self.dropout)
+                drop_masks.append(mask)
+            else:
+                drop_masks.append(None)
+            activations.append(a)
+
+        logits = a @ self.W[-1] + self.b[-1]
+        pre_acts.append(logits)
+        probs = self._softmax(logits)
+        activations.append(probs)
+        return activations, pre_acts, norm_caches, drop_masks
+
+    def _compute_loss_and_delta(self, probs, y):
+        m, k = probs.shape
+        y_onehot = np.zeros((m, k), dtype=np.float64)
+        y_onehot[np.arange(m), y] = 1.0
+
+        if self.loss_type == "ce":
+            eps = 1e-12
+            data_loss = float(-np.mean(np.log(probs[np.arange(m), y] + eps)))
+            delta = (probs - y_onehot) / m
+        elif self.loss_type == "mse":
+            diff = probs - y_onehot
+            data_loss = float(0.5 * np.mean(np.sum(diff * diff, axis=1)))
+            # dL/dz for softmax + MSE: p * ((p - y) - sum((p - y)*p)) / m
+            dot = np.sum(diff * probs, axis=1, keepdims=True)
+            delta = probs * (diff - dot) / m
+        else:
+            raise ValueError(f"Unknown loss_type: {self.loss_type!r}")
+
+        reg = 0.0
+        if self.l2 > 0.0:
+            reg += 0.5 * self.l2 * sum(float(np.sum(w * w)) for w in self.W) / m
+        if self.l1 > 0.0:
+            reg += self.l1 * sum(float(np.sum(np.abs(w))) for w in self.W) / m
+        return data_loss + reg, data_loss, delta
+
+    def _backward(self, delta, activations, pre_acts, norm_caches, drop_masks):
+        n_layers = len(self.W)
+        m = activations[0].shape[0]
+        dW = [None] * n_layers
+        db = [None] * n_layers
+        dgamma = [None] * len(self.gamma)
+        dbeta = [None] * len(self.beta)
+
+        dW[-1] = activations[-2].T @ delta
+        db[-1] = np.sum(delta, axis=0)
+
+        for i in range(n_layers - 2, -1, -1):
+            delta = delta @ self.W[i + 1].T
+            if drop_masks[i] is not None:
+                delta = delta * drop_masks[i] / (1.0 - self.dropout)
+            delta = delta * self._activate_grad(pre_acts[i])
+            if self.norm:
+                delta, dgamma[i], dbeta[i] = self._norm_backward(delta, norm_caches[i], i)
+            dW[i] = activations[i].T @ delta
+            db[i] = np.sum(delta, axis=0)
+
+        if self.l2 > 0.0:
+            for i in range(n_layers):
+                dW[i] = dW[i] + (self.l2 / m) * self.W[i]
+        if self.l1 > 0.0:
+            for i in range(n_layers):
+                dW[i] = dW[i] + (self.l1 / m) * np.sign(self.W[i])
+
+        return dW, db, dgamma, dbeta
+
+    def _get_lr(self, epoch: int) -> float:
+        if self.lr_schedule != "warmup_cosine":
+            return self.lr
+        if self.warmup_epochs > 0 and epoch < self.warmup_epochs:
+            return self.lr * float(epoch + 1) / float(self.warmup_epochs)
+        progress = float(epoch - self.warmup_epochs) / max(1.0, float(self.n_epochs - self.warmup_epochs))
+        progress = min(1.0, max(0.0, progress))
+        cosine = 0.5 * (1.0 + np.cos(np.pi * progress))
+        return self.min_lr + (self.lr - self.min_lr) * float(cosine)
+
+    def _apply_gradients(self, dW, db, dgamma, dbeta, lr_t: float):
+        self._step += 1
+        t = self._step
+        eps = 1e-8
+
+        if self.optimizer == "sgd":
+            for i in range(len(self.W)):
+                self.W[i] -= lr_t * dW[i]
+                self.b[i] -= lr_t * db[i]
+            for i in range(len(self.gamma)):
+                self.gamma[i] -= lr_t * dgamma[i]
+                self.beta[i] -= lr_t * dbeta[i]
+            return
+
+        if self.optimizer == "momentum":
+            mu = self.momentum
+            for i in range(len(self.W)):
+                if self.weight_decay > 0.0:
+                    self.W[i] *= (1.0 - lr_t * self.weight_decay)
+                self._mW[i] = mu * self._mW[i] + dW[i]
+                self._mb[i] = mu * self._mb[i] + db[i]
+                self.W[i] -= lr_t * self._mW[i]
+                self.b[i] -= lr_t * self._mb[i]
+            for i in range(len(self.gamma)):
+                self._mgamma[i] = mu * self._mgamma[i] + dgamma[i]
+                self._mbeta[i] = mu * self._mbeta[i] + dbeta[i]
+                self.gamma[i] -= lr_t * self._mgamma[i]
+                self.beta[i] -= lr_t * self._mbeta[i]
+            return
+
+        if self.optimizer == "adamw":
+            b1, b2 = self.beta1, self.beta2
+            bc1 = 1.0 - b1 ** t
+            bc2 = 1.0 - b2 ** t
+            for i in range(len(self.W)):
+                # Decoupled weight decay on weights (AdamW)
+                if self.weight_decay > 0.0:
+                    self.W[i] *= (1.0 - lr_t * self.weight_decay)
+                self._mW[i] = b1 * self._mW[i] + (1.0 - b1) * dW[i]
+                self._vW[i] = b2 * self._vW[i] + (1.0 - b2) * (dW[i] * dW[i])
+                m_hat = self._mW[i] / bc1
+                v_hat = self._vW[i] / bc2
+                self.W[i] -= lr_t * m_hat / (np.sqrt(v_hat) + eps)
+
+                self._mb[i] = b1 * self._mb[i] + (1.0 - b1) * db[i]
+                self._vb[i] = b2 * self._vb[i] + (1.0 - b2) * (db[i] * db[i])
+                mb_hat = self._mb[i] / bc1
+                vb_hat = self._vb[i] / bc2
+                self.b[i] -= lr_t * mb_hat / (np.sqrt(vb_hat) + eps)
+
+            for i in range(len(self.gamma)):
+                self._mgamma[i] = b1 * self._mgamma[i] + (1.0 - b1) * dgamma[i]
+                self._vgamma[i] = b2 * self._vgamma[i] + (1.0 - b2) * (dgamma[i] * dgamma[i])
+                mg_hat = self._mgamma[i] / bc1
+                vg_hat = self._vgamma[i] / bc2
+                self.gamma[i] -= lr_t * mg_hat / (np.sqrt(vg_hat) + eps)
+
+                self._mbeta[i] = b1 * self._mbeta[i] + (1.0 - b1) * dbeta[i]
+                self._vbeta[i] = b2 * self._vbeta[i] + (1.0 - b2) * (dbeta[i] * dbeta[i])
+                mbt_hat = self._mbeta[i] / bc1
+                vbt_hat = self._vbeta[i] / bc2
+                self.beta[i] -= lr_t * mbt_hat / (np.sqrt(vbt_hat) + eps)
+            return
+
+        raise ValueError(f"Unknown optimizer: {self.optimizer!r}")
+
+    def _snapshot(self):
+        return {
+            "W": [w.copy() for w in self.W],
+            "b": [b.copy() for b in self.b],
+            "gamma": [g.copy() for g in self.gamma],
+            "beta": [bt.copy() for bt in self.beta],
+            "running_mean": [m.copy() for m in self.running_mean],
+            "running_var": [v.copy() for v in self.running_var],
+        }
+
+    def _restore(self, snap):
+        self.W = [w.copy() for w in snap["W"]]
+        self.b = [b.copy() for b in snap["b"]]
+        self.gamma = [g.copy() for g in snap["gamma"]]
+        self.beta = [bt.copy() for bt in snap["beta"]]
+        self.running_mean = [m.copy() for m in snap["running_mean"]]
+        self.running_var = [v.copy() for v in snap["running_var"]]
+
+    def evaluate(self, X, y) -> tuple[float, float]:
+        probs = self.predict_proba(X)
+        _, data_loss, _ = self._compute_loss_and_delta(probs, y)
+        preds = np.argmax(probs, axis=1)
+        acc = float(np.mean(preds == y) * 100.0)
+        return data_loss, acc
+
+    def fit(
+        self,
+        X,
+        y,
+        X_val=None,
+        y_val=None,
+        early_stop_patience: int | None = None,
+        verbose: bool = False,
+        print_every: int = 10,
+    ):
+        X = np.asarray(X, dtype=np.float64)
+        y = np.asarray(y, dtype=np.int64)
+        if X_val is not None:
+            X_val = np.asarray(X_val, dtype=np.float64)
+            y_val = np.asarray(y_val, dtype=np.int64)
+
+        n = X.shape[0]
+        rng = np.random.RandomState(self.seed + 101)
+        best_val = float("inf")
+        best_snap = None
+        wait = 0
+        self.best_epoch_ = None
+
+        for epoch in range(self.n_epochs):
+            lr_t = self._get_lr(epoch)
+            self.lr_history_.append(lr_t)
+            perm = rng.permutation(n)
+            epoch_loss = 0.0
+            epoch_correct = 0
+
+            for start in range(0, n, self.batch_size):
+                idx = perm[start : start + self.batch_size]
+                xb, yb = X[idx], y[idx]
+                activations, pre_acts, norm_caches, drop_masks = self._forward(xb, training=True)
+                probs = activations[-1]
+                loss, _, delta = self._compute_loss_and_delta(probs, yb)
+                dW, db, dgamma, dbeta = self._backward(delta, activations, pre_acts, norm_caches, drop_masks)
+                self._apply_gradients(dW, db, dgamma, dbeta, lr_t)
+
+                bs = len(yb)
+                epoch_loss += loss * bs
+                epoch_correct += int(np.sum(np.argmax(probs, axis=1) == yb))
+
+            train_loss = epoch_loss / n
+            train_acc = (epoch_correct / n) * 100.0
+            self.loss_.append(float(train_loss))
+            self.accuracy_.append(float(train_acc))
+
+            if X_val is not None and y_val is not None:
+                vloss, vacc = self.evaluate(X_val, y_val)
+                self.val_loss_.append(float(vloss))
+                self.val_accuracy_.append(float(vacc))
+                if early_stop_patience is not None:
+                    if vloss < best_val - 1e-5:
+                        best_val = vloss
+                        best_snap = self._snapshot()
+                        self.best_epoch_ = epoch
+                        wait = 0
+                    else:
+                        wait += 1
+                        if wait >= early_stop_patience:
+                            if verbose:
+                                print(
+                                    f"    Early stop at epoch {epoch + 1} "
+                                    f"(best={self.best_epoch_ + 1}, val_acc={self.val_accuracy_[self.best_epoch_]:.2f}%)"
+                                )
+                            break
+
+            if verbose and ((epoch + 1) % print_every == 0 or epoch == 0):
+                extra = ""
+                if self.val_loss_:
+                    extra = f" | val_loss = {self.val_loss_[-1]:.4f} | val_acc = {self.val_accuracy_[-1]:6.2f}%"
+                print(
+                    f"    Epoch {epoch + 1:3d}/{self.n_epochs} | lr = {lr_t:.5f} | "
+                    f"loss = {train_loss:.4f} | train_acc = {train_acc:6.2f}%{extra}"
+                )
+
+        if best_snap is not None:
+            self._restore(best_snap)
+        return self
+
+    def predict_proba(self, X):
+        X = np.asarray(X, dtype=np.float64)
+        return self._forward(X, training=False)[0][-1]
+
+    def predict(self, X):
+        return np.argmax(self.predict_proba(X), axis=1)

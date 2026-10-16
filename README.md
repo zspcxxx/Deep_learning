@@ -15,7 +15,7 @@
 | 06 参数初始化 | [docs/06_weight_init.html](docs/06_weight_init.html) | `/learn/06` | `python scripts/run_lesson.py 06` |
 | 07 归一化 | [docs/07_normalization.html](docs/07_normalization.html) | `/learn/07` | `python scripts/run_lesson.py 07` |
 | 08 正则化 | [docs/08_regularization.html](docs/08_regularization.html) | `/learn/08` | `python scripts/run_lesson.py 08` |
-| 09 综合实战 | [docs/09_full_pipeline.html](docs/09_full_pipeline.html) | `/learn/09` | `python scripts/run_lesson.py 09` |
+| 09 综合实战（MNIST） | [docs/09_full_pipeline.html](docs/09_full_pipeline.html) | `/learn/09` | `python scripts/run_lesson.py 09` |
 
 ## 环境（一次）
 
@@ -40,7 +40,7 @@ python scripts/run_lesson.py 05              # 学习率对比
 python scripts/run_lesson.py 06              # 参数初始化
 python scripts/run_lesson.py 07              # 归一化
 python scripts/run_lesson.py 08              # 正则化
-python scripts/run_lesson.py 09              # 综合实战（串起 01–08）
+python scripts/run_lesson.py 09              # 综合实战：MNIST 数字识别（集齐 11 项核心技术）
 ```
 
 也可以直接调用入口：

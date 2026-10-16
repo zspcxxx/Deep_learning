@@ -119,6 +119,11 @@
         <h3>正则化</h3>
         <p>并排验证 L1/L2/Dropout/组合/早停：看 gap、||W||、稀疏度与欠拟合。</p>
       </a>
+      <a class="lesson-card" href="09_full_pipeline.html">
+        <div class="num">EXPERIMENT 09</div>
+        <h3>综合实战：MNIST 数字识别</h3>
+        <p>集齐 11 项核心知识（He/Xavier、GELU、BN/LN/RMSNorm、CE、AdamW、Warmup+Cosine、早停等）识别手写数字。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -175,7 +180,7 @@ python lessons/09_full_pipeline.py</pre>
       <tr><td><a href="06_weight_init.html">06</a></td><td>参数初始化</td><td>全零对称崩溃；过小衰减；过大爆炸；He 稳住尺度</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="07_normalization.html">07</a></td><td>归一化</td><td>尺度悬殊难学；输入标准化 / BatchNorm 稳住训练</td><td>约 1 分钟</td></tr>
       <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>L1/L2/Dropout/组合/早停对照；过强 L2 欠拟合</td><td>约 1–2 分钟</td></tr>
-      <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战</td><td>naive vs tuned：串起 lr/init/归一化/正则</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战：MNIST</td><td>集齐 11 项核心技术（He/GELU/RMSNorm/CE/AdamW/Cosine/早停）实现手写数字识别</td><td>约 10–20 秒</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>
