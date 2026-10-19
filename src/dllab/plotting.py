@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 
 import matplotlib
@@ -7,6 +8,18 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib import font_manager
+
+_CJK_FONTS = ("Noto Sans CJK SC", "Noto Sans SC", "WenQuanYi Micro Hei", "SimHei", "Microsoft YaHei")
+_installed = {f.name for f in font_manager.fontManager.ttflist}
+# Per-glyph fallback (matplotlib >= 3.6) only walks the families listed in font.family itself;
+# a generic "sans-serif" alias resolves to a single font. Listing only installed fonts avoids "findfont" noise.
+plt.rcParams["font.family"] = ["DejaVu Sans", *[f for f in _CJK_FONTS if f in _installed]]
+plt.rcParams["axes.unicode_minus"] = False
+# Hosts without any CJK font would otherwise print one warning per missing glyph per figure.
+warnings.filterwarnings("ignore", message=r"Glyph \d+ .* missing from font")
+# Gridspec figures with fig.text; save_figure crops with bbox_inches="tight" anyway.
+warnings.filterwarnings("ignore", message="This figure includes Axes that are not compatible with tight_layout")
 
 
 def save_figure(fig: plt.Figure, path: Path, dpi: int = 110) -> Path:

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Deep Learning Lab{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="/">Deep Learning Lab</a>
+  <a href="/">实验看板</a>
+  <a href="/learn/">学习导读</a>
+  <span class="spacer"></span>
+  <span id="active-run" class="active-run" hidden></span>
+</nav>
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+<script src="{{ url_for('static', filename='common.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

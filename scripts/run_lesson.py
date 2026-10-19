@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import sys
 from importlib import import_module
+from pathlib import Path
 
 from dllab.catalog import LESSONS, find_lesson
+from dllab.io_utils import dump_metrics
 from dllab.paths import PROJECT_ROOT
 
 
@@ -18,6 +20,7 @@ def main() -> int:
     )
     parser.add_argument("lesson", nargs="?", help="实验编号或名称，如 01 / lr / 09")
     parser.add_argument("--list", action="store_true", help="列出全部实验")
+    parser.add_argument("--result-json", type=Path, help="把 run() 返回的指标写到该 JSON 文件（供看板读取）")
     args = parser.parse_args()
 
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -43,6 +46,8 @@ def main() -> int:
     print()
     mod = import_module(item["module"])
     metrics = mod.run()
+    if args.result_json:
+        dump_metrics(args.result_json, metrics)
     passed = bool(metrics.get("passed", True))
     print("\n" + ("通过" if passed else "未通过"))
     return 0 if passed else 1

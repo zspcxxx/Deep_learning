@@ -18,6 +18,7 @@
   <a href="07_normalization.html">07 归一化</a>
   <a href="08_regularization.html">08 正则化</a>
   <a href="09_full_pipeline.html">09 综合实战</a>
+  <a href="10_cnn.html">10 CNN</a>
   <span class="spacer"></span>
   <a href="/">验证看板</a>
 </nav>
@@ -38,7 +39,7 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">入门路径</span>
-        <span class="chip teal">6 个实验</span>
+        <span class="chip teal">10 个实验</span>
         <span class="chip amber">可读 + 可跑</span>
       </div>
       <h1>从一条直线到识别手写数字</h1>
@@ -47,7 +48,7 @@
 
     <h2 id="path">推荐学习路径</h2>
     <div class="diagram">
-      <svg viewBox="0 0 900 120" width="900" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
+      <svg viewBox="0 0 940 120" width="940" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f6feb"/></marker>
         </defs>
@@ -74,6 +75,10 @@
         <rect x="678" y="30" width="120" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
         <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">09 综合</text>
         <text x="738" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">真实图像</text>
+        <line x1="798" y1="57" x2="820" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="822" y="30" width="110" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="877" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">10 CNN</text>
+        <text x="877" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">检测小猫</text>
       </svg>
       <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
     </div>
@@ -124,6 +129,11 @@
         <h3>综合实战：MNIST 数字识别</h3>
         <p>集齐 11 项核心知识（He/Xavier、GELU、BN/LN/RMSNorm、CE、AdamW、Warmup+Cosine、早停等）识别手写数字。</p>
       </a>
+      <a class="lesson-card" href="10_cnn.html">
+        <div class="num">EXPERIMENT 10</div>
+        <h3>卷积神经网络：检测小猫</h3>
+        <p>手写 CNN 判断彩色照片里有没有猫：参数只有 MLP 的十分之一，准确率更高；再用检出率、误报和遮挡热力图看它在看哪里。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -149,7 +159,8 @@ python scripts/run_lesson.py 05
 python scripts/run_lesson.py 06
 python scripts/run_lesson.py 07
 python scripts/run_lesson.py 08
-python scripts/run_lesson.py 09</pre>
+python scripts/run_lesson.py 09
+python scripts/run_lesson.py 10</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -162,14 +173,15 @@ python lessons/05_learning_rate.py
 python lessons/06_weight_init.py
 python lessons/07_normalization.py
 python lessons/08_regularization.py
-python lessons/09_full_pipeline.py</pre>
+python lessons/09_full_pipeline.py
+python lessons/10_cnn.py</pre>
       </div>
     </div>
-    <p>结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
+    <p>各实验使用的数据集缓存在 <code>data/&lt;实验&gt;/*.npz</code>（MNIST 原始文件在 <code>data/mnist/</code>），结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">九个实验分别带走什么</h2>
+    <h2 id="map">十个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -181,6 +193,7 @@ python lessons/09_full_pipeline.py</pre>
       <tr><td><a href="07_normalization.html">07</a></td><td>归一化</td><td>尺度悬殊难学；输入标准化 / BatchNorm 稳住训练</td><td>约 1 分钟</td></tr>
       <tr><td><a href="08_regularization.html">08</a></td><td>正则化</td><td>L1/L2/Dropout/组合/早停对照；过强 L2 欠拟合</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战：MNIST</td><td>集齐 11 项核心技术（He/GELU/RMSNorm/CE/AdamW/Cosine/早停）实现手写数字识别</td><td>约 10–20 秒</td></tr>
+      <tr><td><a href="10_cnn.html">10</a></td><td>卷积神经网络：检测小猫</td><td>局部连接 + 权重共享 + 池化 + 数据增强；检测任务看检出率与误报</td><td>约 2–3 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>
@@ -188,6 +201,7 @@ python lessons/09_full_pipeline.py</pre>
       <div class="card"><h4>src/dllab/</h4><p>模型、数据、画图——“零件库”。对着公式读类方法。</p></div>
       <div class="card"><h4>lessons/</h4><p>组装一次完整实验并写 artifacts——“剧本”。</p></div>
       <div class="card"><h4>docs/</h4><p>原理与实现说明。可直接用浏览器打开 HTML。</p></div>
+      <div class="card"><h4>data/</h4><p>各实验的测试 / 调试数据（<code>.npz</code>），参数变了会自动重新生成。</p></div>
       <div class="card"><h4>web/app.py</h4><p>验证看板 + 挂载本学习页。</p></div>
     </div>
 

@@ -9,21 +9,11 @@ import traceback
 from datetime import datetime, timezone
 from importlib import import_module
 
+from dllab.catalog import LESSONS as CATALOG
 from dllab.io_utils import dump_metrics
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT, ensure_artifacts
 
-LESSONS = [
-    ("01_perceptron", "lessons.01_perceptron"),
-    ("02_mlp", "lessons.02_mlp"),
-    ("03_backprop_visual", "lessons.03_backprop_visual"),
-    ("03_backpropagation", "lessons.03_backpropagation"),
-    ("04_activations", "lessons.04_activations"),
-    ("05_learning_rate", "lessons.05_learning_rate"),
-    ("06_weight_init", "lessons.06_weight_init"),
-    ("07_normalization", "lessons.07_normalization"),
-    ("08_regularization", "lessons.08_regularization"),
-    ("09_full_pipeline", "lessons.09_full_pipeline"),
-]
+LESSONS = [(item["name"], item["module"]) for item in CATALOG]
 
 
 def run_all() -> dict:
@@ -48,6 +38,7 @@ def run_all() -> dict:
             entry.update({
                 "status": "passed" if passed else "failed",
                 "elapsed_sec": round(elapsed, 2),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
                 "metrics": {k: v for k, v in metrics.items() if k not in {"history_mlp", "history_cnn", "table"}},
             })
             if not passed:
@@ -58,6 +49,7 @@ def run_all() -> dict:
             entry.update({
                 "status": "error",
                 "elapsed_sec": round(elapsed, 2),
+                "finished_at": datetime.now(timezone.utc).isoformat(),
                 "error": str(exc),
                 "traceback": traceback.format_exc(),
             })

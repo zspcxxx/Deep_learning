@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_xor_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
@@ -32,7 +33,7 @@ def gd_1d(lr: float, n_steps: int = 25, w0: float = -3.0) -> list[float]:
 
 def run() -> dict:
     out = ensure_artifacts("05_learning_rate")
-    X, y = generate_xor_dataset(n_per_quadrant=100, noise=0.15, seed=0)
+    X, y = cached_dataset("05_learning_rate", "xor", generate_xor_dataset, n_per_quadrant=100, noise=0.15, seed=0)
 
     print("=" * 90)
     print("学习率对比实验（同一 XOR 数据、同一网络结构与随机种子）")

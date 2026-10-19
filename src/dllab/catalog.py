@@ -81,7 +81,20 @@ LESSONS = [
         "doc": "09_full_pipeline.html",
         "help": "集齐 11 项核心技术（He/Xavier、GELU、RMSNorm/BN、CE、AdamW、Warmup+Cosine、早停等）实现 MNIST 手写数字识别",
     },
+    {
+        "id": "10",
+        "keys": ("10", "cnn", "conv", "convolution", "cat", "10_cnn"),
+        "title": "卷积神经网络：检测小猫",
+        "module": "lessons.10_cnn",
+        "doc": "10_cnn.html",
+        "help": "手写 CNN 判断彩色照片里有没有猫：对比 MLP 与数据增强，看检出率、误报和遮挡热力图",
+    },
 ]
+
+
+for _item in LESSONS:
+    # Run / summary name, e.g. "03_backprop_visual" (also the lesson file stem).
+    _item["name"] = _item["module"].split(".", 1)[1]
 
 
 def find_lesson(key: str) -> dict:

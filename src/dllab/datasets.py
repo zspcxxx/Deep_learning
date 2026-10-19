@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
+import hashlib
 import urllib.request
+from pathlib import Path
 
 import numpy as np
 
-from dllab.paths import PROJECT_ROOT
+from dllab.paths import DATA_DIR
 
 
 def truncated_gaussian_2d(n_samples: int, sigma: float, half_width: float, rng, max_batches: int = 200) -> np.ndarray:
@@ -75,6 +76,8 @@ def generate_moons_dataset(n_per_class: int = 200, noise: float = 0.10, seed: in
 MNIST_URLS = (
     "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz",
 )
+# Same hash Keras uses to validate this file.
+MNIST_SHA256 = "731c5ac602752760c8e48fbffcf8c3b850d9dc2a2aedcf2cc48468fc17b673d1"
 
 # 7-segment bitmasks (a,b,c,d,e,f,g) for offline fallback 28x28 synthesis
 _DIGIT_SEGMENTS = {
@@ -136,6 +139,32 @@ def _synthesize_mnist_fallback(n_total: int, seed: int = 42):
     return images[perm], labels[perm]
 
 
+def ensure_mnist_npz(cache_dir: Path | None = None) -> Path:
+    """Return the path of `data/mnist/mnist.npz` (shipped with the repo), downloading it if missing.
+
+    The returned path may still not exist when every download URL is unreachable.
+    """
+    cache_dir = Path(cache_dir) if cache_dir is not None else DATA_DIR / "mnist"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    npz_path = cache_dir / "mnist.npz"
+    if npz_path.exists():
+        return npz_path
+    for url in MNIST_URLS:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = resp.read()
+            if hashlib.sha256(data).hexdigest() != MNIST_SHA256:
+                continue
+            tmp_path = npz_path.with_suffix(".npz.tmp")
+            tmp_path.write_bytes(data)
+            tmp_path.replace(npz_path)
+            break
+        except Exception:
+            continue
+    return npz_path
+
+
 def load_mnist_dataset(
     n_train: int = 4000,
     n_val: int = 800,
@@ -145,29 +174,11 @@ def load_mnist_dataset(
 ):
     """Load MNIST (28x28 flattened to 784) as float32 in [0, 255] and int64 labels 0..9.
 
-    Downloads and caches `data/mnist.npz` on first use; falls back to synthetic 28x28
+    Downloads and caches `data/mnist/mnist.npz` on first use; falls back to synthetic 28x28
     digits only if the network is completely unreachable and no cache exists.
     """
-    if cache_dir is None:
-        cache_dir = PROJECT_ROOT / "data"
-    cache_dir = Path(cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    npz_path = cache_dir / "mnist.npz"
-
+    npz_path = ensure_mnist_npz(cache_dir)
     source = "mnist_npz"
-    if not npz_path.exists():
-        for url in MNIST_URLS:
-            try:
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=15) as resp:
-                    data = resp.read()
-                tmp_path = npz_path.with_suffix(".npz.tmp")
-                tmp_path.write_bytes(data)
-                tmp_path.replace(npz_path)
-                break
-            except Exception:
-                continue
-
     rng = np.random.RandomState(seed)
     if npz_path.exists():
         with np.load(npz_path) as data:
@@ -195,3 +206,36 @@ def load_mnist_dataset(
         X_test, y_test = X_all[n_train + n_val :], lbls[n_train + n_val :]
 
     return X_train, y_train, X_val, y_val, X_test, y_test, source
+
+
+CIFAR10_CLASSES = ("airplane", "automobile", "bird", "cat", "deer", "dog", "frog", "horse", "ship", "truck")
+CAT_DATASET_PATH = DATA_DIR / "cat" / "cat_vs_noncat.npz"
+
+
+def load_cat_dataset(n_val: int = 1000, seed: int = 42) -> dict:
+    """Cat vs not-cat (32x32 RGB uint8, label 1 = cat) from data/cat/cat_vs_noncat.npz.
+
+    The file ships with the repo; `python scripts/build_cat_dataset.py` rebuilds it from CIFAR-10.
+    Validation images are split off the training pool; `source_*` keeps the original CIFAR-10 class.
+    """
+    if not CAT_DATASET_PATH.exists():
+        raise FileNotFoundError(f"{CAT_DATASET_PATH} 不存在，请先运行 python scripts/build_cat_dataset.py")
+    with np.load(CAT_DATASET_PATH) as f:
+        d = {k: f[k] for k in f.files}
+    idx = np.random.RandomState(seed).permutation(len(d["y_train"]))
+    val, train = idx[:n_val], idx[n_val:]
+    out = {"class_names": [str(c) for c in d["class_names"]]}
+    for split, sel in (("train", train), ("val", val)):
+        out[f"x_{split}"] = d["x_train"][sel]
+        out[f"y_{split}"] = d["y_train"][sel]
+        out[f"source_{split}"] = d["source_train"][sel]
+    out.update(x_test=d["x_test"], y_test=d["y_test"], source_test=d["source_test"])
+    return out
+
+
+def load_cat_debug_batch(n: int = 4, seed: int = 0):
+    """A few cat / not-cat test images (uint8 32x32x3) for gradient checks and quick debugging."""
+    d = load_cat_dataset()
+    rng = np.random.RandomState(seed)
+    idx = np.concatenate([rng.choice(np.where(d["y_test"] == c)[0], size=n // 2, replace=False) for c in (1, 0)])
+    return d["x_test"][idx], d["y_test"][idx]

@@ -3,15 +3,18 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_2d_dataset, generate_logic_gate_dataset
 from dllab.io_utils import dump_metrics
 from dllab.paths import ensure_artifacts
 from dllab.perceptron import Perceptron
 from dllab.plotting import plt, save_figure
 
+LESSON = "01_perceptron"
+
 
 def run() -> dict:
-    out = ensure_artifacts("01_perceptron")
+    out = ensure_artifacts(LESSON)
     X_gate_base = np.array([[0, 0], [0, 2], [2, 0], [2, 2]], dtype=float)
     y_and_base = np.array([-1, -1, -1, 1])
     y_or_base = np.array([-1, 1, 1, 1])
@@ -19,9 +22,9 @@ def run() -> dict:
     n_per, sigma, hw = 50, 0.30, 0.49
 
     gates = {
-        "AND": generate_logic_gate_dataset(X_gate_base, y_and_base, n_per, sigma, hw, seed=1),
-        "OR": generate_logic_gate_dataset(X_gate_base, y_or_base, n_per, sigma, hw, seed=2),
-        "XOR": generate_logic_gate_dataset(X_gate_base, y_xor_base, n_per, sigma, hw, seed=3),
+        "AND": cached_dataset(LESSON, "and_gate", generate_logic_gate_dataset, X_gate_base, y_and_base, n_per, sigma, hw, seed=1),
+        "OR": cached_dataset(LESSON, "or_gate", generate_logic_gate_dataset, X_gate_base, y_or_base, n_per, sigma, hw, seed=2),
+        "XOR": cached_dataset(LESSON, "xor_gate", generate_logic_gate_dataset, X_gate_base, y_xor_base, n_per, sigma, hw, seed=3),
     }
 
     print("=" * 105)
@@ -49,7 +52,7 @@ def run() -> dict:
             "final_errors": int(clf.errors_[-1]),
         }
 
-    X_2d, y_2d = generate_2d_dataset()
+    X_2d, y_2d = cached_dataset(LESSON, "two_d", generate_2d_dataset)
     print("\n" + "=" * 105)
     print(f"二维数据（共 {len(y_2d)} 个样本）")
     print("=" * 105)

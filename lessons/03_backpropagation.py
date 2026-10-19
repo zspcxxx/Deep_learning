@@ -4,18 +4,21 @@ from __future__ import annotations
 import numpy as np
 
 from dllab.backprop import BackpropNN, gradient_check
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_moons_dataset, generate_xor_dataset
 from dllab.io_utils import dump_metrics
 from dllab.paths import ensure_artifacts
 from dllab.plotting import plot_decision_boundary, plt, save_figure
 
+LESSON = "03_backprop"
+
 
 def run() -> dict:
-    out = ensure_artifacts("03_backprop")
+    out = ensure_artifacts(LESSON)
     print("=" * 90)
     print("梯度检查（验证反向传播正确性）")
     print("=" * 90)
-    X_ck, y_ck = generate_xor_dataset(n_per_quadrant=10, noise=0.15, seed=0)
+    X_ck, y_ck = cached_dataset(LESSON, "gradcheck_xor", generate_xor_dataset, n_per_quadrant=10, noise=0.15, seed=0)
     model_ck = BackpropNN(n_in=2, n_hidden=4, activation="sigmoid", seed=42)
     results = gradient_check(model_ck, X_ck, y_ck)
     grad_ok = True
@@ -27,7 +30,7 @@ def run() -> dict:
         grad_report[name] = {"max_rel_err": err, "passed": ok}
         print(f"  {name:>3s} : max relative error = {err:.3e}   {'✓ 通过' if ok else '✗ 未通过'}")
 
-    X_xor, y_xor = generate_xor_dataset()
+    X_xor, y_xor = cached_dataset(LESSON, "xor", generate_xor_dataset)
     print("\n" + "=" * 90)
     print("训练演示 1：XOR")
     print("=" * 90)
@@ -36,7 +39,7 @@ def run() -> dict:
     acc_xor = float(np.mean(model_xor.predict(X_xor) == y_xor) * 100)
     print(f"  → 最终准确率: {acc_xor:.2f}%  损失: {model_xor.loss_[-1]:.6f}")
 
-    X_moon, y_moon = generate_moons_dataset()
+    X_moon, y_moon = cached_dataset(LESSON, "moons", generate_moons_dataset)
     print("\n" + "=" * 90)
     print("训练演示 2：Two Moons")
     print("=" * 90)

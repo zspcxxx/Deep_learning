@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>10 卷积神经网络：检测小猫 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
+  <a href="10_cnn.html">10 CNN</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#data">数据：CIFAR-10 找猫</a></li>
+      <li><a href="#intuition">为什么用卷积</a></li>
+      <li><a href="#conv">卷积层与 im2col</a></li>
+      <li><a href="#pool">最大池化</a></li>
+      <li><a href="#arch">网络结构与参数量</a></li>
+      <li><a href="#aug">数据增强</a></li>
+      <li><a href="#metrics">检测任务怎么评估</a></li>
+      <li><a href="#occlusion">遮挡热力图</a></li>
+      <li><a href="#results">实验结果</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#tips">自己改一改</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 10</span>
+        <span class="chip teal">纯 NumPy，无需 GPU</span>
+        <span class="chip amber">彩色照片 · 二分类检测</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>卷积神经网络：检测图片里有没有猫</h1>
+          <p class="lead">前面几课处理的是点、黑白数字。这一课换成真实的彩色照片：给一张 32×32 的小图，判断里面是不是猫。
+            用手写的 CNN 对比 MLP，加上数据增强，最后用检出率、误报率和遮挡热力图分析模型到底“看”到了什么。</p>
+          <p class="meta">入口 <code>lessons/10_cnn.py</code> · 实现 <code>src/dllab/cnn.py</code>（<code>Conv2D</code> / <code>MaxPool2</code> / <code>SimpleCNN</code> / <code>augment_flip_crop</code> / <code>gradient_check</code>）</p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 300 170" width="300" height="170" xmlns="http://www.w3.org/2000/svg">
+            <rect x="8" y="44" width="48" height="48" fill="#fde68a" stroke="#b45309"/>
+            <text x="32" y="106" text-anchor="middle" font-size="10" font-family="sans-serif">32×32×3</text>
+            <rect x="72" y="40" width="40" height="40" fill="#ccfbf1" stroke="#0f766e"/>
+            <rect x="77" y="45" width="40" height="40" fill="#ccfbf1" stroke="#0f766e"/>
+            <text x="95" y="102" text-anchor="middle" font-size="10" font-family="sans-serif">8@16²</text>
+            <rect x="132" y="50" width="26" height="26" fill="#dbeafe" stroke="#2563eb"/>
+            <rect x="137" y="55" width="26" height="26" fill="#dbeafe" stroke="#2563eb"/>
+            <text x="148" y="98" text-anchor="middle" font-size="10" font-family="sans-serif">16@8²</text>
+            <rect x="180" y="58" width="14" height="14" fill="#ede9fe" stroke="#7c3aed"/>
+            <rect x="184" y="62" width="14" height="14" fill="#ede9fe" stroke="#7c3aed"/>
+            <text x="190" y="94" text-anchor="middle" font-size="10" font-family="sans-serif">32@4²</text>
+            <rect x="218" y="36" width="12" height="70" fill="#fef3c7" stroke="#b45309"/>
+            <text x="224" y="120" text-anchor="middle" font-size="10" font-family="sans-serif">FC 64</text>
+            <rect x="250" y="52" width="40" height="36" rx="6" fill="#fee2e2" stroke="#be123c"/>
+            <text x="270" y="68" text-anchor="middle" font-size="10" font-family="sans-serif">猫?</text>
+            <text x="270" y="81" text-anchor="middle" font-size="9" font-family="sans-serif">P(猫)</text>
+            <text x="150" y="155" text-anchor="middle" font-size="10" fill="#475569" font-family="sans-serif">三次 [3×3 卷积 → ReLU → 2×2 池化]</text>
+          </svg>
+          <div class="cap">从像素到“是不是猫”</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>卷积层、池化层怎么算？前向和反向能否只用矩阵乘法实现，并通过梯度检查？</li>
+        <li>处理彩色照片时，CNN 比 MLP 强在哪里？参数量差多少？</li>
+        <li>数据增强（翻转、平移）为什么能减少过拟合？</li>
+        <li>“检测猫”这种任务，除了准确率还该看什么指标？模型最容易把什么误认成猫？它判断时看的是图里哪个位置？</li>
+      </ol>
+    </div>
+
+    <h2 id="data">数据：CIFAR-10 找猫</h2>
+    <p><a href="https://www.cs.toronto.edu/~kriz/cifar.html">CIFAR-10</a> 是 6 万张 32×32 彩色照片，分 10 类：飞机、汽车、鸟、猫、鹿、狗、青蛙、马、船、卡车。
+      本课把它改造成“找猫”的二分类：猫作为正类，另外 9 类各取相同数量作为负类，两类各占一半。</p>
+    <table>
+      <tr><th>划分</th><th>数量</th><th>用途</th></tr>
+      <tr><td>训练</td><td>5000（约一半是猫）</td><td>更新参数</td></tr>
+      <tr><td>验证</td><td>1000</td><td>早停、选择最佳轮次</td></tr>
+      <tr><td>测试</td><td>2000（1000 猫 + 1000 非猫）</td><td>只在最后评估一次</td></tr>
+    </table>
+    <p>数据文件 <code>data/cat/cat_vs_noncat.npz</code>（约 23 MB）已随仓库提供，离线即可运行；需要重新生成时运行 <code>scripts/build_cat_dataset.py</code>。
+      输入按 R、G、B 三个通道分别减均值、除标准差（不做逐像素标准化，保留空间结构）。</p>
+    <div class="callout warn"><strong>难度</strong>32×32 的猫只有很少的像素，很多图人眼看都模糊；猫和狗在这个分辨率下尤其难分。所以这里的准确率远低于 MNIST 是正常的。</div>
+
+    <h2 id="intuition">为什么用卷积</h2>
+    <div class="card-grid">
+      <div class="card"><h4>局部连接</h4><p>猫的耳朵、眼睛、胡须都是局部结构。每个卷积输出只看 3×3 的小窗口，而不是全部 3072 个数。</p></div>
+      <div class="card"><h4>权重共享</h4><p>“尖耳朵检测器”在图的左上角和右下角都有用，一组 3×3 权重滑过整张图复用。参数量和图片大小无关。</p></div>
+      <div class="card"><h4>层层组合</h4><p>第一层找边缘和颜色块，第二层把它们组合成纹理和轮廓，第三层组合成耳朵、脸这样的部件。池化每次把分辨率减半，让后面的层“看得更广”。</p></div>
+    </div>
+    <p>MLP 把图片拉平后，每个像素位置都有独立的权重：猫在左边和在右边，对它来说是两件完全不同的事，只能靠大量参数和数据去硬记。</p>
+
+    <h2 id="conv">卷积层与 im2col</h2>
+    <pre class="formula">out[n, f, i, j] = b[f] + Σ_c Σ_u Σ_v  W[f, c, u, v] · x_pad[n, c, i+u, j+v]
+输出尺寸  H_out = H + 2·pad − k + 1    （k=3, pad=1 时尺寸不变）
+参数量    C_out × C_in × k × k + C_out</pre>
+    <p>输入是彩色图时 <code>C_in = 3</code>：每个卷积核同时覆盖 R、G、B 三个通道，形状是 3×3×3。</p>
+    <p><strong>im2col</strong>：把每个 3×3×C 的窗口展开成一行，所有位置堆起来得到 <code>cols</code>（形状 <code>N·H_out·W_out × C·k·k</code>），卷积核展开成 <code>F × C·k·k</code>，卷积就变成一次矩阵乘法：</p>
+    <pre class="formula">前向  out   = cols @ W.reshape(F, −1).T + b
+反向  dW    = dᵀ @ cols              （和全连接层 dW = xᵀ·δ 同一个形式）
+      db    = Σ d
+      dcols = d @ W.reshape(F, −1)  →  col2im：把每行加回它来自的 3×3 窗口（重叠处累加）</pre>
+    <p>代码用 <code>np.lib.stride_tricks.as_strided</code> 构造窗口视图，<code>col2im</code> 只循环 k×k = 9 次。实验开头在 4 张调试图片上做梯度检查，相对误差都在 1e-8 以下。</p>
+
+    <h2 id="pool">最大池化（2×2，stride 2）</h2>
+    <p>前向：每个 2×2 窗口取最大值并记下位置。反向：梯度只回传给那个最大值的位置，其余 3 个位置梯度为 0。池化没有参数，作用是把分辨率减半，并对一两个像素的位置偏移不敏感。</p>
+
+    <h2 id="arch">网络结构与参数量</h2>
+    <table>
+      <tr><th>层</th><th>输出形状</th><th>参数量</th></tr>
+      <tr><td>输入</td><td>3×32×32</td><td>—</td></tr>
+      <tr><td>conv1 3×3 + ReLU + maxpool</td><td>8×16×16</td><td>224</td></tr>
+      <tr><td>conv2 3×3 + ReLU + maxpool</td><td>16×8×8</td><td>1,168</td></tr>
+      <tr><td>conv3 3×3 + ReLU + maxpool</td><td>32×4×4 = 512</td><td>4,640</td></tr>
+      <tr><td>FC + ReLU + Dropout(0.3)</td><td>64</td><td>32,832</td></tr>
+      <tr><td>FC + Softmax</td><td>2（猫 / 非猫）</td><td>130</td></tr>
+      <tr><td><strong>合计</strong></td><td></td><td><strong>38,994</strong>（MLP [3072, 128, 64, 2] 约 40 万）</td></tr>
+    </table>
+    <p>训练配方沿用 09 课的结论：He 初始化（输出层 Xavier）、交叉熵、AdamW 解耦权重衰减、1 轮 Warmup + Cosine 学习率、batch 64、验证集早停（patience 5）。</p>
+
+    <h2 id="aug">数据增强</h2>
+    <p>训练时对每个 batch 随机做两件事（<code>augment_flip_crop</code>）：一半概率水平翻转；四周补 2 个像素后随机裁回 32×32（相当于随机平移最多 2 像素）。
+      朝左的猫翻过来还是猫，往右挪两个像素也还是猫——标签不变，但模型每轮看到的图都不完全一样，很难死记训练集。验证集和测试集不做增强。</p>
+
+    <h2 id="metrics">检测任务怎么评估</h2>
+    <p>模型输出 P(猫)，超过阈值（默认 0.5）就算“检测到猫”。错误分两种：</p>
+    <table>
+      <tr><th>指标</th><th>含义</th><th>低了说明</th></tr>
+      <tr><td>检出率 recall</td><td>所有猫里被找出来的比例 = TP / (TP + FN)</td><td>漏检多</td></tr>
+      <tr><td>精确率 precision</td><td>判为猫的里面真是猫的比例 = TP / (TP + FP)</td><td>误报多</td></tr>
+      <tr><td>F1</td><td>两者的调和平均</td><td>—</td></tr>
+    </table>
+    <p>调高阈值，模型更“谨慎”：误报少了，漏检多了；调低则相反。实际应用要按两种错误的代价来选阈值。</p>
+
+    <h2 id="occlusion">遮挡热力图：模型在看哪里</h2>
+    <p>用一个 8×8 的灰块（均值颜色）依次遮住图片的每个位置（步长 2），记录“是猫”的得分下降多少。得分用 log-odds：log(P(猫) / P(非猫))，
+      它不会像概率那样在 0.99 附近饱和。下降越多的位置越红，说明模型判断“这是猫”时最依赖那里。</p>
+
+    <h2 id="results">实验结果</h2>
+    <table>
+      <tr><th>模型</th><th>参数量</th><th>准确率</th><th>精确率</th><th>检出率</th><th>F1</th></tr>
+      <tr><td>MLP</td><td>401,922</td><td>71.1%</td><td>71.2%</td><td>70.8%</td><td>71.0%</td></tr>
+      <tr><td>CNN</td><td>38,994</td><td>75.3%</td><td>72.0%</td><td>82.8%</td><td>77.0%</td></tr>
+      <tr><td>CNN + 数据增强</td><td>38,994</td><td>77.8%</td><td>72.5%</td><td>89.7%</td><td>80.2%</td></tr>
+    </table>
+    <p class="meta">Jetson 设备（aarch64）实测，测试集 2000 张，阈值 0.5；固定随机种子，重跑结果一致。</p>
+    <ul>
+      <li>CNN 参数只有 MLP 的约 10%，准确率高约 7 个百分点。</li>
+      <li>不增强的 CNN 第 6 轮后验证损失开始回升（过拟合）；增强后训练和验证损失始终贴在一起，准确率再涨 2.5 个百分点。</li>
+      <li>误报最多的是狗：约 87% 的狗被判成了猫；汽车、卡车、飞机只有 10%–16%。</li>
+    </ul>
+    <div class="callout ok"><strong>通过标准</strong>梯度检查全部 &lt; 1e-5；CNN + 增强的测试准确率 ≥ 75% 且高于 MLP；CNN 参数量少于 MLP。</div>
+
+    <h2 id="run">如何运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 10
+# 或在网页看板 /lesson/10 点「运行」，能看到实时日志与逐步注解</pre>
+    <p>完整运行约 2–3 分钟（三个模型，纯 NumPy）。结果在 <code>artifacts/10_cnn/</code>：</p>
+    <ul>
+      <li><code>cnn_curves.png</code> — 三个模型的训练 / 验证损失与验证准确率</li>
+      <li><code>cnn_filters.png</code> — conv1 学到的 RGB 卷积核、对应特征图，以及 conv2 的特征图</li>
+      <li><code>cnn_detect.png</code> — 16 张测试图的 P(猫)，红色为判错</li>
+      <li><code>cnn_occlusion.png</code> — 遮挡热力图：模型判断时依赖的位置</li>
+      <li><code>cnn_metrics.png</code> — 准确率 / 精确率 / 检出率对比、阈值曲线、各类误报率、混淆矩阵</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="tips">自己改一改</h2>
+    <ul>
+      <li>把 <code>CNN_CFG["channels"]</code> 改成 <code>(16, 32, 64)</code>：参数和耗时约翻倍，看准确率还能涨多少。</li>
+      <li>在 <code>augment_flip_crop</code> 里把 <code>pad</code> 调到 4，或者去掉翻转，观察增强强度对过拟合的影响。</li>
+      <li>只用“猫 vs 狗”作为训练数据（修改 <code>scripts/build_cat_dataset.py</code> 的负类），看看最难的那一对能分到什么程度。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="09_full_pipeline.html">← 09 综合实战</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

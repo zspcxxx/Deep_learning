@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_xor_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
@@ -50,7 +51,7 @@ def weight_stds(model: MLP) -> list[float]:
 
 def run() -> dict:
     out = ensure_artifacts("06_weight_init")
-    X, y = generate_xor_dataset(n_per_quadrant=100, noise=0.15, seed=0)
+    X, y = cached_dataset("06_weight_init", "xor", generate_xor_dataset, n_per_quadrant=100, noise=0.15, seed=0)
 
     print("=" * 90)
     print("参数初始化对比实验（同一 XOR、同一结构 / lr / seed，只改 init）")

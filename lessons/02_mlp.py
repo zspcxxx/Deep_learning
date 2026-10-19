@@ -3,16 +3,19 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_moons_dataset, generate_xor_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
 from dllab.paths import ensure_artifacts
 from dllab.plotting import plot_decision_boundary, plt, save_figure
 
+LESSON = "02_mlp"
+
 
 def run() -> dict:
-    out = ensure_artifacts("02_mlp")
-    X_xor, y_xor = generate_xor_dataset()
+    out = ensure_artifacts(LESSON)
+    X_xor, y_xor = cached_dataset(LESSON, "xor", generate_xor_dataset)
     print("=" * 90)
     print("多层感知机演示 - XOR")
     print("=" * 90)
@@ -21,7 +24,7 @@ def run() -> dict:
     acc_xor = float(np.mean(mlp_xor.predict(X_xor) == y_xor) * 100)
     print(f"  → 最终训练准确率: {acc_xor:.2f}%  损失: {mlp_xor.loss_[-1]:.6f}")
 
-    X_moon, y_moon = generate_moons_dataset()
+    X_moon, y_moon = cached_dataset(LESSON, "moons", generate_moons_dataset)
     print("\n" + "=" * 90)
     print("多层感知机演示 - Two Moons")
     print("=" * 90)

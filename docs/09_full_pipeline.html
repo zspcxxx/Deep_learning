@@ -19,6 +19,7 @@
   <a href="07_normalization.html">07 归一化</a>
   <a href="08_regularization.html">08 正则化</a>
   <a href="09_full_pipeline.html">09 综合实战</a>
+  <a href="10_cnn.html">10 CNN</a>
   <span class="spacer"></span>
   <a href="/">看板</a>
 </nav>
@@ -127,7 +128,7 @@
 
     <h2 id="data">MNIST 数据设定与网络结构</h2>
     <ul>
-      <li><strong>数据集</strong>：MNIST 手写数字（\(28 \times 28 = 784\) 维特征，类别 \(0\text{–}9\)）。首次运行自动下载并缓存至 <code>data/mnist.npz</code>（若处于完全无网环境，自动启用内置 28×28 手写笔画生成器兜底）。</li>
+      <li><strong>数据集</strong>：MNIST 手写数字（\(28 \times 28 = 784\) 维特征，类别 \(0\text{–}9\)）。数据文件 <code>data/mnist/mnist.npz</code> 已随仓库提供，离线即可运行（文件缺失时自动下载并校验；完全无网又没有该文件时，启用内置 28×28 手写笔画生成器兜底）。</li>
       <li><strong>划分</strong>：训练集 <code>4000</code> 张 / 验证集 <code>800</code> 张 / 测试集 <code>1200</code> 张。</li>
       <li><strong>网络结构</strong>：<code>[784, 128, 64, 10]</code>（两层隐藏层 + 10 分类输出头），Mini-batch 大小 <code>128</code>，训练最多 <code>35</code> 个 Epoch。</li>
     </ul>
@@ -164,7 +165,7 @@ python lessons/09_full_pipeline.py</pre>
 
     <div class="footer-nav">
       <a href="08_regularization.html">← 08 正则化</a>
-      <a href="index.html">回到导读 →</a>
+      <a href="10_cnn.html">下一课：卷积神经网络 →</a>
     </div>
   </article>
 </div>

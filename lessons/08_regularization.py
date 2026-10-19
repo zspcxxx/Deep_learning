@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_moons_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
@@ -44,7 +45,7 @@ COLORS = {
 
 
 def split_moons(n_train: int = N_TRAIN, n_val: int = N_VAL, n_flip: int = N_FLIP, seed: int = 0):
-    X, y = generate_moons_dataset(n_per_class=250, noise=NOISE, seed=seed)
+    X, y = cached_dataset("08_regularization", "moons", generate_moons_dataset, n_per_class=250, noise=NOISE, seed=seed)
     rng = np.random.RandomState(seed + 1)
     idx = rng.permutation(len(y))
     X, y = X[idx], y[idx]

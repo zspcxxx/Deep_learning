@@ -1,98 +1,20 @@
 #!/usr/bin/env python3
+"""Lesson runner dashboard: run each lesson from the browser and read annotated logs and results."""
 from __future__ import annotations
 
 import json
 
-from flask import Flask, abort, render_template_string, send_from_directory
+from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
 
-from dllab.catalog import find_lesson
+from dllab.catalog import LESSONS, find_lesson
+from dllab.notes import get_notes
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT
+from dllab.runner import RUNS_DIR, SUMMARY_PATH, BusyError, RunManager
 
 app = Flask(__name__)
+app.json.ensure_ascii = False
 DOCS = PROJECT_ROOT / "docs"
-
-PAGE = r"""
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Deep Learning Lab 验证结果</title>
-<style>
-:root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --ok:#34d399; --bad:#f87171; --run:#fbbf24; --accent:#818cf8; }
-* { box-sizing:border-box; }
-body { margin:0; font-family: ui-sans-serif, system-ui, sans-serif; background:linear-gradient(160deg,#0f172a,#1e1b4b); color:var(--text); }
-header { padding:36px 24px 16px; text-align:center; }
-h1 { margin:0 0 8px; font-size:2rem; }
-.sub { color:var(--muted); }
-.wrap { max-width:1200px; margin:0 auto 48px; padding:0 20px; }
-.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:16px; margin:24px 0; }
-.card { background:var(--card); border-radius:16px; padding:18px; box-shadow:0 10px 30px rgba(0,0,0,.25); }
-.badge { display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:700; }
-.ok { background:#064e3b; color:var(--ok); }
-.bad { background:#7f1d1d; color:var(--bad); }
-.run { background:#78350f; color:var(--run); }
-.lesson { margin:18px 0; }
-.images { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; margin-top:12px; }
-.images img { width:100%; border-radius:12px; background:#0b1220; }
-pre { overflow:auto; background:#0b1220; padding:12px; border-radius:10px; font-size:12px; }
-a { color:var(--accent); }
-.topnav { display:flex; gap:18px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
-</style>
-</head>
-<body>
-<header>
-  <h1>Deep Learning Lab 验证看板</h1>
-  <p class="sub">先读原理，再单独跑实验，这里汇总指标与图像</p>
-  <div class="topnav">
-    <a href="/learn/">学习导读</a>
-    <a href="/learn/01">感知机</a>
-    <a href="/learn/02">MLP</a>
-    <a href="/learn/03">反向传播</a>
-    <a href="/learn/04">激活函数</a>
-    <a href="/learn/05">学习率</a>
-    <a href="/learn/06">参数初始化</a>
-    <a href="/learn/07">归一化</a>
-    <a href="/learn/08">正则化</a>
-    <a href="/learn/09">综合实战</a>
-  </div>
-</header>
-<div class="wrap">
-  <div class="grid">
-    <div class="card"><div>总体状态</div><h2><span class="badge {{ 'ok' if summary.passed else 'bad' }}">{{ 'PASS' if summary.passed else 'FAIL' }}</span></h2></div>
-    <div class="card"><div>实验数量</div><h2>{{ summary.lessons|length }}</h2></div>
-    <div class="card"><div>开始时间</div><h2 style="font-size:1rem">{{ summary.started_at or '-' }}</h2></div>
-    <div class="card"><div>结束时间</div><h2 style="font-size:1rem">{{ summary.finished_at or '进行中' }}</h2></div>
-  </div>
-  <section class="card">
-    <h2>单独运行</h2>
-    <pre>python scripts/run_lesson.py --list
-python scripts/run_lesson.py 01
-python scripts/run_lesson.py 09</pre>
-  </section>
-  {% for lesson in summary.lessons %}
-  {% set images = (lesson.metrics or {}).get('images') or lesson.get('images') or [] %}
-  <section class="card lesson">
-    <h2>{{ lesson.name }} <span class="badge {{ 'ok' if lesson.status=='passed' else ('run' if lesson.status=='running' else 'bad') }}">{{ lesson.status or ('passed' if lesson.passed else 'unknown') }}</span></h2>
-    <p class="sub">耗时 {{ lesson.elapsed_sec or '-' }} s · <a href="/learn/{{ lesson.name.split('_')[0] }}">阅读原理</a></p>
-    {% if lesson.error %}<pre>{{ lesson.error }}</pre>{% endif %}
-    {% if lesson.metrics %}
-      <pre>{{ lesson.metrics | tojson(indent=2) }}</pre>
-    {% endif %}
-    {% if images %}
-      <div class="images">
-        {% for img in images %}
-          <a href="/file/{{ img }}"><img src="/file/{{ img }}" alt="{{ img }}"></a>
-        {% endfor %}
-      </div>
-    {% endif %}
-  </section>
-  {% endfor %}
-  <p><a href="/api/summary">JSON API</a></p>
-</div>
-</body>
-</html>
-"""
+manager = RunManager()
 
 DOC_FILES = {
     "01": "01_perceptron.html",
@@ -105,25 +27,157 @@ DOC_FILES = {
     "07": "07_normalization.html",
     "08": "08_regularization.html",
     "09": "09_full_pipeline.html",
+    "10": "10_cnn.html",
 }
 
 
 def load_summary() -> dict:
-    path = ARTIFACTS_DIR / "summary.json"
-    if not path.exists():
+    if not SUMMARY_PATH.exists():
         return {"passed": False, "lessons": [], "started_at": None, "finished_at": None}
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(SUMMARY_PATH.read_text(encoding="utf-8"))
 
+
+def lesson_status(item: dict, summary_entries: dict) -> dict:
+    """Latest known state of one lesson: whichever is newer of its last web run and its summary entry."""
+    path = RUNS_DIR / f"{item['name']}.json"
+    rec = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    entry = summary_entries.get(item["name"])
+    if entry and (rec is None or (entry.get("finished_at") or "") > (rec.get("finished_at") or "")):
+        return {"status": entry.get("status"), "elapsed_sec": entry.get("elapsed_sec"),
+                "finished_at": entry.get("finished_at"), "source": entry.get("source", "verify")}
+    if rec:
+        return {"status": rec["status"], "elapsed_sec": rec.get("elapsed_sec"), "finished_at": rec.get("finished_at"),
+                "source": "web"}
+    return {"status": None, "elapsed_sec": None, "finished_at": None, "source": None}
+
+
+def lesson_list() -> list[dict]:
+    entries = {e["name"]: e for e in load_summary().get("lessons", [])}
+    active = manager.active
+    out = []
+    for item in LESSONS:
+        state = lesson_status(item, entries)
+        if active and active.lesson["id"] == item["id"]:
+            state = {**state, "status": "running"}
+        out.append({
+            "id": item["id"], "name": item["name"], "title": item["title"], "help": item["help"],
+            "doc": item["doc"], **state,
+        })
+    return out
+
+
+def run_brief(run) -> dict | None:
+    return run.to_dict(include_events=False) if run else None
+
+
+# ---------------------------------------------------------------- pages
 
 @app.get("/")
 def index():
-    return render_template_string(PAGE, summary=load_summary())
+    return render_template("index.html", lessons=lesson_list())
 
+
+@app.get("/lesson/<lesson_id>")
+def lesson_page(lesson_id: str):
+    try:
+        item = find_lesson(lesson_id)
+    except KeyError:
+        abort(404)
+    ids = [x["id"] for x in LESSONS]
+    pos = ids.index(item["id"])
+    notes = get_notes(item["id"])
+    meta = {
+        "id": item["id"], "name": item["name"], "title": item["title"], "help": item["help"], "doc": item["doc"],
+        "intro": notes.intro, "steps": notes.steps,
+    }
+    return render_template(
+        "lesson.html",
+        lesson=meta,
+        prev=LESSONS[pos - 1] if pos > 0 else None,
+        next=LESSONS[pos + 1] if pos + 1 < len(LESSONS) else None,
+        autorun=request.args.get("autorun") == "1",
+    )
+
+
+# ---------------------------------------------------------------- API
 
 @app.get("/api/summary")
 def api_summary():
     return load_summary()
 
+
+@app.get("/api/lessons")
+def api_lessons():
+    return jsonify(lesson_list())
+
+
+@app.get("/api/lessons/<lesson_id>/latest")
+def api_latest(lesson_id: str):
+    try:
+        return jsonify(manager.latest(lesson_id))
+    except KeyError:
+        abort(404)
+
+
+@app.post("/api/lessons/<lesson_id>/run")
+def api_run(lesson_id: str):
+    try:
+        run = manager.start(lesson_id)
+    except KeyError:
+        abort(404)
+    except BusyError as exc:
+        return jsonify({"error": "busy", "active": run_brief(exc.active)}), 409
+    return jsonify(run_brief(run)), 202
+
+
+@app.get("/api/active")
+def api_active():
+    return jsonify(run_brief(manager.active))
+
+
+@app.get("/api/runs/<run_id>")
+def api_run_detail(run_id: str):
+    run = manager.get(run_id)
+    if not run:
+        abort(404)
+    return jsonify(run.to_dict())
+
+
+@app.post("/api/runs/<run_id>/cancel")
+def api_cancel(run_id: str):
+    return jsonify({"cancelled": manager.cancel(run_id)})
+
+
+@app.get("/api/runs/<run_id>/events")
+def api_events(run_id: str):
+    run = manager.get(run_id)
+    if not run:
+        abort(404)
+    last = request.headers.get("Last-Event-ID") or request.args.get("since", "-1")
+    start = int(last) + 1
+
+    def stream():
+        i = start
+        while True:
+            with run.cond:
+                if i >= len(run.events) and not run.finished:
+                    run.cond.wait(timeout=15)
+                batch = run.events[i:]
+                finished = run.finished
+            if not batch:
+                if finished:
+                    return
+                yield ": keepalive\n\n"
+                continue
+            for ev in batch:
+                yield f"id: {ev['i']}\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
+            i += len(batch)
+
+    return Response(stream(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+# ---------------------------------------------------------------- static docs & artifacts
 
 @app.get("/learn.css")
 @app.get("/learn/learn.css")
@@ -161,7 +215,7 @@ def learn_page(key: str):
 @app.get("/file/<path:rel>")
 def artifact_file(rel: str):
     target = (PROJECT_ROOT / rel).resolve()
-    if PROJECT_ROOT not in target.parents and target != PROJECT_ROOT:
+    if ARTIFACTS_DIR.resolve() not in target.parents:
         abort(403)
     if not target.exists():
         abort(404)
@@ -169,7 +223,7 @@ def artifact_file(rel: str):
 
 
 def main():
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

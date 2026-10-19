@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="hero">
+  <h1>实验看板</h1>
+  <p class="lead">每个实验都可以直接在这里运行。点进实验页面能看到实时运行日志、逐步出现的过程注解，以及运行结束后的结果解读和图表说明。
+    实验按 CPU 顺序执行，同一时间只运行一个。</p>
+  <div class="stats" id="stats"></div>
+</header>
+
+<section class="lesson-grid" id="lesson-grid">
+  {% for l in lessons %}
+  <article class="lesson-card" data-id="{{ l.id }}">
+    <div class="card-head">
+      <span class="num">{{ l.id }}</span>
+      <span class="badge" data-status="{{ l.status or 'none' }}"></span>
+    </div>
+    <h3><a href="/lesson/{{ l.id }}">{{ l.title }}</a></h3>
+    <p class="help">{{ l.help }}</p>
+    <p class="meta" data-meta>
+      {% if l.elapsed_sec %}上次耗时 {{ '%.1f'|format(l.elapsed_sec) }} s{% endif %}
+    </p>
+    <div class="actions">
+      <button class="btn primary" data-run="{{ l.id }}">▶ 运行</button>
+      <a class="btn" href="/lesson/{{ l.id }}">查看过程与结果</a>
+      <a class="btn ghost" href="/learn/{{ l.doc }}">原理</a>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+<p class="footnote">命令行同样可用：<code>python scripts/run_lesson.py 05</code> 跑单个实验，<code>python scripts/run_verify.py</code> 顺序跑完全部。
+  <a href="/api/summary">summary JSON</a></p>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='dashboard.js') }}"></script>
+{% endblock %}

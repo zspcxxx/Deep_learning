@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from dllab.data_store import cached_dataset
 from dllab.datasets import generate_moons_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
@@ -27,7 +28,7 @@ COLORS = {"raw": "#be123c", "input": "#3b82f6", "bn": "#0f766e"}
 
 
 def make_scaled_moons():
-    X, y = generate_moons_dataset(n_per_class=200, noise=0.12, seed=0)
+    X, y = cached_dataset("07_normalization", "moons", generate_moons_dataset, n_per_class=200, noise=0.12, seed=0)
     X_raw = X * SCALE + SHIFT
     return X_raw, y
 

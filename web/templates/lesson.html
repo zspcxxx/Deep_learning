@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}{{ lesson.id }} {{ lesson.title }} · Deep Learning Lab{% endblock %}
+{% block content %}
+<div class="crumbs">
+  <a href="/">← 实验看板</a>
+  <span class="spacer"></span>
+  {% if prev %}<a href="/lesson/{{ prev.id }}">‹ {{ prev.id }} {{ prev.title }}</a>{% endif %}
+  {% if next %}<a href="/lesson/{{ next.id }}">{{ next.id }} {{ next.title }} ›</a>{% endif %}
+</div>
+
+<header class="hero lesson-hero">
+  <div class="hero-row">
+    <div>
+      <div class="kicker">实验 {{ lesson.id }}</div>
+      <h1>{{ lesson.title }}</h1>
+      <p class="lead">{{ lesson.intro or lesson.help }}</p>
+    </div>
+    <div class="controls">
+      <span class="badge big" id="status" data-status="none"></span>
+      <span class="timer" id="timer"></span>
+      <button class="btn primary" id="run-btn">▶ 运行</button>
+      <button class="btn danger" id="stop-btn" hidden>■ 停止</button>
+      <a class="btn ghost" href="/learn/{{ lesson.doc }}" target="_blank">原理文档</a>
+    </div>
+  </div>
+  <p class="cmdline">等价命令：<code>python scripts/run_lesson.py {{ lesson.id }}</code></p>
+</header>
+
+<section class="panel">
+  <h2>本次运行会做什么</h2>
+  <ol class="steps" id="steps">
+    {% for s in lesson.steps %}<li data-step="{{ loop.index0 }}">{{ s }}</li>{% endfor %}
+  </ol>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>运行过程</h2>
+    <span class="hint" id="run-info"></span>
+  </div>
+  <div class="process">
+    <div class="console-wrap">
+      <div class="console-head">
+        <span>日志</span>
+        <label><input type="checkbox" id="follow" checked> 自动滚动</label>
+      </div>
+      <div class="console" id="console"><div class="placeholder">还没有运行记录，点击右上角“运行”。</div></div>
+    </div>
+    <div class="notes-wrap">
+      <div class="console-head"><span>过程注解</span><span class="hint">点击注解定位到日志行</span></div>
+      <div class="notes" id="notes"><div class="placeholder">运行时，关键日志行出现后这里会给出解释。</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel" id="result-panel" hidden>
+  <h2>运行结果</h2>
+  <div class="verdict" id="verdict"></div>
+  <h3>结果解读</h3>
+  <div class="findings" id="findings"></div>
+  <h3>结果图</h3>
+  <div class="figures" id="figures"></div>
+  <details class="raw">
+    <summary>原始指标 metrics.json</summary>
+    <pre id="raw-json"></pre>
+  </details>
+</section>
+
+<script id="lesson-meta" type="application/json">{{ lesson | tojson }}</script>
+{% endblock %}
+{% block scripts %}
+<script>window.AUTORUN = {{ 'true' if autorun else 'false' }};</script>
+<script src="{{ url_for('static', filename='lesson.js') }}"></script>
+{% endblock %}
