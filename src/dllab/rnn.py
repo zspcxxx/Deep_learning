@@ -1,4 +1,4 @@
-"""Vanilla RNN and LSTM with hand-written backpropagation through time (NumPy only).
+"""Vanilla RNN, LSTM and GRU with hand-written backpropagation through time (NumPy only).
 
 Inputs are (N, T, D) arrays (usually one-hot), hidden states (N, T, H). A RecurrentNet puts a
 Dense read-out on top: either on the last step only ("last", sequence classification) or on every
@@ -127,6 +127,92 @@ class LSTMCell:
         return dX
 
 
+class GRUCell:
+    """PyTorch-style GRU: update z, reset r, candidate n.
+
+    z = σ(x Wxz + h Whz + bz)
+    r = σ(x Wxr + h Whr + br)
+    n = tanh(x Wxn + r ⊙ (h Whn + bn))
+    h_t = (1 − z) ⊙ n + z ⊙ h_{t-1}
+
+    A large update-gate bias makes z start near 1, so the previous state is copied
+    and gradients can travel back through the additive path (same role as LSTM forget bias).
+    """
+
+    param_names = ("Wx", "Wh", "b")
+
+    def __init__(self, n_in: int, hidden: int, rng, dtype, update_bias: float = 0.0):
+        self.H = hidden
+        self.Wx = (rng.randn(n_in, 3 * hidden) * np.sqrt(1.0 / n_in)).astype(dtype)
+        self.Wh = (rng.randn(hidden, 3 * hidden) * np.sqrt(1.0 / hidden)).astype(dtype)
+        self.b = np.zeros(3 * hidden, dtype=dtype)
+        self.b[:hidden] = update_bias
+
+    def init_state(self, n: int):
+        return np.zeros((n, self.H), dtype=self.Wx.dtype)
+
+    def _parts(self, x, h):
+        H = self.H
+        z_lin = x @ self.Wx[:, :H] + h @ self.Wh[:, :H] + self.b[:H]
+        r_lin = x @ self.Wx[:, H : 2 * H] + h @ self.Wh[:, H : 2 * H] + self.b[H : 2 * H]
+        u = h @ self.Wh[:, 2 * H :] + self.b[2 * H :]
+        z, r = _sigmoid(z_lin), _sigmoid(r_lin)
+        n = np.tanh(x @ self.Wx[:, 2 * H :] + r * u)
+        return z, r, n, u
+
+    def step(self, x, h):
+        z, r, n, _ = self._parts(x, h)
+        return (1.0 - z) * n + z * h
+
+    def forward(self, X):
+        n_batch, t_len, _ = X.shape
+        h = self.init_state(n_batch)
+        hs = np.empty((n_batch, t_len, self.H), dtype=self.Wx.dtype)
+        cache = []
+        for t in range(t_len):
+            z, r, n, u = self._parts(X[:, t], h)
+            h_prev = h
+            h = (1.0 - z) * n + z * h
+            hs[:, t] = h
+            cache.append((h_prev, z, r, n, u))
+        self._cache = (X, cache)
+        return hs
+
+    def backward(self, dhs):
+        X, cache = self._cache
+        n_batch, t_len, _ = X.shape
+        H = self.H
+        self.dWx = np.zeros_like(self.Wx)
+        self.dWh = np.zeros_like(self.Wh)
+        self.db = np.zeros_like(self.b)
+        dX = np.empty_like(X)
+        dh_next = np.zeros((n_batch, H), dtype=X.dtype)
+        for t in reversed(range(t_len)):
+            h_prev, z, r, n, u = cache[t]
+            dh = dhs[:, t] + dh_next
+            da_z = dh * (h_prev - n) * z * (1.0 - z)
+            da_n = dh * (1.0 - z) * (1.0 - n ** 2)
+            du = da_n * r
+            da_r = (da_n * u) * r * (1.0 - r)
+            self.dWx[:, :H] += X[:, t].T @ da_z
+            self.dWx[:, H : 2 * H] += X[:, t].T @ da_r
+            self.dWx[:, 2 * H :] += X[:, t].T @ da_n
+            self.dWh[:, :H] += h_prev.T @ da_z
+            self.dWh[:, H : 2 * H] += h_prev.T @ da_r
+            self.dWh[:, 2 * H :] += h_prev.T @ du
+            self.db[:H] += da_z.sum(axis=0)
+            self.db[H : 2 * H] += da_r.sum(axis=0)
+            self.db[2 * H :] += du.sum(axis=0)
+            dX[:, t] = da_z @ self.Wx[:, :H].T + da_r @ self.Wx[:, H : 2 * H].T + da_n @ self.Wx[:, 2 * H :].T
+            dh_next = (
+                dh * z
+                + da_z @ self.Wh[:, :H].T
+                + da_r @ self.Wh[:, H : 2 * H].T
+                + du @ self.Wh[:, 2 * H :].T
+            )
+        return dX
+
+
 def _softmax(z):
     z = z - z.max(axis=-1, keepdims=True)
     e = np.exp(z)
@@ -134,14 +220,16 @@ def _softmax(z):
 
 
 class RecurrentNet:
-    """cell ("rnn" | "lstm") + Dense read-out, trained with softmax cross-entropy, Adam and gradient clipping."""
+    """cell ("rnn" | "lstm" | "gru") + Dense read-out, trained with softmax cross-entropy, Adam and gradient clipping."""
 
     def __init__(self, cell: str, n_in: int, hidden: int, n_out: int, seed: int = 42, dtype=np.float64,
-                 forget_bias: float = 1.0):
+                 forget_bias: float = 1.0, update_bias: float = 0.0):
         rng = np.random.RandomState(seed)
         self.kind = cell
         if cell == "lstm":
             self.cell = LSTMCell(n_in, hidden, rng, dtype, forget_bias=forget_bias)
+        elif cell == "gru":
+            self.cell = GRUCell(n_in, hidden, rng, dtype, update_bias=update_bias)
         elif cell == "rnn":
             self.cell = RNNCell(n_in, hidden, rng, dtype)
         else:
@@ -214,6 +302,11 @@ class RecurrentNet:
         """LSTM only: forget-gate activations f_t, shape (N, T, H)."""
         self.cell.forward(np.asarray(X, dtype=self.dtype))
         return np.stack([c[3] for c in self.cell._cache[1]], axis=1)
+
+    def update_gates(self, X) -> np.ndarray:
+        """GRU only: update-gate activations z_t, shape (N, T, H)."""
+        self.cell.forward(np.asarray(X, dtype=self.dtype))
+        return np.stack([c[1] for c in self.cell._cache[1]], axis=1)
 
     def fit(self, batch_fn, n_steps: int, lr: float = 3e-3, clip: float = 1.0, mode: str = "last",
             log_every: int = 0, log_fn=None):

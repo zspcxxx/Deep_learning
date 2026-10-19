@@ -35,6 +35,7 @@
       <li><a href="#bptt">随时间反向传播</a></li>
       <li><a href="#vanish">梯度沿时间消失</a></li>
       <li><a href="#lstm">LSTM：用门控制记忆</a></li>
+      <li><a href="#gru">GRU：两个门就够了</a></li>
       <li><a href="#memory">实验一：记住第 1 个符号</a></li>
       <li><a href="#names">实验二：生成名字</a></li>
       <li><a href="#results">实验结果</a></li>
@@ -47,15 +48,15 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">实验 12</span>
-        <span class="chip teal">纯 NumPy，约 1.5 分钟</span>
+        <span class="chip teal">纯 NumPy，约 6 分钟</span>
         <span class="chip amber">序列 · 时间</span>
       </div>
       <div class="hero-grid">
         <div>
           <h1>循环神经网络：让网络记住过去</h1>
           <p class="lead">前面的网络一次看完整个输入。文字、语音、股价这类数据是按时间一个个到来的，网络需要一边读一边“记住”前面的内容。
-            本课手写 RNN 和 LSTM 的随时间反向传播，看普通 RNN 为什么记不住 40 步以前的事、LSTM 的门怎么解决它，最后训练一个会自己编英文名字的模型。</p>
-          <p class="meta">入口 <code>lessons/12_rnn.py</code> · 实现 <code>src/dllab/rnn.py</code>（<code>RNNCell</code> / <code>LSTMCell</code> / <code>RecurrentNet</code> / <code>gradient_check</code>）</p>
+            本课手写 RNN、LSTM 和 GRU 的随时间反向传播，看普通 RNN 为什么记不住 40 步以前的事、LSTM 和 GRU 的门怎么解决它，最后训练一个会自己编英文名字的模型。</p>
+          <p class="meta">入口 <code>lessons/12_rnn.py</code> · 实现 <code>src/dllab/rnn.py</code>（<code>RNNCell</code> / <code>LSTMCell</code> / <code>GRUCell</code> / <code>RecurrentNet</code> / <code>gradient_check</code>）</p>
         </div>
         <div class="diagram" style="margin:0;padding:8px;">
           <svg viewBox="0 0 300 170" width="300" height="170" xmlns="http://www.w3.org/2000/svg">
@@ -88,6 +89,7 @@
         <li>RNN 怎么在时间上共享权重？反向传播怎么“沿时间”往回传？</li>
         <li>普通 RNN 能记住多远以前的信息？为什么记不住？</li>
         <li>LSTM 的遗忘门、输入门、输出门和细胞状态各起什么作用？遗忘门的初始化为什么重要？</li>
+        <li>GRU 怎么用更新门和重置门做到类似的事？更新门偏置为什么要设大？</li>
         <li>一个按字符预测的小模型，能不能学会“编”出像样的新名字？</li>
       </ol>
     </div>
@@ -103,7 +105,7 @@ y_t = h_t · Wy + by                              （需要输出的那些时间
     <pre class="formula">da_t     = (dL/dh_t + dh_next) ⊙ (1 − h_t²)        （tanh 的导数）
 dWx     += x_tᵀ · da_t       dWh += h_{t-1}ᵀ · da_t       （每一步的贡献累加）
 dh_next  = da_t · Whᵀ                                      （传给上一步）</pre>
-    <p>代码在 <code>RNNCell.backward</code> 里，不到 15 行。实验开头用数值梯度对 RNN、LSTM 两种单元、两种用法做了检查，误差都在 1e-7 以下。</p>
+    <p>代码在 <code>RNNCell.backward</code> 里，不到 15 行。实验开头用数值梯度对 RNN、LSTM、GRU 三种单元、两种用法做了检查，误差都在 1e-6 以下。</p>
     <p>RNN 训练时梯度偶尔会突然变得很大，所以训练循环里做了<strong>梯度裁剪</strong>：所有梯度的总范数超过阈值时，按比例缩小到阈值。</p>
 
     <h2 id="vanish">梯度沿时间消失</h2>
@@ -125,12 +127,27 @@ h_t = o ⊙ tanh(c_t)</pre>
     <div class="callout warn"><strong>遗忘门偏置</strong>常见的默认值是 1，此时 f ≈ sigmoid(1) ≈ 0.73，40 步后梯度只剩 0.73⁴⁰ ≈ 3e-6，LSTM 一样学不会。
       本课把遗忘门偏置初始化为 3（f ≈ 0.95），细胞一开始就倾向于保留记忆——和第 11 课“让残差块从恒等映射起步”是同一个道理。</div>
 
+    <h2 id="gru">GRU：两个门就够了</h2>
+    <p>GRU（Gated Recurrent Unit）没有单独的细胞状态，隐藏状态自己就是记忆。它用更新门 z 决定“保留旧状态还是换成新内容”，用重置门 r 决定写新内容时要不要看旧状态：</p>
+    <pre class="formula">z = σ(x_t · Wxz + h_{t-1} · Whz + bz)                 更新门
+r = σ(x_t · Wxr + h_{t-1} · Whr + br)                 重置门
+n = tanh(x_t · Wxn + r ⊙ (h_{t-1} · Whn + bn))        候选记忆
+h_t = (1 − z) ⊙ n + z ⊙ h_{t-1}</pre>
+    <table>
+      <tr><th>门</th><th>作用</th></tr>
+      <tr><td>更新门 z</td><td>旧状态保留多少（1 = 原样复制 h_{t-1}，对应 LSTM 里接近 1 的遗忘门）</td></tr>
+      <tr><td>重置门 r</td><td>计算候选记忆 n 时看多少旧状态（0 = 当这一步是新的开始）</td></tr>
+    </table>
+    <p>沿 h 往回传时，复制路径每步只乘 z。z 接近 1，梯度就能穿过几十步——和 LSTM 细胞状态上乘遗忘门是同一件事，只是 GRU 把“细胞”和“隐藏状态”合成了一个向量，参数大约是同宽度 LSTM 的 3/4。</p>
+    <div class="callout warn"><strong>更新门偏置</strong>和遗忘门偏置是同一类初始化。偏置为 0 时 z ≈ 0.5，40 步后复制路径只剩 0.5⁴⁰ ≈ 9e-13，GRU 记不住开头。
+      本课把更新门偏置初始化为 3（z ≈ 0.95），一开始就倾向于保留旧状态。代码在 <code>GRUCell</code>，候选记忆把偏置放在重置门里面（和 PyTorch 的 GRU 一致）。</div>
+
     <h2 id="memory">实验一：记住第 1 个符号</h2>
     <ul>
       <li>输入：长度为“延迟”的随机符号序列（4 种符号，one-hot）；读完后输出第 1 个符号。后面的符号和第 1 个来自同一个字母表，所以必须记住开头、同时忽略长得一样的干扰。随机猜对的概率是 25%。</li>
-      <li>模型：隐藏层 32 维的 RNN（1,316 个参数）和 LSTM（4,868 个参数），只在最后一步接输出层。</li>
+      <li>模型：隐藏层 32 维的 RNN、LSTM 和 GRU，只在最后一步接输出层。</li>
       <li>训练：Adam（lr 3e-3，余弦衰减），1500 步，每步 64 条现场生成的新序列，梯度范数裁剪到 1。测试集 1000 条，缓存在 <code>data/12_rnn/</code>。</li>
-      <li>延迟 5 / 10 / 20 / 40 步；另外在 40 步时测一个遗忘门偏置为 1 的 LSTM 作对照。</li>
+      <li>延迟 5 / 10 / 20 / 40 步。另外在 40 步时测两个对照：遗忘门偏置为 1 的 LSTM，以及更新门偏置为 0 的 GRU。</li>
     </ul>
 
     <h2 id="names">实验二：生成名字</h2>
@@ -146,6 +163,8 @@ h_t = o ⊙ tanh(c_t)</pre>
       <tr><td>RNN</td><td>100%</td><td>100%</td><td>100%</td><td>21.7%</td></tr>
       <tr><td>LSTM（遗忘门偏置 3）</td><td>100%</td><td>100%</td><td>100%</td><td>100%</td></tr>
       <tr><td>LSTM（遗忘门偏置 1）</td><td></td><td></td><td></td><td>25.1%</td></tr>
+      <tr><td>GRU（更新门偏置 3）</td><td>100%</td><td>100%</td><td>100%</td><td>100%</td></tr>
+      <tr><td>GRU（更新门偏置 0）</td><td></td><td></td><td></td><td>25.9%</td></tr>
     </table>
     <table>
       <tr><th>名字模型</th><th>参数量</th><th>验证损失（nats/字符）</th><th>T = 1.0 时新名字占比</th></tr>
@@ -153,10 +172,11 @@ h_t = o ⊙ tanh(c_t)</pre>
       <tr><td>只按字母频率猜</td><td>—</td><td>2.823</td><td>—</td></tr>
       <tr><td>RNN</td><td>7,643</td><td>2.143</td><td>88%</td></tr>
       <tr><td>LSTM</td><td>25,307</td><td>2.112</td><td>90%</td></tr>
+      <tr><td>GRU</td><td>19,419</td><td>2.124</td><td>85%</td></tr>
     </table>
-    <p class="meta">Jetson 设备实测，固定随机种子。LSTM 在 T = 1.0 时编出的名字例如：ashiya、alissa、evant、jaxsen、jarillen、nalila。</p>
-    <p>名字最长只有 15 个字母，用不上长期记忆，所以 RNN 和 LSTM 差距很小——LSTM 的优势只在需要跨越很长距离的任务上才明显。</p>
-    <div class="callout ok"><strong>通过标准</strong>梯度检查全部 &lt; 1e-6；延迟 5 步时 RNN ≥ 95%；延迟 40 步时 LSTM ≥ 95% 而 RNN ≤ 40%；名字 LSTM 的验证损失比“按字母频率猜”低 0.4 以上，且 T = 1.0 时至少一半是新名字。</div>
+    <p class="meta">Jetson（192.168.0.110）实测，固定随机种子。GRU 在 T = 1.0 时编出的名字例如：arisya、alissa、evant、lykes、kiriah、kaynel。</p>
+    <p>名字最长只有 15 个字母，用不上长期记忆，所以三种循环单元差距很小——门控单元的优势只在需要跨越很长距离的任务上才明显。</p>
+    <div class="callout ok"><strong>通过标准</strong>梯度检查全部 &lt; 1e-6；延迟 5 步时 RNN ≥ 95%；延迟 40 步时 LSTM 和 GRU（更新门偏置 3）都 ≥ 95%，而 RNN 和更新门偏置 0 的 GRU 都 ≤ 40%；名字 LSTM 与 GRU 的验证损失都比“按字母频率猜”低 0.4 以上，且 LSTM 在 T = 1.0 时至少一半是新名字。</div>
 
     <h2 id="run">如何运行</h2>
     <pre class="cmd">source .venv/bin/activate
@@ -165,14 +185,14 @@ python scripts/run_lesson.py 12
     <p>结果在 <code>artifacts/12_rnn/</code>：</p>
     <ul>
       <li><code>rnn_memory.png</code> — 不同延迟下的准确率、延迟 40 步时的训练曲线</li>
-      <li><code>rnn_gradflow.png</code> — 梯度沿时间回传的比例、训练后 LSTM 的遗忘门</li>
+      <li><code>rnn_gradflow.png</code> — 梯度沿时间回传的比例、训练后 LSTM 的遗忘门和 GRU 的更新门</li>
       <li><code>rnn_names.png</code> — 名字模型的损失曲线和不同温度下生成的名字</li>
       <li><code>metrics.json</code></li>
     </ul>
 
     <h2 id="tips">自己改一改</h2>
     <ul>
-      <li>把 <code>DELAYS</code> 加上 80，看 LSTM（偏置 3）还能不能记住；再把 <code>FORGET_BIAS</code> 改成 5 试试。</li>
+      <li>把 <code>DELAYS</code> 加上 80，看 LSTM（偏置 3）和 GRU（更新门偏置 3）还能不能记住；再把 <code>FORGET_BIAS</code> 或 <code>UPDATE_BIAS</code> 改成 5 试试。</li>
       <li>去掉梯度裁剪（<code>clip=0</code>），观察 RNN 训练时的梯度范数 <code>model.grad_norm_</code> 会不会出现尖峰。</li>
       <li>把 <code>data/names/names.txt</code> 换成你自己的单词表（每行一个，小写字母），让模型编别的东西。</li>
     </ul>

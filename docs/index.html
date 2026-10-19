@@ -151,8 +151,8 @@
       </a>
       <a class="lesson-card" href="12_rnn.html">
         <div class="num">EXPERIMENT 12</div>
-        <h3>循环神经网络 RNN / LSTM</h3>
-        <p>手写随时间反向传播：RNN 记不住 40 步前的符号，LSTM 可以；再训练一个会自己编英文名字的模型。</p>
+        <h3>循环神经网络 RNN / LSTM / GRU</h3>
+        <p>手写随时间反向传播：RNN 记不住 40 步前的符号，LSTM 和 GRU 可以；再训练一个会自己编英文名字的模型。</p>
       </a>
     </div>
 
@@ -219,7 +219,7 @@ python lessons/12_rnn.py</pre>
       <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战：MNIST</td><td>集齐 11 项核心技术（He/GELU/RMSNorm/CE/AdamW/Cosine/早停）实现手写数字识别</td><td>约 10–20 秒</td></tr>
       <tr><td><a href="10_cnn.html">10</a></td><td>卷积神经网络：检测小猫</td><td>局部连接 + 权重共享 + 池化 + 数据增强；检测任务看检出率与误报</td><td>约 2–3 分钟</td></tr>
       <tr><td><a href="11_residual.html">11</a></td><td>残差连接</td><td>普通深网络会退化；h + F(h) + 分支零初始化让 50 层也能训练</td><td>约 35 秒</td></tr>
-      <tr><td><a href="12_rnn.html">12</a></td><td>循环神经网络</td><td>BPTT；梯度沿时间消失，LSTM 的门与遗忘门偏置让长期记忆成为可能；按字符生成名字</td><td>约 1.5 分钟</td></tr>
+      <tr><td><a href="12_rnn.html">12</a></td><td>循环神经网络</td><td>BPTT；梯度沿时间消失，LSTM 的遗忘门与 GRU 的更新门让长期记忆成为可能；按字符生成名字</td><td>约 6 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

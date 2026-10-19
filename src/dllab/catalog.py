@@ -99,11 +99,11 @@ LESSONS = [
     },
     {
         "id": "12",
-        "keys": ("12", "rnn", "lstm", "recurrent", "sequence", "12_rnn"),
-        "title": "循环神经网络 RNN / LSTM",
+        "keys": ("12", "rnn", "lstm", "gru", "recurrent", "sequence", "12_rnn"),
+        "title": "循环神经网络 RNN / LSTM / GRU",
         "module": "lessons.12_rnn",
         "doc": "12_rnn.html",
-        "help": "手写随时间反向传播：RNN 记不住 40 步前的信息，LSTM 可以；再按字符生成新名字",
+        "help": "手写随时间反向传播：RNN 记不住 40 步前的信息，LSTM 和 GRU 可以；再按字符生成新名字",
     },
 ]
 
