@@ -88,6 +88,40 @@ def generate_spiral_dataset(n_per_class: int = 300, n_classes: int = 3, turns: f
     return X[idx], y[idx]
 
 
+def generate_memory_dataset(n: int, delay: int, n_symbols: int = 4, seed: int = 0):
+    """Long-term memory task: a sequence of `delay` random symbols; the label (read at the last step)
+    is the FIRST symbol. Later symbols come from the same alphabet, so the network must hold on to
+    step 0 while ignoring look-alike inputs. One-hot X (n, delay, n_symbols)."""
+    rng = np.random.RandomState(seed)
+    tokens = rng.randint(n_symbols, size=(n, delay))
+    return np.eye(n_symbols)[tokens], tokens[:, 0].astype(np.int64)
+
+
+NAMES_PATH = DATA_DIR / "names" / "names.txt"
+NAME_VOCAB = "." + "abcdefghijklmnopqrstuvwxyz"  # "." marks both the start and the end of a name
+
+
+def load_names() -> list[str]:
+    """32k lowercase first names (from github.com/karpathy/makemore, MIT licence), shipped in data/names/."""
+    return [w for w in NAMES_PATH.read_text(encoding="utf-8").split() if w]
+
+
+def encode_names(names: list[str]):
+    """Next-character training pairs: X = one-hot of ".name" (padded), Y = "name." indices, mask = 1 on real steps."""
+    idx = {ch: i for i, ch in enumerate(NAME_VOCAB)}
+    t_len = max(len(w) for w in names) + 1
+    X = np.zeros((len(names), t_len, len(NAME_VOCAB)))
+    Y = np.zeros((len(names), t_len), dtype=np.int64)
+    mask = np.zeros((len(names), t_len))
+    for r, w in enumerate(names):
+        inp = [0] + [idx[c] for c in w]
+        out = [idx[c] for c in w] + [0]
+        X[r, np.arange(len(inp)), inp] = 1.0
+        Y[r, : len(out)] = out
+        mask[r, : len(out)] = 1.0
+    return X, Y, mask
+
+
 MNIST_URLS = (
     "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz",
 )

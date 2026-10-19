@@ -20,6 +20,7 @@
   <a href="09_full_pipeline.html">09 综合实战</a>
   <a href="10_cnn.html">10 CNN</a>
   <a href="11_residual.html">11 残差连接</a>
+  <a href="12_rnn.html">12 RNN</a>
   <span class="spacer"></span>
   <a href="/">验证看板</a>
 </nav>
@@ -40,7 +41,7 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">入门路径</span>
-        <span class="chip teal">11 个实验</span>
+        <span class="chip teal">12 个实验</span>
         <span class="chip amber">可读 + 可跑</span>
       </div>
       <h1>从一条直线到识别手写数字</h1>
@@ -49,7 +50,7 @@
 
     <h2 id="path">推荐学习路径</h2>
     <div class="diagram">
-      <svg viewBox="0 0 1074 120" width="1074" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
+      <svg viewBox="0 0 1208 120" width="1208" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f6feb"/></marker>
         </defs>
@@ -84,6 +85,10 @@
         <rect x="956" y="30" width="110" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
         <text x="1011" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">11 残差连接</text>
         <text x="1011" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">更深的网络</text>
+        <line x1="1066" y1="57" x2="1088" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="1090" y="30" width="110" height="54" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+        <text x="1145" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">12 RNN</text>
+        <text x="1145" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">序列与记忆</text>
       </svg>
       <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
     </div>
@@ -144,6 +149,11 @@
         <h3>残差连接</h3>
         <p>普通网络加深到 50 层连训练集都学不会；每块加一条 h + F(h) 的捷径，同样的参数就能训练好。</p>
       </a>
+      <a class="lesson-card" href="12_rnn.html">
+        <div class="num">EXPERIMENT 12</div>
+        <h3>循环神经网络 RNN / LSTM</h3>
+        <p>手写随时间反向传播：RNN 记不住 40 步前的符号，LSTM 可以；再训练一个会自己编英文名字的模型。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -171,7 +181,8 @@ python scripts/run_lesson.py 07
 python scripts/run_lesson.py 08
 python scripts/run_lesson.py 09
 python scripts/run_lesson.py 10
-python scripts/run_lesson.py 11</pre>
+python scripts/run_lesson.py 11
+python scripts/run_lesson.py 12</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -186,14 +197,15 @@ python lessons/07_normalization.py
 python lessons/08_regularization.py
 python lessons/09_full_pipeline.py
 python lessons/10_cnn.py
-python lessons/11_residual.py</pre>
+python lessons/11_residual.py
+python lessons/12_rnn.py</pre>
       </div>
     </div>
     <p>各实验使用的数据集缓存在 <code>data/&lt;实验&gt;/*.npz</code>（MNIST 原始文件在 <code>data/mnist/</code>），结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">十一个实验分别带走什么</h2>
+    <h2 id="map">十二个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -207,6 +219,7 @@ python lessons/11_residual.py</pre>
       <tr><td><a href="09_full_pipeline.html">09</a></td><td>综合实战：MNIST</td><td>集齐 11 项核心技术（He/GELU/RMSNorm/CE/AdamW/Cosine/早停）实现手写数字识别</td><td>约 10–20 秒</td></tr>
       <tr><td><a href="10_cnn.html">10</a></td><td>卷积神经网络：检测小猫</td><td>局部连接 + 权重共享 + 池化 + 数据增强；检测任务看检出率与误报</td><td>约 2–3 分钟</td></tr>
       <tr><td><a href="11_residual.html">11</a></td><td>残差连接</td><td>普通深网络会退化；h + F(h) + 分支零初始化让 50 层也能训练</td><td>约 35 秒</td></tr>
+      <tr><td><a href="12_rnn.html">12</a></td><td>循环神经网络</td><td>BPTT；梯度沿时间消失，LSTM 的门与遗忘门偏置让长期记忆成为可能；按字符生成名字</td><td>约 1.5 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

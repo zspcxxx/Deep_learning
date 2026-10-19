@@ -1,6 +1,6 @@
 # Deep Learning Lab
 
-从感知机到卷积神经网络、残差连接的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
+从感知机到卷积神经网络、残差连接、循环神经网络的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
 
 详细介绍是带侧栏目录、示意图和手算示例的 HTML（`docs/`）。**可直接双击本地打开**（相对路径样式），也可通过看板 `/learn/` 阅读：
 
@@ -18,6 +18,7 @@
 | 09 综合实战（MNIST） | [docs/09_full_pipeline.html](docs/09_full_pipeline.html) | `/learn/09` | `python scripts/run_lesson.py 09` |
 | 10 卷积神经网络：检测小猫 | [docs/10_cnn.html](docs/10_cnn.html) | `/learn/10` | `python scripts/run_lesson.py 10` |
 | 11 残差连接 | [docs/11_residual.html](docs/11_residual.html) | `/learn/11` | `python scripts/run_lesson.py 11` |
+| 12 循环神经网络 RNN / LSTM | [docs/12_rnn.html](docs/12_rnn.html) | `/learn/12` | `python scripts/run_lesson.py 12` |
 
 ## 环境（一次）
 
@@ -45,6 +46,7 @@ python scripts/run_lesson.py 08              # 正则化
 python scripts/run_lesson.py 09              # 综合实战：MNIST 数字识别（集齐 11 项核心技术）
 python scripts/run_lesson.py 10              # 卷积神经网络：检测图片里有没有猫
 python scripts/run_lesson.py 11              # 残差连接：普通深网络 vs h + F(h)
+python scripts/run_lesson.py 12              # 循环神经网络：长期记忆 RNN vs LSTM、生成名字
 ```
 
 也可以直接调用入口：
@@ -62,6 +64,7 @@ python lessons/08_regularization.py
 python lessons/09_full_pipeline.py
 python lessons/10_cnn.py
 python lessons/11_residual.py
+python lessons/12_rnn.py
 ```
 
 图片和指标写到 `artifacts/`。全部实验只需 NumPy / Matplotlib。
@@ -73,6 +76,7 @@ python lessons/11_residual.py
 - `data/<实验>/*.npz`：实验生成或抽取的数据集（XOR、月牙、逻辑门、梯度检查用的小批量等），已随仓库提交，可直接 `np.load` 查看或调试。
 - `data/mnist/mnist.npz`：MNIST 原始文件（约 11 MB），第 09 课使用；缺失时会自动下载并校验 SHA-256。
 - `data/cat/cat_vs_noncat.npz`：CIFAR-10 猫 / 非猫子集（约 23 MB），第 10 课使用；由 `scripts/build_cat_dataset.py` 生成。
+- `data/names/names.txt`：3.2 万个英文名（来自 karpathy/makemore，MIT 许可），第 12 课使用。
 
 以上数据都已随仓库提供，全部实验离线可跑。
 
@@ -110,6 +114,7 @@ python scripts/run_verify.py
 - `src/dllab/`：可复用实现
   - `nn.py`：通用层（Dense / ReLU / Dropout / Residual）、`Sequential` 训练循环与梯度检查
   - `cnn.py`：卷积 / 池化层与第 10 课的 `SimpleCNN`；`resnet.py`：第 11 课的普通 / 残差深层 MLP
+  - `rnn.py`：第 12 课的 RNN / LSTM 单元、随时间反向传播与按字符采样
   - `notes/`：网页上的过程注解、结果解读与看图说明
   - `runner.py`：以子进程运行实验并生成带注解的事件流
 - `lessons/`：每个实验的剧本

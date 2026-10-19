@@ -97,6 +97,14 @@ LESSONS = [
         "doc": "11_residual.html",
         "help": "普通深层网络越深越难训练；h + F(h) 的捷径让 50 层网络也能学会",
     },
+    {
+        "id": "12",
+        "keys": ("12", "rnn", "lstm", "recurrent", "sequence", "12_rnn"),
+        "title": "循环神经网络 RNN / LSTM",
+        "module": "lessons.12_rnn",
+        "doc": "12_rnn.html",
+        "help": "手写随时间反向传播：RNN 记不住 40 步前的信息，LSTM 可以；再按字符生成新名字",
+    },
 ]
 
 

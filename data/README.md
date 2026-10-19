@@ -22,10 +22,15 @@
 | `08_regularization/` | `moons.npz` | 噪声 0.32 的月牙数据（实验里再划分并翻转标签） |
 | `10_cnn/` | `gradcheck_batch.npz` | 2 张猫 + 2 张非猫测试图（uint8 32×32×3）+ 标签，用于 CNN 梯度检查 |
 | `11_residual/` | `spiral_train.npz` `spiral_test.npz` | 三条螺旋臂（各 300 点、绕 2.5 圈），训练 / 测试用不同随机种子 |
+| `12_rnn/` | `memory_test_d{5,10,20,40}.npz` | 记忆任务测试集：每个延迟 1000 条 one-hot 序列（4 种符号）+ 第 1 个符号的标签 |
+| `names/` | `names.txt` | 32033 个小写英文名，每行一个，第 12 课使用（见下文） |
 | `mnist/` | `mnist.npz` | MNIST 原始数据（60000 训练 + 10000 测试，uint8 28×28），第 09 课使用 |
 | `cat/` | `cat_vs_noncat.npz` | 猫 / 非猫彩色图（32×32×3），第 10 课使用，见下文 |
 
-下面两个文件不经过缓存机制，已随仓库提供，离线即可运行：
+下面几个文件不经过缓存机制，已随仓库提供，离线即可运行：
+
+- `names/names.txt`（约 228 KB）：来自 [karpathy/makemore](https://github.com/karpathy/makemore)（MIT 许可），
+  SHA-256 为 `0a30b5557f192f32ab962680889aac5f6fda0f4cecf40a6d0b5694f58ea8cc4d`。
 
 - `mnist/mnist.npz`：Keras 发布的原始文件（约 11 MB），SHA-256 为
   `731c5ac602752760c8e48fbffcf8c3b850d9dc2a2aedcf2cc48468fc17b673d1`。

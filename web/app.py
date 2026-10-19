@@ -29,6 +29,7 @@ DOC_FILES = {
     "09": "09_full_pipeline.html",
     "10": "10_cnn.html",
     "11": "11_residual.html",
+    "12": "12_rnn.html",
 }
 
 
