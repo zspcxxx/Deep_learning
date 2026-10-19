@@ -19,6 +19,7 @@ _MODULES = {
     "08": "l08_regularization",
     "09": "l09_full_pipeline",
     "10": "l10_cnn",
+    "11": "l11_residual",
 }
 
 

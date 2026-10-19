@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11 残差连接 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
+  <a href="10_cnn.html">10 CNN</a>
+  <a href="11_residual.html">11 残差连接</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#degradation">退化问题</a></li>
+      <li><a href="#residual">残差连接</a></li>
+      <li><a href="#gradient">为什么梯度能传下去</a></li>
+      <li><a href="#init">分支为什么要零初始化</a></li>
+      <li><a href="#exp">对比实验</a></li>
+      <li><a href="#results">实验结果</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#tips">自己改一改</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 11</span>
+        <span class="chip teal">纯 NumPy，约 35 秒</span>
+        <span class="chip amber">深度网络的关键结构</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>残差连接：让 50 层网络也能训练</h1>
+          <p class="lead">网络越深表达能力越强，可普通网络加深到一定程度后，连训练集都拟合不了。2015 年的 ResNet 给每个块加了一条“捷径”：
+            输出 = 输入 + 块的计算结果。这一个加号让网络可以堆到上百层，今天的 CNN、Transformer 里到处都是它。</p>
+          <p class="meta">入口 <code>lessons/11_residual.py</code> · 实现 <code>src/dllab/nn.py</code>（<code>Residual</code> 层）、<code>src/dllab/resnet.py</code>（<code>build_deep_mlp</code>）</p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 280 170" width="280" height="170" xmlns="http://www.w3.org/2000/svg">
+            <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#334155"/></marker></defs>
+            <text x="20" y="88" font-size="13" font-family="sans-serif">h</text>
+            <line x1="34" y1="84" x2="62" y2="84" stroke="#334155" stroke-width="2" marker-end="url(#ar)"/>
+            <rect x="66" y="66" width="56" height="36" rx="6" fill="#dbeafe" stroke="#2563eb"/>
+            <text x="94" y="89" text-anchor="middle" font-size="11" font-family="sans-serif">ReLU·W1</text>
+            <line x1="122" y1="84" x2="140" y2="84" stroke="#334155" stroke-width="2" marker-end="url(#ar)"/>
+            <rect x="144" y="66" width="56" height="36" rx="6" fill="#dbeafe" stroke="#2563eb"/>
+            <text x="172" y="89" text-anchor="middle" font-size="11" font-family="sans-serif">ReLU·W2</text>
+            <line x1="200" y1="84" x2="222" y2="84" stroke="#334155" stroke-width="2" marker-end="url(#ar)"/>
+            <circle cx="232" cy="84" r="10" fill="#fff" stroke="#0f766e" stroke-width="2"/>
+            <text x="232" y="89" text-anchor="middle" font-size="14" font-family="sans-serif" fill="#0f766e">+</text>
+            <path d="M48,84 C48,30 232,30 232,72" fill="none" stroke="#0f766e" stroke-width="2.5" marker-end="url(#ar)"/>
+            <text x="140" y="34" text-anchor="middle" font-size="11" fill="#0f766e" font-family="sans-serif">捷径：恒等映射</text>
+            <text x="133" y="125" text-anchor="middle" font-size="11" fill="#2563eb" font-family="sans-serif">残差分支 F(h)</text>
+            <line x1="242" y1="84" x2="266" y2="84" stroke="#334155" stroke-width="2" marker-end="url(#ar)"/>
+            <text x="140" y="155" text-anchor="middle" font-size="12" font-family="sans-serif">h ← h + F(h)</text>
+          </svg>
+          <div class="cap">一个残差块</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>普通全连接网络加深到多少层会开始“学不动”？学不动是过拟合还是优化问题？</li>
+        <li>给每个块加一条 h + F(h) 的捷径之后，同样的层数、同样的参数，结果差多少？</li>
+        <li>从信号传播的角度看，捷径到底改变了什么？</li>
+        <li>为什么残差分支的最后一层要初始化为 0？</li>
+      </ol>
+    </div>
+
+    <h2 id="degradation">退化问题</h2>
+    <p>假设一个 18 层网络已经训练得很好。在它后面再加 32 层，只要这 32 层什么都不做（恒等映射），50 层网络至少和 18 层一样好。
+      所以从“能表示什么”看，更深不可能更差。</p>
+    <p>但实验里，普通网络 50 层时连训练集都分不对——训练准确率掉到 33%，和随机猜一样。这不是过拟合（过拟合是训练好、测试差），
+      而是优化失败：梯度下降找不到那组“什么都不做”的参数。让一叠 ReLU + Dense 层精确地学成恒等映射，其实非常难。</p>
+
+    <h2 id="residual">残差连接</h2>
+    <p>既然恒等映射难学，那就让它成为默认值：每个块只学“在输入基础上改多少”。</p>
+    <pre class="formula">普通块    h ← F(h)
+残差块    h ← h + F(h)          F(h) = W2 · ReLU(W1 · ReLU(h) + b1) + b2</pre>
+    <p>如果某一块没什么用，F 只要学成 0 就行——把权重推向 0 比学成恒等映射容易得多。F 学的是“残差”，即在恒等映射之上的修正量。</p>
+    <p>代码里 <code>Residual</code> 层把若干子层包起来：前向 <code>return x + F(x)</code>；反向 <code>return dout + F.backward(dout)</code>。整个实现就这么几行。</p>
+
+    <h2 id="gradient">为什么梯度能传下去</h2>
+    <pre class="formula">普通网络   ∂L/∂h₁ = ∂L/∂h_L · ∂F_L/∂h · … · ∂F_1/∂h          （L 个雅可比矩阵连乘）
+残差网络   ∂(h + F(h))/∂h = I + ∂F/∂h
+           ∂L/∂h₁ = ∂L/∂h_L · (I + ∂F_L/∂h) · … · (I + ∂F_1/∂h)</pre>
+    <p>普通网络里，梯度要穿过每一层的雅可比矩阵，连乘几十次后很容易衰减（或爆炸）。残差网络把乘积展开后有一项就是 I·I·…·I = I：
+      不管中间的 F 怎样，总有一份梯度原封不动地从输出传回输入。实验里测到，训练前 50 层普通网络第 1 块收到的梯度只有最后一块的约 1/19，
+      而残差网络每一块完全一样。</p>
+
+    <h2 id="init">分支为什么要零初始化</h2>
+    <p>如果残差分支 F 一开始就输出和 h 同样大小的随机信号，h + F(h) 每经过一块方差就大约翻倍。24 块下来，隐藏状态的标准差从 0.54 涨到了 1800 以上，
+      训练很不稳定，50 层时只有 81% 的训练准确率。</p>
+    <p>把每个分支最后一个 Dense 的权重初始化为 0，F(h) 一开始恒为 0，每块都是 h + 0 = h：整个网络起步时相当于一个只有首尾两层的浅网络，
+      信号和梯度都能原样通过；训练过程中各块再逐渐学会自己的修正量。实际的 ResNet 把每块最后一个 BatchNorm 的 γ 初始化为 0，
+      GPT 等 Transformer 按层数缩小残差分支的初始权重，思路相同。</p>
+    <div class="callout warn"><strong>代价</strong>零初始化的分支一开始“什么都不做”，前几十轮损失下降得比较慢；只有 2 个块的浅网络上，残差网络在 100 轮内反而比普通网络略差。残差连接解决的是“深”的问题。</div>
+
+    <h2 id="exp">对比实验</h2>
+    <ul>
+      <li>数据：三条螺旋臂，各 300 个训练点，每条绕 2.5 圈，另取 900 个点做测试。缓存在 <code>data/11_residual/</code>。</li>
+      <li>网络：宽度 32；stem Dense(2→32) → 若干个块 → ReLU → Dense(32→3)。深度按 Dense 层数计：6 / 10 / 18 / 34 / 50 层（2 / 4 / 8 / 16 / 24 个块）。</li>
+      <li>三种网络：<code>plain</code>（普通）、<code>residual</code>（残差 + 分支末层零初始化）、<code>residual_he</code>（残差 + 分支 He 初始化）。同一深度下三者参数完全相同。</li>
+      <li>训练：AdamW，lr 2e-3（Warmup 2 轮 + Cosine），batch 64，100 轮；不加权重衰减、不早停——只比较“能不能把训练集拟合好”。</li>
+      <li>额外诊断：训练前，在 50 层网络上测每块输出的标准差（前向信号）和传到每块的梯度 ‖dL/dh‖（反向信号）。</li>
+    </ul>
+
+    <h2 id="results">实验结果</h2>
+    <table>
+      <tr><th>深度（层）</th><th>6</th><th>10</th><th>18</th><th>34</th><th>50</th></tr>
+      <tr><td>plain</td><td>91.2%</td><td>99.7%</td><td>99.7%</td><td>88.6%</td><td>33.3%</td></tr>
+      <tr><td>residual（零初始化）</td><td>84.1%</td><td>100%</td><td>100%</td><td>100%</td><td>100%</td></tr>
+      <tr><td>residual_he（He 初始化）</td><td>72.8%</td><td>100%</td><td>95.0%</td><td>94.3%</td><td>81.3%</td></tr>
+    </table>
+    <p class="meta">训练集准确率，Jetson 设备实测，固定随机种子。测试集结果趋势相同（50 层残差网络测试准确率 100%）。</p>
+    <div class="callout ok"><strong>通过标准</strong>梯度检查全部 &lt; 1e-5；50 层残差网络训练准确率 ≥ 95%；50 层普通网络比残差网络低至少 20 个百分点，且比普通网络的最好深度低 5 个百分点以上（出现退化）。</div>
+
+    <h2 id="run">如何运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 11
+# 或在网页看板 /lesson/11 点「运行」</pre>
+    <p>结果在 <code>artifacts/11_residual/</code>：</p>
+    <ul>
+      <li><code>res_depth.png</code> — 训练准确率 / 训练损失随深度的变化（退化问题的核心图）</li>
+      <li><code>res_curves.png</code> — 三种网络在各深度下的训练曲线</li>
+      <li><code>res_signal.png</code> — 训练前 50 层网络的前向标准差与反向梯度</li>
+      <li><code>res_boundaries.png</code> — 18 / 50 层普通网络与 50 层残差网络的决策边界</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="tips">自己改一改</h2>
+    <ul>
+      <li>把 <code>BLOCKS</code> 加上 <code>48</code>（98 层），看残差网络还能不能训练。</li>
+      <li>在 <code>build_deep_mlp</code> 里把 <code>branch_init="zeros"</code> 改成把 He 初始化的权重乘以 <code>1/√块数</code>，和零初始化比一比。</li>
+      <li>把第 10 课的 CNN 也改成残差结构：在两个同尺寸的卷积层外面套一个 <code>Residual</code>。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="10_cnn.html">← 10 卷积神经网络</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

@@ -28,6 +28,7 @@ DOC_FILES = {
     "08": "08_regularization.html",
     "09": "09_full_pipeline.html",
     "10": "10_cnn.html",
+    "11": "11_residual.html",
 }
 
 

@@ -73,6 +73,21 @@ def generate_moons_dataset(n_per_class: int = 200, noise: float = 0.10, seed: in
     return X[idx], y[idx]
 
 
+def generate_spiral_dataset(n_per_class: int = 300, n_classes: int = 3, turns: float = 1.5,
+                            noise: float = 0.15, seed: int = 0):
+    """Interleaved spiral arms (one per class) in 2D; more turns = harder to separate."""
+    rng = np.random.RandomState(seed)
+    X, y = [], []
+    for k in range(n_classes):
+        r = np.linspace(0.05, 1.0, n_per_class)
+        t = r * turns * 2 * np.pi + 2 * np.pi * k / n_classes + rng.randn(n_per_class) * noise
+        X.append(np.column_stack([r * np.sin(t), r * np.cos(t)]))
+        y.append(np.full(n_per_class, k))
+    X, y = np.vstack(X), np.concatenate(y).astype(np.int64)
+    idx = rng.permutation(len(y))
+    return X[idx], y[idx]
+
+
 MNIST_URLS = (
     "https://storage.googleapis.com/tensorflow/tf-keras-datasets/mnist.npz",
 )

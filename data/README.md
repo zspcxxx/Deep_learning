@@ -21,6 +21,7 @@
 | `07_normalization/` | `moons.npz` | 月牙数据（实验里再乘极端尺度） |
 | `08_regularization/` | `moons.npz` | 噪声 0.32 的月牙数据（实验里再划分并翻转标签） |
 | `10_cnn/` | `gradcheck_batch.npz` | 2 张猫 + 2 张非猫测试图（uint8 32×32×3）+ 标签，用于 CNN 梯度检查 |
+| `11_residual/` | `spiral_train.npz` `spiral_test.npz` | 三条螺旋臂（各 300 点、绕 2.5 圈），训练 / 测试用不同随机种子 |
 | `mnist/` | `mnist.npz` | MNIST 原始数据（60000 训练 + 10000 测试，uint8 28×28），第 09 课使用 |
 | `cat/` | `cat_vs_noncat.npz` | 猫 / 非猫彩色图（32×32×3），第 10 课使用，见下文 |
 

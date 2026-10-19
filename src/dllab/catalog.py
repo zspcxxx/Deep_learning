@@ -89,6 +89,14 @@ LESSONS = [
         "doc": "10_cnn.html",
         "help": "手写 CNN 判断彩色照片里有没有猫：对比 MLP 与数据增强，看检出率、误报和遮挡热力图",
     },
+    {
+        "id": "11",
+        "keys": ("11", "res", "resnet", "residual", "skip", "11_residual"),
+        "title": "残差连接",
+        "module": "lessons.11_residual",
+        "doc": "11_residual.html",
+        "help": "普通深层网络越深越难训练；h + F(h) 的捷径让 50 层网络也能学会",
+    },
 ]
 
 
