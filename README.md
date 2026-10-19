@@ -1,6 +1,6 @@
 # Deep Learning Lab
 
-从感知机到卷积神经网络、残差连接、循环神经网络和编码器–解码器的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
+从感知机到卷积神经网络、残差连接、循环神经网络、编码器–解码器和注意力机制的入门实验：先讲原理，再对照代码，最后**可以只跑某一个实验**。
 
 详细介绍是带侧栏目录、示意图和手算示例的 HTML（`docs/`）。**可直接双击本地打开**（相对路径样式），也可通过看板 `/learn/` 阅读：
 
@@ -20,6 +20,7 @@
 | 11 残差连接 | [docs/11_residual.html](docs/11_residual.html) | `/learn/11` | `python scripts/run_lesson.py 11` |
 | 12 循环神经网络 RNN / LSTM / GRU | [docs/12_rnn.html](docs/12_rnn.html) | `/learn/12` | `python scripts/run_lesson.py 12` |
 | 13 编码器–解码器 Seq2Seq | [docs/13_seq2seq.html](docs/13_seq2seq.html) | `/learn/13` | `python scripts/run_lesson.py 13` |
+| 14 注意力机制 | [docs/14_attention.html](docs/14_attention.html) | `/learn/14` | `python scripts/run_lesson.py 14` |
 
 ## 环境（一次）
 
@@ -51,6 +52,7 @@ python scripts/run_lesson.py 10              # 卷积神经网络：检测图片
 python scripts/run_lesson.py 11              # 残差连接：普通深网络 vs h + F(h)
 python scripts/run_lesson.py 12              # 循环神经网络：长期记忆 RNN vs LSTM vs GRU、生成名字
 python scripts/run_lesson.py 13              # 编码器–解码器：倒序，固定向量 vs 注意力
+python scripts/run_lesson.py 14              # 注意力机制：Q/K/V 按键查值 vs 平均池化
 ```
 
 也可以直接调用入口：
@@ -70,6 +72,7 @@ python lessons/10_cnn.py
 python lessons/11_residual.py
 python lessons/12_rnn.py
 python lessons/13_seq2seq.py
+python lessons/14_attention.py
 ```
 
 图片和指标写到 `artifacts/`。全部实验只需 NumPy / Matplotlib。
@@ -121,6 +124,7 @@ python scripts/run_verify.py
   - `cnn.py`：卷积 / 池化层与第 10 课的 `SimpleCNN`；`resnet.py`：第 11 课的普通 / 残差深层 MLP
   - `rnn.py`：第 12 课的 RNN / LSTM / GRU 单元、随时间反向传播与按字符采样
   - `seq2seq.py`：第 13 课的编码器–解码器，固定向量或注意力，teacher forcing 与贪心解码
+  - `attention.py`：第 14 课的缩放点积注意力与按键查值（平均池化对照）
   - `notes/`：网页上的过程注解、结果解读与看图说明
   - `runner.py`：以子进程运行实验并生成带注解的事件流
 - `lessons/`：每个实验的剧本

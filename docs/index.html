@@ -42,7 +42,7 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">入门路径</span>
-        <span class="chip teal">13 个实验</span>
+        <span class="chip teal">14 个实验</span>
         <span class="chip amber">可读 + 可跑</span>
       </div>
       <h1>从一条直线到识别手写数字</h1>
@@ -160,6 +160,11 @@
         <h3>编码器–解码器 Seq2Seq</h3>
         <p>编码器读完一串符号，解码器逐个写出来。短序列用最后一个向量就够；变长以后必须用注意力回去看源序列。</p>
       </a>
+      <a class="lesson-card" href="14_attention.html">
+        <div class="num">EXPERIMENT 14</div>
+        <h3>注意力机制</h3>
+        <p>把注意力拆成 Query / Key / Value：缩放点积按键查值；记忆一长，平均池化就糊掉，注意力还能找对。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -189,7 +194,8 @@ python scripts/run_lesson.py 09
 python scripts/run_lesson.py 10
 python scripts/run_lesson.py 11
 python scripts/run_lesson.py 12
-python scripts/run_lesson.py 13</pre>
+python scripts/run_lesson.py 13
+python scripts/run_lesson.py 14</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -206,14 +212,15 @@ python lessons/09_full_pipeline.py
 python lessons/10_cnn.py
 python lessons/11_residual.py
 python lessons/12_rnn.py
-python lessons/13_seq2seq.py</pre>
+python lessons/13_seq2seq.py
+python lessons/14_attention.py</pre>
       </div>
     </div>
     <p>各实验使用的数据集缓存在 <code>data/&lt;实验&gt;/*.npz</code>（MNIST 原始文件在 <code>data/mnist/</code>），结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">十三个实验分别带走什么</h2>
+    <h2 id="map">十四个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -229,6 +236,7 @@ python lessons/13_seq2seq.py</pre>
       <tr><td><a href="11_residual.html">11</a></td><td>残差连接</td><td>普通深网络会退化；h + F(h) + 分支零初始化让 50 层也能训练</td><td>约 35 秒</td></tr>
       <tr><td><a href="12_rnn.html">12</a></td><td>循环神经网络</td><td>BPTT；梯度沿时间消失，LSTM 的遗忘门与 GRU 的更新门让长期记忆成为可能；按字符生成名字</td><td>约 6 分钟</td></tr>
       <tr><td><a href="13_seq2seq.html">13</a></td><td>编码器–解码器</td><td>Teacher forcing；固定向量装不下长序列，注意力按位置对齐源序列</td><td>约 4 分钟</td></tr>
+      <tr><td><a href="14_attention.html">14</a></td><td>注意力机制</td><td>Q/K/V 缩放点积按键查值；记忆变长后平均池化失败，注意力仍能找对</td><td>约 1–2 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

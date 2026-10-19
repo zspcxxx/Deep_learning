@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>14 注意力机制 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <a href="01_perceptron.html">01 感知机</a>
+  <a href="02_mlp.html">02 MLP</a>
+  <a href="03_backprop.html">03 反向传播</a>
+  <a href="04_activations.html">04 激活函数</a>
+  <a href="05_learning_rate.html">05 学习率</a>
+  <a href="06_weight_init.html">06 参数初始化</a>
+  <a href="07_normalization.html">07 归一化</a>
+  <a href="08_regularization.html">08 正则化</a>
+  <a href="09_full_pipeline.html">09 综合实战</a>
+  <a href="10_cnn.html">10 CNN</a>
+  <a href="11_residual.html">11 残差连接</a>
+  <a href="12_rnn.html">12 RNN</a>
+  <a href="13_seq2seq.html">13 Seq2Seq</a>
+  <a href="14_attention.html">14 注意力</a>
+  <span class="spacer"></span>
+  <a href="/">看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#qkv">Query / Key / Value</a></li>
+      <li><a href="#scale">为什么除以 √d</a></li>
+      <li><a href="#lookup">实验：按键查值</a></li>
+      <li><a href="#mean">平均池化为什么不够</a></li>
+      <li><a href="#results">实验结果</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#tips">自己改一改</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 14</span>
+        <span class="chip teal">纯 NumPy，约 1–2 分钟</span>
+        <span class="chip amber">Q / K / V</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>注意力机制：按键查值</h1>
+          <p class="lead">第 13 课在编码器–解码器里用过注意力，但公式藏在 GRU 旁边。
+            本课把它单独拿出来：Query 去问，Key 来应，Value 被取走。缩放点积注意力就是 Transformer 里的那一步；
+            和一个“把所有槽位平均掉”的基线对照，能直接看见软查找在做什么。</p>
+          <p class="meta">入口 <code>lessons/14_attention.py</code> · 实现 <code>src/dllab/attention.py</code>（<code>scaled_dot_product_attention</code> / <code>LookupNet</code> / <code>gradient_check</code>）</p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 320 168" width="320" height="168" xmlns="http://www.w3.org/2000/svg">
+            <g font-family="sans-serif" font-size="11" text-anchor="middle">
+              <rect x="20" y="24" width="70" height="40" rx="8" fill="#dbeafe" stroke="#2563eb"/>
+              <text x="55" y="48">Query</text>
+              <rect x="120" y="12" width="70" height="28" rx="6" fill="#fef3c7" stroke="#d97706"/>
+              <text x="155" y="31">Key</text>
+              <rect x="120" y="48" width="70" height="28" rx="6" fill="#ccfbf1" stroke="#0f766e"/>
+              <text x="155" y="67">Value</text>
+              <rect x="230" y="24" width="70" height="40" rx="8" fill="#e2e8f0" stroke="#475569"/>
+              <text x="265" y="48">Context</text>
+              <line x1="90" y1="44" x2="118" y2="26" stroke="#334155" stroke-width="1.5"/>
+              <line x1="90" y1="44" x2="118" y2="62" stroke="#334155" stroke-width="1.5"/>
+              <line x1="190" y1="44" x2="228" y2="44" stroke="#334155" stroke-width="2" marker-end="url(#ar)"/>
+              <text x="160" y="100" font-size="10" fill="#475569">score = QKᵀ / √d</text>
+              <text x="160" y="118" font-size="10" fill="#475569">α = softmax(score)</text>
+              <text x="160" y="136" font-size="10" fill="#475569">context = α V</text>
+            </g>
+            <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#334155"/></marker></defs>
+          </svg>
+          <div class="cap">软查找：权重和为 1</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>注意力里的 Query、Key、Value 分别扮演什么角色？</li>
+        <li>分数为什么要除以 √d，再做 softmax？</li>
+        <li>把所有记忆平均掉，和只盯住匹配的键，差别有多大？</li>
+        <li>学会以后，注意力权重会不会集中在正确答案所在的槽位？</li>
+      </ol>
+    </div>
+
+    <h2 id="qkv">Query / Key / Value</h2>
+    <pre class="formula">Q = q W_Q                         查询（本课里来自“要找的键”）
+K = X W_K ,  V = X W_V            每个槽位各有一把钥匙和一份内容
+score = Q Kᵀ / √d
+α     = softmax(score)            对槽位维归一化，和为 1
+context = α V                     按权重取出的内容</pre>
+    <p>第 13 课的 Bahdanau 注意力用 <code>v · tanh(h_s W_a + h_t U_a)</code> 打分；这里改成点积，少一组参数，也是 Transformer 的写法。代码在 <code>scaled_dot_product_attention</code> 与 <code>LookupNet</code>（<code>mode="attention"</code>）。</p>
+
+    <h2 id="scale">为什么除以 √d</h2>
+    <p>若 Q、K 的坐标大致独立、方差约 1，则点积的方差大约是 d。d 一大，softmax 就会变得又尖又容易饱和，梯度几乎为零。除以 √d 把分数的尺度拉回大约 1，训练更稳。本课隐藏维是 32，有没有缩放都能学会；习惯上仍写上这一步。</p>
+
+    <h2 id="lookup">实验：按键查值</h2>
+    <ul>
+      <li>键有 16 种，值有 8 种。每条样本抽出 4 / 8 / 16 个槽位，键在样本内互不相同，值随机。</li>
+      <li>再随机挑一个键当查询，标签是它对应的值。随机猜对率 = 1/8 = 12.5%。</li>
+      <li>两种模型嵌入维都是 32：平均池化把槽位取平均后与查询拼接再分类；注意力用上面的 Q/K/V 软查找。</li>
+      <li>Adam（lr 4e-3，余弦衰减），批大小 64，梯度裁剪到 1。槽位 4 / 8 / 16 分别训练 400 / 600 / 900 步。测试集各 500 条，缓存在 <code>data/14_attention/</code>。</li>
+    </ul>
+
+    <h2 id="mean">平均池化为什么不够</h2>
+    <p>平均值里每一份内容的权重都是 1/T。T 变大时，匹配项被稀释，分类器很难从糊成一团的向量里读出正确的值。注意力则可以在匹配键上接近权重 1，其余接近 0——等价于一次可微的查表。</p>
+
+    <h2 id="results">实验结果</h2>
+    <table>
+      <tr><th>槽位数</th><th>4</th><th>8</th><th>16</th></tr>
+      <tr><td>平均池化</td><td>40.8%</td><td>32.6%</td><td>26.4%</td></tr>
+      <tr><td>缩放点积注意力</td><td>100%</td><td>100%</td><td>100%</td></tr>
+    </table>
+    <p class="meta">测试准确率。Jetson（192.168.0.110）实测，固定随机种子。随机猜对率 12.5%。一条 16 槽样本：查询键 7，目标值 4，注意力在匹配槽上的权重约 0.92。</p>
+    <div class="callout ok"><strong>通过标准</strong>梯度检查相对误差全部 &lt; 1e-4；4 个槽位时注意力准确率 ≥ 90%；16 个槽位时注意力 ≥ 95%，平均池化 ≤ 40%。</div>
+
+    <h2 id="run">如何运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 14
+# 或在网页看板 /lesson/14 点「运行」</pre>
+    <p>结果在 <code>artifacts/14_attention/</code>：</p>
+    <ul>
+      <li><code>attention_accuracy.png</code> — 不同槽位数的准确率，以及 16 槽时的训练损失</li>
+      <li><code>attention_weights.png</code> — 对齐到真值槽位后的平均注意力权重</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="tips">自己改一改</h2>
+    <ul>
+      <li>把 <code>SLOT_SIZES</code> 加上 32，看平均池化是否更接近随机猜，注意力是否仍能整表查对。</li>
+      <li>去掉 <code>scaled_dot_product_attention</code> 里的 <code>/ √d</code>，对比训练曲线是否更容易抖。</li>
+      <li>把值的种类 <code>N_VALUES</code> 改成 2，任务变简单：平均池化在短记忆上也可能过关，对照会变弱。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="13_seq2seq.html">← 13 编码器–解码器</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+</body>
+</html>

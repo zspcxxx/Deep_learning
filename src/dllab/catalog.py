@@ -107,11 +107,19 @@ LESSONS = [
     },
     {
         "id": "13",
-        "keys": ("13", "seq2seq", "encoder", "decoder", "attention", "13_seq2seq"),
+        "keys": ("13", "seq2seq", "encoder", "decoder", "13_seq2seq"),
         "title": "编码器–解码器 Seq2Seq",
         "module": "lessons.13_seq2seq",
         "doc": "13_seq2seq.html",
         "help": "编码器读完源序列，解码器逐符号生成倒序；固定向量装不下长序列，注意力可以",
+    },
+    {
+        "id": "14",
+        "keys": ("14", "attention", "qkv", "dot-product", "self-attention", "14_attention"),
+        "title": "注意力机制",
+        "module": "lessons.14_attention",
+        "doc": "14_attention.html",
+        "help": "Query / Key / Value 缩放点积注意力按键查值；平均池化在记忆变长后失败",
     },
 ]
 
