@@ -21,6 +21,7 @@ _MODULES = {
     "10": "l10_cnn",
     "11": "l11_residual",
     "12": "l12_rnn",
+    "13": "l13_seq2seq",
 }
 
 

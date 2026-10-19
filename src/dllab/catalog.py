@@ -105,6 +105,14 @@ LESSONS = [
         "doc": "12_rnn.html",
         "help": "手写随时间反向传播：RNN 记不住 40 步前的信息，LSTM 和 GRU 可以；再按字符生成新名字",
     },
+    {
+        "id": "13",
+        "keys": ("13", "seq2seq", "encoder", "decoder", "attention", "13_seq2seq"),
+        "title": "编码器–解码器 Seq2Seq",
+        "module": "lessons.13_seq2seq",
+        "doc": "13_seq2seq.html",
+        "help": "编码器读完源序列，解码器逐符号生成倒序；固定向量装不下长序列，注意力可以",
+    },
 ]
 
 

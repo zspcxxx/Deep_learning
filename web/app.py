@@ -30,6 +30,7 @@ DOC_FILES = {
     "10": "10_cnn.html",
     "11": "11_residual.html",
     "12": "12_rnn.html",
+    "13": "13_seq2seq.html",
 }
 
 

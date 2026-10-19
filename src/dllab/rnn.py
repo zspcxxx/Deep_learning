@@ -210,6 +210,7 @@ class GRUCell:
                 + da_r @ self.Wh[:, H : 2 * H].T
                 + du @ self.Wh[:, 2 * H :].T
             )
+        self.dh0 = dh_next
         return dX
 
 
