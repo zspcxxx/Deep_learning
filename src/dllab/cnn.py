@@ -6,9 +6,8 @@ Generic layers, the training loop and gradient_check live in dllab.nn.
 """
 from __future__ import annotations
 
-import numpy as np
-
 from dllab.nn import Dense, Dropout, Flatten, ReLU, Sequential, gradient_check
+from dllab.xp import as_param, asnumpy, gpu_enter, gpu_exit, host_rng, np
 
 __all__ = ["Conv2D", "MaxPool2", "SimpleCNN", "augment_flip_crop", "col2im", "gradient_check", "im2col"]
 
@@ -19,8 +18,9 @@ def im2col(x: np.ndarray, k: int, pad: int):
     xp = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad))) if pad else x
     ho, wo = h + 2 * pad - k + 1, w + 2 * pad - k + 1
     s0, s1, s2, s3 = xp.strides
+    kwargs = {} if type(xp).__module__.startswith("cupy") else {"writeable": False}
     windows = np.lib.stride_tricks.as_strided(
-        xp, shape=(n, c, k, k, ho, wo), strides=(s0, s1, s2, s3, s2, s3), writeable=False
+        xp, shape=(n, c, k, k, ho, wo), strides=(s0, s1, s2, s3, s2, s3), **kwargs
     )
     cols = windows.transpose(0, 4, 5, 1, 2, 3).reshape(n * ho * wo, c * k * k)
     return cols, ho, wo
@@ -42,8 +42,8 @@ class Conv2D:
 
     def __init__(self, c_in: int, c_out: int, k: int, pad: int, rng, dtype):
         self.k, self.pad = k, pad
-        self.W = (rng.randn(c_out, c_in, k, k) * np.sqrt(2.0 / (c_in * k * k))).astype(dtype)
-        self.b = np.zeros(c_out, dtype=dtype)
+        self.W = as_param(rng.randn(c_out, c_in, k, k) * (2.0 / (c_in * k * k)) ** 0.5, dtype)
+        self.b = as_param(np.zeros(c_out), dtype)
 
     def forward(self, x, training: bool):
         cols, ho, wo = im2col(x, self.k, self.pad)
@@ -85,11 +85,11 @@ class MaxPool2:
 def augment_flip_crop(x, rng, pad: int = 2):
     """Random horizontal flip + random crop after zero padding (NCHW batch)."""
     n, _, h, w = x.shape
-    flip = rng.rand(n) < 0.5
+    flip = np.asarray(rng.rand(n) < 0.5)
     x = np.where(flip[:, None, None, None], x[..., ::-1], x)
     xp = np.pad(x, ((0, 0), (0, 0), (pad, pad), (pad, pad)))
-    dy, dx = rng.randint(0, 2 * pad + 1, size=(2, n))
-    return np.stack([xp[i, :, dy[i] : dy[i] + h, dx[i] : dx[i] + w] for i in range(n)])
+    dy, dx = asnumpy(rng.randint(0, 2 * pad + 1, size=(2, n)))
+    return np.stack([xp[i, :, int(dy[i]) : int(dy[i]) + h, int(dx[i]) : int(dx[i]) + w] for i in range(n)])
 
 
 class SimpleCNN(Sequential):
@@ -108,7 +108,7 @@ class SimpleCNN(Sequential):
     ):
         if image_size % 2 ** len(channels):
             raise ValueError(f"image_size must be divisible by {2 ** len(channels)} ({len(channels)} 2x2 poolings)")
-        rng = np.random.RandomState(seed)
+        rng = host_rng(seed)
         layers, names = [], []
         c_prev = in_channels
         for k, c in enumerate(channels, start=1):
@@ -129,13 +129,17 @@ class SimpleCNN(Sequential):
 
     def feature_maps(self, x) -> dict[str, np.ndarray]:
         """Activations after each conv block's ReLU (relu1, relu2, ...) for visualization."""
-        a = np.asarray(x, dtype=self.dtype)
-        maps = {}
-        last = f"relu{self.n_conv}"
-        for name, layer in zip(self.layer_names, self.layers):
-            a = layer.forward(a, False)
-            if name.startswith("relu") and name[4:].isdigit():
-                maps[name] = a
-            if name == last:
-                break
-        return maps
+        gpu_enter(self, self._move)
+        try:
+            a = np.asarray(x, dtype=self.dtype)
+            maps = {}
+            last = f"relu{self.n_conv}"
+            for name, layer in zip(self.layer_names, self.layers):
+                a = layer.forward(a, False)
+                if name.startswith("relu") and name[4:].isdigit():
+                    maps[name] = asnumpy(a)
+                if name == last:
+                    break
+            return maps
+        finally:
+            gpu_exit(self, self._move)

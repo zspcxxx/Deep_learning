@@ -5,7 +5,12 @@ Every layer has forward(x, training) / backward(dout); layers with parameters li
 """
 from __future__ import annotations
 
-import numpy as np
+import numpy as _numpy
+
+from dllab.xp import (
+    as_device, as_param, asnumpy, cast_params, gpu_enter, gpu_exit, host_rng, move_params, np,
+    on_gpu, prefer_cpu_if_small,
+)
 
 
 class ReLU:
@@ -35,15 +40,15 @@ class Dense:
 
     def __init__(self, n_in: int, n_out: int, rng, dtype, init: str = "he"):
         if init == "he":
-            w = rng.randn(n_in, n_out) * np.sqrt(2.0 / n_in)
+            w = rng.randn(n_in, n_out) * (2.0 / n_in) ** 0.5
         elif init == "xavier":
-            w = rng.randn(n_in, n_out) * np.sqrt(2.0 / (n_in + n_out))
+            w = rng.randn(n_in, n_out) * (2.0 / (n_in + n_out)) ** 0.5
         elif init == "zeros":
             w = np.zeros((n_in, n_out))
         else:
             raise ValueError(f"unknown init {init!r}")
-        self.W = w.astype(dtype)
-        self.b = np.zeros(n_out, dtype=dtype)
+        self.W = as_param(w, dtype)
+        self.b = as_param(np.zeros(n_out), dtype)
 
     def forward(self, x, training: bool):
         self._x = x
@@ -60,13 +65,13 @@ class Dropout:
 
     def __init__(self, p: float, seed: int):
         self.p = float(p)
-        self._rng = np.random.RandomState(seed)
+        self._rng = host_rng(seed)
 
     def forward(self, x, training: bool):
         if not training or self.p <= 0.0:
             self._mask = None
             return x
-        self._mask = (self._rng.rand(*x.shape) >= self.p).astype(x.dtype) / (1.0 - self.p)
+        self._mask = np.asarray(self._rng.rand(*x.shape) >= self.p, dtype=x.dtype) / (1.0 - self.p)
         return x * self._mask
 
     def backward(self, dout):
@@ -119,6 +124,10 @@ class Sequential:
         self.val_accuracy_: list[float] = []
         self.lr_history_: list[float] = []
         self.best_epoch_: int | None = None
+        self._gpu_depth = 0
+
+    def _move(self, *, host: bool) -> None:
+        move_params(self.parameters(), host=host)
 
     def parameters(self):
         def walk(prefix, layer):
@@ -135,10 +144,14 @@ class Sequential:
         return int(sum(getattr(layer, p).size for _, layer, p in self.parameters()))
 
     def forward(self, x, training: bool = False):
-        a = np.asarray(x, dtype=self.dtype)
-        for layer in self.layers:
-            a = layer.forward(a, training)
-        return a
+        gpu_enter(self, self._move)
+        try:
+            a = np.asarray(x, dtype=self.dtype)
+            for layer in self.layers:
+                a = layer.forward(a, training)
+            return a
+        finally:
+            gpu_exit(self, self._move)
 
     def backward(self, dlogits):
         d = dlogits
@@ -147,23 +160,30 @@ class Sequential:
 
     def loss_and_backward(self, x, y):
         """Forward in training mode, softmax-CE loss, then backprop; returns (loss, probs)."""
-        probs = softmax(self.forward(x, training=True))
-        m = len(y)
-        loss = float(-np.mean(np.log(probs[np.arange(m), y] + 1e-12)))
-        d = probs.copy()
-        d[np.arange(m), y] -= 1.0
-        self.backward(d / m)
-        return loss, probs
+        gpu_enter(self, self._move)
+        try:
+            probs = softmax(self.forward(x, training=True))
+            m = len(y)
+            loss = -np.mean(np.log(probs[np.arange(m), y] + 1e-12))
+            d = probs.copy()
+            d[np.arange(m), y] -= 1.0
+            self.backward(d / m)
+            return loss, probs
+        finally:
+            gpu_exit(self, self._move)
 
     def predict_proba(self, X, batch_size: int = 500):
         out = [softmax(self.forward(X[i : i + batch_size])) for i in range(0, len(X), batch_size)]
-        return np.concatenate(out, axis=0)
+        return asnumpy(np.concatenate(out, axis=0))
 
     def predict(self, X):
-        return np.argmax(self.predict_proba(X), axis=1)
+        chunks = [self.forward(X[i : i + 500]) for i in range(0, len(X), 500)]
+        return asnumpy(np.argmax(np.concatenate(chunks, axis=0), axis=1))
 
     def evaluate(self, X, y) -> tuple[float, float]:
-        probs = self.predict_proba(X)
+        y = as_device(y)
+        chunks = [softmax(self.forward(X[i : i + 500])) for i in range(0, len(y), 500)]
+        probs = np.concatenate(chunks, axis=0)
         loss = float(-np.mean(np.log(probs[np.arange(len(y)), y] + 1e-12)))
         acc = float(np.mean(np.argmax(probs, axis=1) == y) * 100.0)
         return loss, acc
@@ -198,11 +218,43 @@ class Sequential:
         """`augment(batch, rng) -> batch` is applied to each training batch (not to validation)."""
         if optimizer not in ("adamw", "sgd"):
             raise ValueError(f"unknown optimizer {optimizer!r}")
+        with prefer_cpu_if_small(getattr(X, "size", 0)):
+            return self._fit_on_device(
+                X, y, X_val, y_val, n_epochs, batch_size, lr, min_lr, warmup_epochs,
+                weight_decay, early_stop_patience, optimizer, momentum, augment, seed,
+                verbose, print_every,
+            )
+
+    def _fit_on_device(
+        self, X, y, X_val, y_val, n_epochs, batch_size, lr, min_lr, warmup_epochs,
+        weight_decay, early_stop_patience, optimizer, momentum, augment, seed,
+        verbose, print_every,
+    ):
+        if on_gpu():
+            self.dtype = np.float32
+            cast_params(self.parameters())
+        gpu_enter(self, self._move)
+        try:
+            return self._fit_loop(
+                X, y, X_val, y_val, n_epochs, batch_size, lr, min_lr, warmup_epochs,
+                weight_decay, early_stop_patience, optimizer, momentum, augment, seed,
+                verbose, print_every,
+            )
+        finally:
+            gpu_exit(self, self._move)
+
+    def _fit_loop(
+        self, X, y, X_val, y_val, n_epochs, batch_size, lr, min_lr, warmup_epochs,
+        weight_decay, early_stop_patience, optimizer, momentum, augment, seed,
+        verbose, print_every,
+    ):
         X = np.asarray(X, dtype=self.dtype)
-        rng = np.random.RandomState(seed)
+        y = as_device(y)
+        rng = host_rng(seed)
         b1, b2, eps = 0.9, 0.999, 1e-8
+        params = list(self.parameters())
         state = {key: (np.zeros_like(getattr(layer, p)), np.zeros_like(getattr(layer, p)))
-                 for key, layer, p in self.parameters()}
+                 for key, layer, p in params}
         step = 0
         steps_per_epoch = int(np.ceil(len(y) / batch_size))
         total_steps = n_epochs * steps_per_epoch
@@ -210,8 +262,9 @@ class Sequential:
         best_val, best_snap, wait = float("inf"), None, 0
 
         for epoch in range(n_epochs):
-            perm = rng.permutation(len(y))
-            loss_sum, correct = 0.0, 0
+            perm = np.asarray(rng.permutation(len(y)))
+            loss_sum = np.zeros((), dtype=self.dtype)
+            correct = np.zeros((), dtype=np.int64)
             for start in range(0, len(y), batch_size):
                 idx = perm[start : start + batch_size]
                 if step < warmup_steps:
@@ -224,10 +277,10 @@ class Sequential:
                 xb = X[idx] if augment is None else augment(X[idx], rng).astype(self.dtype)
                 loss, probs = self.loss_and_backward(xb, y[idx])
                 loss_sum += loss * len(idx)
-                correct += int(np.sum(np.argmax(probs, axis=1) == y[idx]))
+                correct += np.sum(np.argmax(probs, axis=1) == y[idx])
 
                 bc1, bc2 = 1.0 - b1 ** step, 1.0 - b2 ** step
-                for key, layer, p in self.parameters():
+                for key, layer, p in params:
                     param = getattr(layer, p)
                     grad = getattr(layer, "d" + p)
                     m, v = state[key]
@@ -236,17 +289,17 @@ class Sequential:
                     if optimizer == "sgd":
                         m *= momentum
                         m += grad
-                        param -= (lr_t * m).astype(param.dtype)
+                        param -= lr_t * m
                         continue
                     m *= b1
                     m += (1.0 - b1) * grad
                     v *= b2
                     v += (1.0 - b2) * grad * grad
-                    param -= (lr_t * (m / bc1) / (np.sqrt(v / bc2) + eps)).astype(param.dtype)
+                    param -= lr_t * (m / bc1) / (np.sqrt(v / bc2) + eps)
 
             self.lr_history_.append(float(lr_t))
-            self.loss_.append(loss_sum / len(y))
-            self.accuracy_.append(correct / len(y) * 100.0)
+            self.loss_.append(float(loss_sum) / len(y))
+            self.accuracy_.append(float(correct) / len(y) * 100.0)
             msg = f"    Epoch {epoch + 1:2d}/{n_epochs} | lr = {lr_t:.5f} | loss = {self.loss_[-1]:.4f} | train_acc = {self.accuracy_[-1]:6.2f}%"
 
             if X_val is not None:
@@ -277,7 +330,15 @@ def gradient_check(model: Sequential, x, y, n_checks: int = 8, eps: float = 1e-5
 
     Use a float64 model with dropout=0 so the training-mode forward is deterministic.
     """
-    rng = np.random.RandomState(seed)
+    rng = host_rng(seed)
+    gpu_enter(model, model._move)
+    try:
+        return _gradient_check(model, x, y, rng, n_checks, eps)
+    finally:
+        gpu_exit(model, model._move)
+
+
+def _gradient_check(model, x, y, rng, n_checks, eps) -> dict:
     model.loss_and_backward(x, y)
     analytic = {key: getattr(layer, "d" + p).copy() for key, layer, p in model.parameters()}
 
@@ -291,8 +352,8 @@ def gradient_check(model: Sequential, x, y, n_checks: int = 8, eps: float = 1e-5
         flat_idx = rng.choice(param.size, size=min(n_checks, param.size), replace=False)
         errs = []
         for fi in flat_idx:
-            idx = np.unravel_index(fi, param.shape)
-            orig = param[idx]
+            idx = tuple(int(v) for v in _numpy.unravel_index(int(fi), param.shape))
+            orig = param[idx].copy()
             param[idx] = orig + eps
             lp = loss_at()
             param[idx] = orig - eps

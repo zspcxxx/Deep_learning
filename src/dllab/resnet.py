@@ -10,9 +10,8 @@ so the two models have exactly the same parameters and differ only in the skip c
 """
 from __future__ import annotations
 
-import numpy as np
-
 from dllab.nn import Dense, ReLU, Residual, Sequential, softmax
+from dllab.xp import gpu_enter, gpu_exit, host_rng, np
 
 
 def build_deep_mlp(
@@ -26,7 +25,7 @@ def build_deep_mlp(
     dtype=np.float64,
 ) -> Sequential:
     """`branch_init` is the init of the last Dense in each residual branch ("zeros" = block starts as identity)."""
-    rng = np.random.RandomState(seed)
+    rng = host_rng(seed)
     layers, names = [Dense(n_in, width, rng, dtype)], ["stem"]
     for k in range(1, n_blocks + 1):
         branch = [
@@ -54,24 +53,33 @@ def n_weight_layers(n_blocks: int) -> int:
 
 def block_outputs(model: Sequential, x) -> list[np.ndarray]:
     """Hidden state h after the stem and after every block (inference mode)."""
-    a = np.asarray(x, dtype=model.dtype)
-    outs = []
-    for name, layer in zip(model.layer_names, model.layers):
-        a = layer.forward(a, False)
-        if name == "stem" or isinstance(layer, Residual) or name.endswith(".fc_b"):
-            outs.append(a)
-    return outs
+    gpu_enter(model, model._move)
+    try:
+        a = np.asarray(x, dtype=model.dtype)
+        outs = []
+        for name, layer in zip(model.layer_names, model.layers):
+            a = layer.forward(a, False)
+            if name == "stem" or isinstance(layer, Residual) or name.endswith(".fc_b"):
+                outs.append(a)
+        return outs
+    finally:
+        gpu_exit(model, model._move)
 
 
 def block_input_grads(model: Sequential, x, y) -> list[float]:
     """‖dL/dh‖ at the input of every block (block 1 first), from one backward pass at the current weights."""
-    probs = softmax(model.forward(x, training=True))
-    d = probs.copy()
-    d[np.arange(len(y)), y] -= 1.0
-    d /= len(y)
-    norms = []
-    for name, layer in reversed(list(zip(model.layer_names, model.layers))):
-        d = layer.backward(d)
-        if isinstance(layer, Residual) or name.endswith(".relu_a"):
-            norms.append(float(np.linalg.norm(d)))
-    return norms[::-1]
+    gpu_enter(model, model._move)
+    try:
+        y = np.asarray(y)
+        probs = softmax(model.forward(x, training=True))
+        d = probs.copy()
+        d[np.arange(len(y)), y] -= 1.0
+        d /= len(y)
+        norms = []
+        for name, layer in reversed(list(zip(model.layer_names, model.layers))):
+            d = layer.backward(d)
+            if isinstance(layer, Residual) or name.endswith(".relu_a"):
+                norms.append(float(np.linalg.norm(d)))
+        return norms[::-1]
+    finally:
+        gpu_exit(model, model._move)

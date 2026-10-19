@@ -41,6 +41,9 @@ def main() -> int:
         return 2
 
     print(f"\n=== {item['title']} ===")
+    from dllab.xp import describe
+
+    print(describe())
     print(f"原理介绍: docs/{item['doc']}")
     print("单独运行: python scripts/run_lesson.py " + item["id"])
     print()

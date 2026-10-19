@@ -8,9 +8,17 @@ target one token at a time, trained with teacher forcing. Two ways to pass the s
 """
 from __future__ import annotations
 
-import numpy as np
+import numpy as _numpy
 
 from dllab.rnn import GRUCell
+from dllab.xp import as_device, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
+
+
+def _on_small(method):
+    def wrapped(self, *args, **kwargs):
+        with prefer_cpu_if_small(self.n_params):
+            return method(self, *args, **kwargs)
+    return wrapped
 
 
 def _softmax(z):
@@ -19,8 +27,9 @@ def _softmax(z):
     return e / np.sum(e, axis=-1, keepdims=True)
 
 
-def one_hot(tokens: np.ndarray, vocab: int) -> np.ndarray:
-    out = np.zeros(tokens.shape + (vocab,), dtype=np.float64)
+def one_hot(tokens: np.ndarray, vocab: int, dtype) -> np.ndarray:
+    tokens = np.asarray(tokens)
+    out = np.zeros(tokens.shape + (vocab,), dtype=dtype)
     np.put_along_axis(out, tokens[..., None], 1.0, axis=-1)
     return out
 
@@ -30,7 +39,7 @@ class EncoderDecoder:
 
     def __init__(self, vocab: int, hidden: int, attention: bool = False, update_bias: float = 3.0,
                  seed: int = 0):
-        rng = np.random.RandomState(seed)
+        rng = host_rng(seed)
         dtype = np.float64
         self.vocab = vocab
         self.hidden = hidden
@@ -38,13 +47,13 @@ class EncoderDecoder:
         dec_in = vocab + hidden if attention else vocab
         self.encoder = GRUCell(vocab, hidden, rng, dtype, update_bias=update_bias)
         self.decoder = GRUCell(dec_in, hidden, rng, dtype, update_bias=update_bias)
-        self.Wy = (rng.randn(hidden, vocab) * np.sqrt(1.0 / hidden)).astype(dtype)
-        self.by = np.zeros(vocab, dtype=dtype)
+        self.Wy = as_param(rng.randn(hidden, vocab) * (1.0 / hidden) ** 0.5, dtype)
+        self.by = as_param(np.zeros(vocab), dtype)
         if attention:
-            scale = np.sqrt(1.0 / hidden)
-            self.Wa = (rng.randn(hidden, hidden) * scale).astype(dtype)
-            self.Ua = (rng.randn(hidden, hidden) * scale).astype(dtype)
-            self.va = (rng.randn(hidden) * scale).astype(dtype)
+            scale = (1.0 / hidden) ** 0.5
+            self.Wa = as_param(rng.randn(hidden, hidden) * scale, dtype)
+            self.Ua = as_param(rng.randn(hidden, hidden) * scale, dtype)
+            self.va = as_param(rng.randn(hidden) * scale, dtype)
         self.loss_: list[float] = []
         self.grad_norm_: list[float] = []
 
@@ -77,7 +86,7 @@ class EncoderDecoder:
         return hs
 
     def _encode(self, src: np.ndarray) -> np.ndarray:
-        return self.encoder.forward(one_hot(src, self.vocab))
+        return self.encoder.forward(one_hot(src, self.vocab, self.encoder.Wx.dtype))
 
     def _attend(self, h: np.ndarray, enc_hs: np.ndarray):
         pre = enc_hs @ self.Wa + (h @ self.Ua)[:, None, :]
@@ -90,13 +99,13 @@ class EncoderDecoder:
     def _forward_decoder(self, dec_in: np.ndarray, enc_hs: np.ndarray) -> np.ndarray:
         """Teacher-forced decoder. Attention, when enabled, reads every encoder state at each step."""
         n_batch, t_len = dec_in.shape
-        tokens = one_hot(dec_in, self.vocab)
+        tokens = one_hot(dec_in, self.vocab, self.decoder.Wx.dtype)
         h = enc_hs[:, -1]
-        hs = np.empty((n_batch, t_len, self.hidden), dtype=np.float64)
+        hs = np.empty((n_batch, t_len, self.hidden), dtype=self.decoder.Wx.dtype)
         cache = []
         att_cache = []
         if self.attention:
-            X = np.empty((n_batch, t_len, self.vocab + self.hidden), dtype=np.float64)
+            X = np.empty((n_batch, t_len, self.vocab + self.hidden), dtype=self.decoder.Wx.dtype)
             for t in range(t_len):
                 alpha, ctx, energy = self._attend(h, enc_hs)
                 x = np.concatenate([tokens[:, t], ctx], axis=1)
@@ -122,7 +131,9 @@ class EncoderDecoder:
         self._enc_hs = enc_hs
         return hs @ self.Wy + self.by, hs
 
+    @_on_small
     def loss_and_backward(self, src: np.ndarray, dec_in: np.ndarray, target: np.ndarray):
+        src, dec_in, target = as_device(src), as_device(dec_in), as_device(target)
         logits, hs = self.logits_teacher(src, dec_in)
         probs = _softmax(logits)
         n_batch, t_len = target.shape
@@ -206,6 +217,7 @@ class EncoderDecoder:
         denc[:, -1] += dh_next
         self.encoder.backward(denc)
 
+    @_on_small
     def decode(self, src: np.ndarray, sos: int, eos: int):
         """Greedy decode. Returns tokens (N, S+1) and, for the attention model, alphas (N, S+1, S)."""
         enc_hs = self._encode(src)
@@ -213,31 +225,36 @@ class EncoderDecoder:
         h = enc_hs[:, -1]
         tok = np.full(n_batch, sos, dtype=np.int64)
         outs = np.empty((n_batch, src_len + 1), dtype=np.int64)
-        alphas = np.zeros((n_batch, src_len + 1, src_len), dtype=np.float64) if self.attention else None
+        alphas = np.zeros((n_batch, src_len + 1, src_len), dtype=h.dtype) if self.attention else None
         for t in range(src_len + 1):
             if self.attention:
                 alpha, ctx, _ = self._attend(h, enc_hs)
                 alphas[:, t] = alpha
-                x = np.concatenate([one_hot(tok, self.vocab), ctx], axis=1)
+                x = np.concatenate([one_hot(tok, self.vocab, h.dtype), ctx], axis=1)
             else:
-                x = one_hot(tok, self.vocab)
+                x = one_hot(tok, self.vocab, h.dtype)
             h = self.decoder.step(x, h)
             tok = np.argmax(h @ self.Wy + self.by, axis=1)
             outs[:, t] = tok
-        return outs, alphas
+        return asnumpy(outs), None if alphas is None else asnumpy(alphas)
 
     def exact_match(self, src: np.ndarray, target: np.ndarray, sos: int, eos: int) -> float:
         pred, _ = self.decode(src, sos, eos)
-        return float(np.mean(np.all(pred == target, axis=1)) * 100)
+        return float(_numpy.mean(_numpy.all(pred == _numpy.asarray(target), axis=1)) * 100)
 
     def fit(self, batch_fn, n_steps: int, lr: float = 3e-3, clip: float = 1.0,
             log_every: int = 0, log_fn=None):
+        with prefer_cpu_if_small(self.n_params):
+            return self._fit_steps(batch_fn, n_steps, lr, clip, log_every, log_fn)
+
+    def _fit_steps(self, batch_fn, n_steps, lr, clip, log_every, log_fn):
+        cast_params(self.parameters())
         b1, b2, eps = 0.9, 0.999, 1e-8
         state = {k: (np.zeros_like(getattr(o, p)), np.zeros_like(getattr(o, p))) for k, o, p in self.parameters()}
         self.loss_.clear()
         for step in range(1, n_steps + 1):
             src, dec_in, target = batch_fn(step)
-            loss = self.loss_and_backward(src, dec_in, target)
+            loss = self.loss_and_backward(as_device(src), as_device(dec_in), as_device(target))
             grads = {k: getattr(o, "d" + p) for k, o, p in self.parameters()}
             norm = float(np.sqrt(sum(float(np.sum(g * g)) for g in grads.values())))
             scale = min(1.0, clip / (norm + 1e-12)) if clip else 1.0
@@ -260,16 +277,17 @@ class EncoderDecoder:
 
 def make_reverse_batch(n: int, length: int, n_sym: int, sos: int, eos: int, rng) -> tuple:
     """Source digits, decoder inputs (SOS + reversed[:-1] + last reversed? ), targets (reversed + EOS)."""
-    src = rng.randint(0, n_sym, size=(n, length))
+    raw = rng.randint(0, n_sym, size=(n, length))
+    src = _numpy.asarray(raw.get() if hasattr(raw, "get") else raw)
     rev = src[:, ::-1]
-    target = np.concatenate([rev, np.full((n, 1), eos, dtype=np.int64)], axis=1)
-    dec_in = np.concatenate([np.full((n, 1), sos, dtype=np.int64), rev], axis=1)
+    target = _numpy.concatenate([rev, _numpy.full((n, 1), eos, dtype=_numpy.int64)], axis=1)
+    dec_in = _numpy.concatenate([_numpy.full((n, 1), sos, dtype=_numpy.int64), rev], axis=1)
     return src, dec_in, target
 
 
 def gradient_check(model: EncoderDecoder, src, dec_in, target, n_checks: int = 6,
                    eps: float = 1e-5, seed: int = 0) -> dict:
-    rng = np.random.RandomState(seed)
+    rng = host_rng(seed)
     model.loss_and_backward(src, dec_in, target)
     analytic = {k: getattr(o, "d" + p).copy() for k, o, p in model.parameters()}
     report = {}
@@ -277,8 +295,8 @@ def gradient_check(model: EncoderDecoder, src, dec_in, target, n_checks: int = 6
         param = getattr(o, p)
         errs = []
         for fi in rng.choice(param.size, size=min(n_checks, param.size), replace=False):
-            idx = np.unravel_index(int(fi), param.shape)
-            orig = param[idx]
+            idx = tuple(int(v) for v in __import__("numpy").unravel_index(int(fi), param.shape))
+            orig = param[idx].copy()
             param[idx] = orig + eps
             lp = model.loss_and_backward(src, dec_in, target)
             param[idx] = orig - eps

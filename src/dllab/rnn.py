@@ -6,7 +6,7 @@ step ("all", next-token prediction with an optional padding mask).
 """
 from __future__ import annotations
 
-import numpy as np
+from dllab.xp import as_compute, as_device, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
 
 
 def _sigmoid(z):
@@ -20,9 +20,9 @@ class RNNCell:
 
     def __init__(self, n_in: int, hidden: int, rng, dtype):
         self.H = hidden
-        self.Wx = (rng.randn(n_in, hidden) * np.sqrt(1.0 / n_in)).astype(dtype)
-        self.Wh = (rng.randn(hidden, hidden) * np.sqrt(1.0 / hidden)).astype(dtype)
-        self.b = np.zeros(hidden, dtype=dtype)
+        self.Wx = as_param(rng.randn(n_in, hidden) * (1.0 / n_in) ** 0.5, dtype)
+        self.Wh = as_param(rng.randn(hidden, hidden) * (1.0 / hidden) ** 0.5, dtype)
+        self.b = as_param(np.zeros(hidden), dtype)
 
     def init_state(self, n: int):
         return np.zeros((n, self.H), dtype=self.Wx.dtype)
@@ -65,9 +65,9 @@ class LSTMCell:
 
     def __init__(self, n_in: int, hidden: int, rng, dtype, forget_bias: float = 1.0):
         self.H = hidden
-        self.Wx = (rng.randn(n_in, 4 * hidden) * np.sqrt(1.0 / n_in)).astype(dtype)
-        self.Wh = (rng.randn(hidden, 4 * hidden) * np.sqrt(1.0 / hidden)).astype(dtype)
-        self.b = np.zeros(4 * hidden, dtype=dtype)
+        self.Wx = as_param(rng.randn(n_in, 4 * hidden) * (1.0 / n_in) ** 0.5, dtype)
+        self.Wh = as_param(rng.randn(hidden, 4 * hidden) * (1.0 / hidden) ** 0.5, dtype)
+        self.b = as_param(np.zeros(4 * hidden), dtype)
         self.b[hidden : 2 * hidden] = forget_bias
 
     def init_state(self, n: int):
@@ -143,9 +143,9 @@ class GRUCell:
 
     def __init__(self, n_in: int, hidden: int, rng, dtype, update_bias: float = 0.0):
         self.H = hidden
-        self.Wx = (rng.randn(n_in, 3 * hidden) * np.sqrt(1.0 / n_in)).astype(dtype)
-        self.Wh = (rng.randn(hidden, 3 * hidden) * np.sqrt(1.0 / hidden)).astype(dtype)
-        self.b = np.zeros(3 * hidden, dtype=dtype)
+        self.Wx = as_param(rng.randn(n_in, 3 * hidden) * (1.0 / n_in) ** 0.5, dtype)
+        self.Wh = as_param(rng.randn(hidden, 3 * hidden) * (1.0 / hidden) ** 0.5, dtype)
+        self.b = as_param(np.zeros(3 * hidden), dtype)
         self.b[:hidden] = update_bias
 
     def init_state(self, n: int):
@@ -214,6 +214,13 @@ class GRUCell:
         return dX
 
 
+def _on_small(method):
+    def wrapped(self, *args, **kwargs):
+        with prefer_cpu_if_small(self.n_params):
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 def _softmax(z):
     z = z - z.max(axis=-1, keepdims=True)
     e = np.exp(z)
@@ -225,7 +232,7 @@ class RecurrentNet:
 
     def __init__(self, cell: str, n_in: int, hidden: int, n_out: int, seed: int = 42, dtype=np.float64,
                  forget_bias: float = 1.0, update_bias: float = 0.0):
-        rng = np.random.RandomState(seed)
+        rng = host_rng(seed)
         self.kind = cell
         if cell == "lstm":
             self.cell = LSTMCell(n_in, hidden, rng, dtype, forget_bias=forget_bias)
@@ -235,8 +242,8 @@ class RecurrentNet:
             self.cell = RNNCell(n_in, hidden, rng, dtype)
         else:
             raise ValueError(f"unknown cell {cell!r}")
-        self.Wy = (rng.randn(hidden, n_out) * np.sqrt(1.0 / hidden)).astype(dtype)
-        self.by = np.zeros(n_out, dtype=dtype)
+        self.Wy = as_param(rng.randn(hidden, n_out) * (1.0 / hidden) ** 0.5, dtype)
+        self.by = as_param(np.zeros(n_out), dtype)
         self.dtype = dtype
         self.loss_: list[float] = []
         self.grad_norm_: list[float] = []
@@ -251,12 +258,17 @@ class RecurrentNet:
     def n_params(self) -> int:
         return int(sum(getattr(obj, p).size for _, obj, p in self.parameters()))
 
+    @_on_small
     def logits(self, X, mode: str = "last"):
         hs = self.cell.forward(np.asarray(X, dtype=self.dtype))
         return (hs[:, -1] if mode == "last" else hs) @ self.Wy + self.by, hs
 
+    @_on_small
     def loss_and_backward(self, X, Y, mode: str = "last", mask=None):
         """mode "last": Y (N,) labels for the final step. mode "all": Y (N, T) next-token labels, mask (N, T)."""
+        Y = np.asarray(Y)
+        if mask is not None:
+            mask = np.asarray(mask, dtype=self.dtype)
         logits, hs = self.logits(X, mode)
         probs = _softmax(logits)
         if mode == "last":
@@ -284,39 +296,55 @@ class RecurrentNet:
         dX = self.cell.backward(dhs)
         return loss, probs, dX
 
+    @_on_small
     def predict(self, X):
-        return np.argmax(self.logits(X, "last")[0], axis=1)
+        return asnumpy(np.argmax(self.logits(X, "last")[0], axis=1))
 
+    @_on_small
     def sequence_loss(self, X, Y, mask, batch_size: int = 1000) -> float:
         """Mean next-token cross-entropy (nats per token) over the masked steps, forward only."""
         total, count = 0.0, 0.0
         for s in range(0, len(Y), batch_size):
             logits, _ = self.logits(X[s : s + batch_size], "all")
             p = _softmax(logits)
-            y, m = Y[s : s + batch_size], mask[s : s + batch_size]
+            y, m = np.asarray(Y[s : s + batch_size]), np.asarray(mask[s : s + batch_size])
             p_true = p[np.arange(len(y))[:, None], np.arange(y.shape[1])[None, :], y]
             total += float(-(np.log(p_true + 1e-12) * m).sum())
             count += float(m.sum())
         return total / count
 
+    @_on_small
     def forget_gates(self, X) -> np.ndarray:
         """LSTM only: forget-gate activations f_t, shape (N, T, H)."""
         self.cell.forward(np.asarray(X, dtype=self.dtype))
-        return np.stack([c[3] for c in self.cell._cache[1]], axis=1)
+        return asnumpy(np.stack([c[3] for c in self.cell._cache[1]], axis=1))
 
+    @_on_small
     def update_gates(self, X) -> np.ndarray:
         """GRU only: update-gate activations z_t, shape (N, T, H)."""
         self.cell.forward(np.asarray(X, dtype=self.dtype))
-        return np.stack([c[1] for c in self.cell._cache[1]], axis=1)
+        return asnumpy(np.stack([c[1] for c in self.cell._cache[1]], axis=1))
 
     def fit(self, batch_fn, n_steps: int, lr: float = 3e-3, clip: float = 1.0, mode: str = "last",
             log_every: int = 0, log_fn=None):
         """batch_fn(step) -> (X, Y) or (X, Y, mask). Adam with global gradient-norm clipping."""
+        with prefer_cpu_if_small(self.n_params):
+            return self._fit_steps(batch_fn, n_steps, lr, clip, mode, log_every, log_fn)
+
+    def _fit_steps(self, batch_fn, n_steps, lr, clip, mode, log_every, log_fn):
+        cast_params(self.parameters())
+        self.dtype = self.Wy.dtype
         b1, b2, eps = 0.9, 0.999, 1e-8
         state = {k: (np.zeros_like(getattr(o, p)), np.zeros_like(getattr(o, p))) for k, o, p in self.parameters()}
+
+        def on_device(batch):
+            x, y = as_compute(batch[0]), as_device(batch[1])
+            mask = as_compute(batch[2]) if len(batch) > 2 else None
+            return x, y, mask
+
         for step in range(1, n_steps + 1):
-            batch = batch_fn(step)
-            loss, *_ = self.loss_and_backward(*batch[:2], mode=mode, mask=batch[2] if len(batch) > 2 else None)
+            x, y, mask = on_device(batch_fn(step))
+            loss, *_ = self.loss_and_backward(x, y, mode=mode, mask=mask)
             grads = {k: getattr(o, "d" + p) for k, o, p in self.parameters()}
             norm = float(np.sqrt(sum(float(np.sum(g * g)) for g in grads.values())))
             scale = min(1.0, clip / (norm + 1e-12)) if clip else 1.0
@@ -336,9 +364,10 @@ class RecurrentNet:
                 log_fn(step, loss, norm)
         return self
 
+    @_on_small
     def sample(self, start: int, stop: int, n: int, temperature: float = 1.0, max_len: int = 20, seed: int = 0):
         """Generate n token sequences, feeding back each sampled token, until `stop` or max_len."""
-        rng = np.random.RandomState(seed)
+        rng = host_rng(seed)
         vocab = self.Wy.shape[1]
         out = []
         for _ in range(n):
@@ -349,7 +378,7 @@ class RecurrentNet:
                 x[0, tok] = 1.0
                 state = self.cell.step(x, state)
                 h = state[0] if isinstance(state, tuple) else state
-                p = _softmax((h @ self.Wy + self.by)[0] / temperature)
+                p = asnumpy(_softmax((h @ self.Wy + self.by)[0] / temperature))
                 tok = int(rng.choice(vocab, p=p))
                 if tok == stop:
                     break
@@ -361,7 +390,7 @@ class RecurrentNet:
 def gradient_check(model: RecurrentNet, X, Y, mode: str = "last", mask=None, n_checks: int = 8,
                    eps: float = 1e-5, seed: int = 0) -> dict:
     """Central differences vs BPTT on random entries of every parameter (use float64)."""
-    rng = np.random.RandomState(seed)
+    rng = host_rng(seed)
     model.loss_and_backward(X, Y, mode=mode, mask=mask)
     analytic = {k: getattr(o, "d" + p).copy() for k, o, p in model.parameters()}
     report = {}
@@ -369,8 +398,8 @@ def gradient_check(model: RecurrentNet, X, Y, mode: str = "last", mask=None, n_c
         param = getattr(o, p)
         errs = []
         for fi in rng.choice(param.size, size=min(n_checks, param.size), replace=False):
-            idx = np.unravel_index(fi, param.shape)
-            orig = param[idx]
+            idx = tuple(int(v) for v in __import__("numpy").unravel_index(int(fi), param.shape))
+            orig = param[idx].copy()
             param[idx] = orig + eps
             lp = model.loss_and_backward(X, Y, mode=mode, mask=mask)[0]
             param[idx] = orig - eps
@@ -385,5 +414,6 @@ def gradient_check(model: RecurrentNet, X, Y, mode: str = "last", mask=None, n_c
 
 def input_grad_norms(model: RecurrentNet, X, Y) -> np.ndarray:
     """‖dL/dx_t‖ for each step t (loss on the last step): how much each input still matters at the end."""
-    _, _, dX = model.loss_and_backward(X, Y, mode="last")
-    return np.linalg.norm(dX, axis=2).mean(axis=0)
+    with prefer_cpu_if_small(model.n_params):
+        _, _, dX = model.loss_and_backward(X, Y, mode="last")
+        return np.linalg.norm(dX, axis=2).mean(axis=0)

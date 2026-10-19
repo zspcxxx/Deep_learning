@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-import numpy as np
+from dllab.xp import (
+    GPU, as_compute, as_device, as_param, asnumpy, cast_lists, gpu_enter, gpu_exit, host_rng, move_lists, np,
+    prefer_cpu_if_small,
+)
+
+_MLP_LISTS = (
+    "W", "b", "gamma", "beta", "running_mean", "running_var",
+    "_mW", "_vW", "_mb", "_vb", "_mgamma", "_vgamma", "_mbeta", "_vbeta",
+)
+
+
+def _mlp_move(model, *, host: bool) -> None:
+    move_lists(model, _MLP_LISTS, host=host)
 
 
 class MLP:
@@ -38,11 +50,11 @@ class MLP:
         self.best_epoch_: int | None = None
         self._bn_eps = 1e-5
         self._bn_momentum = 0.9
-        self._rng = np.random.RandomState(self.seed + 17)
+        self._rng = host_rng(self.seed + 17)
         self._init_params()
 
     def _init_params(self):
-        rng = np.random.RandomState(self.seed)
+        rng = host_rng(self.seed)
         self.W, self.b = [], []
         self.gamma, self.beta = [], []
         self.running_mean, self.running_var = [], []
@@ -53,23 +65,23 @@ class MLP:
         for i in range(len(self.layer_sizes) - 1):
             n_in, n_out = self.layer_sizes[i], self.layer_sizes[i + 1]
             if scheme == "zeros":
-                self.W.append(np.zeros((n_in, n_out)))
+                self.W.append(as_param(np.zeros((n_in, n_out))))
             elif scheme == "small":
-                self.W.append(rng.randn(n_in, n_out) * 0.01)
+                self.W.append(as_param(rng.randn(n_in, n_out) * 0.01))
             elif scheme == "large":
-                self.W.append(rng.randn(n_in, n_out) * 2.0)
+                self.W.append(as_param(rng.randn(n_in, n_out) * 2.0))
             elif scheme == "he":
-                self.W.append(rng.randn(n_in, n_out) * np.sqrt(2.0 / n_in))
+                self.W.append(as_param(rng.randn(n_in, n_out) * (2.0 / n_in) ** 0.5))
             elif scheme == "xavier":
-                self.W.append(rng.randn(n_in, n_out) * np.sqrt(1.0 / n_in))
+                self.W.append(as_param(rng.randn(n_in, n_out) * (1.0 / n_in) ** 0.5))
             else:
                 raise ValueError(f"Unknown init scheme: {self.init!r}")
-            self.b.append(np.zeros(n_out))
+            self.b.append(as_param(np.zeros(n_out)))
             if self.batch_norm and i < n_hidden:
-                self.gamma.append(np.ones(n_out))
-                self.beta.append(np.zeros(n_out))
-                self.running_mean.append(np.zeros(n_out))
-                self.running_var.append(np.ones(n_out))
+                self.gamma.append(as_param(np.ones(n_out)))
+                self.beta.append(as_param(np.zeros(n_out)))
+                self.running_mean.append(as_param(np.zeros(n_out)))
+                self.running_var.append(as_param(np.ones(n_out)))
 
     @staticmethod
     def _relu(z):
@@ -133,6 +145,14 @@ class MLP:
         return dz, dgamma, dbeta
 
     def _forward(self, X, training: bool = True):
+        X = as_compute(X)
+        gpu_enter(self, lambda **kw: _mlp_move(self, **kw))
+        try:
+            return self._forward_body(X, training)
+        finally:
+            gpu_exit(self, lambda **kw: _mlp_move(self, **kw))
+
+    def _forward_body(self, X, training: bool = True):
         activations, pre_acts, a = [X], [], X
         bn_caches, drop_masks = [], []
         n_hidden = len(self.W) - 1
@@ -146,7 +166,7 @@ class MLP:
             pre_acts.append(z)
             a = self._activate(z)
             if self.dropout > 0.0 and training:
-                mask = (self._rng.rand(*a.shape) >= self.dropout).astype(a.dtype)
+                mask = np.asarray(self._rng.rand(*a.shape) >= self.dropout, dtype=a.dtype)
                 a = a * mask / (1.0 - self.dropout)
                 drop_masks.append(mask)
             else:
@@ -227,6 +247,24 @@ class MLP:
         y_val=None,
         early_stop_patience: int | None = None,
     ):
+        with prefer_cpu_if_small(getattr(X, "size", 0)):
+            return self._fit_small(X, y, verbose, print_every, X_val, y_val, early_stop_patience)
+
+    def _fit_small(self, X, y, verbose, print_every, X_val, y_val, early_stop_patience):
+        X, y = as_compute(X), as_compute(y)
+        if X_val is not None:
+            X_val, y_val = as_compute(X_val), as_compute(y_val)
+        if GPU:
+            self.W, self.b, self.gamma, self.beta, self.running_mean, self.running_var = cast_lists(
+                self.W, self.b, self.gamma, self.beta, self.running_mean, self.running_var
+            )
+        gpu_enter(self, lambda **kw: _mlp_move(self, **kw))
+        try:
+            return self._fit_body(X, y, X_val, y_val, early_stop_patience, verbose, print_every)
+        finally:
+            gpu_exit(self, lambda **kw: _mlp_move(self, **kw))
+
+    def _fit_body(self, X, y, X_val, y_val, early_stop_patience, verbose, print_every):
         best_val = float("inf")
         best_snap = None
         wait = 0
@@ -283,7 +321,7 @@ class MLP:
         return self
 
     def predict_proba(self, X):
-        return self._forward(X, training=False)[0][-1].ravel()
+        return asnumpy(self._forward(as_compute(X), training=False)[0][-1].ravel())
 
     def predict(self, X):
         return (self.predict_proba(X) >= 0.5).astype(int)
@@ -357,12 +395,12 @@ class MulticlassMLP:
 
         self._eps = 1e-5
         self._bn_momentum = 0.9
-        self._rng = np.random.RandomState(self.seed + 19)
+        self._rng = host_rng(self.seed + 19)
         self._step = 0
         self._init_params()
 
     def _init_params(self):
-        rng = np.random.RandomState(self.seed)
+        rng = host_rng(self.seed)
         self.W, self.b = [], []
         self.gamma, self.beta = [], []
         self.running_mean, self.running_var = [], []
@@ -373,36 +411,36 @@ class MulticlassMLP:
             # Use Xavier on the output classification head when hidden layers use He
             scheme = "xavier" if (i == n_hidden and self.init == "he") else self.init
             if scheme == "zeros":
-                w = np.zeros((n_in, n_out), dtype=np.float64)
+                w = as_param(np.zeros((n_in, n_out)), np.float64)
             elif scheme == "small":
-                w = rng.randn(n_in, n_out) * 0.01
+                w = as_param(rng.randn(n_in, n_out) * 0.01)
             elif scheme == "large":
-                w = rng.randn(n_in, n_out) * 1.2
+                w = as_param(rng.randn(n_in, n_out) * 1.2)
             elif scheme == "he":
-                w = rng.randn(n_in, n_out) * np.sqrt(2.0 / n_in)
+                w = as_param(rng.randn(n_in, n_out) * (2.0 / n_in) ** 0.5)
             elif scheme == "xavier":
-                w = rng.randn(n_in, n_out) * np.sqrt(2.0 / (n_in + n_out))
+                w = as_param(rng.randn(n_in, n_out) * (2.0 / (n_in + n_out)) ** 0.5)
             else:
                 raise ValueError(f"Unknown init scheme: {self.init!r}")
             self.W.append(w)
-            self.b.append(np.zeros(n_out, dtype=np.float64))
+            self.b.append(as_param(np.zeros(n_out), np.float64))
 
             if self.norm and i < n_hidden:
-                self.gamma.append(np.ones(n_out, dtype=np.float64))
-                self.beta.append(np.zeros(n_out, dtype=np.float64))
+                self.gamma.append(as_param(np.ones(n_out), np.float64))
+                self.beta.append(as_param(np.zeros(n_out), np.float64))
                 if self.norm == "bn":
-                    self.running_mean.append(np.zeros(n_out, dtype=np.float64))
-                    self.running_var.append(np.ones(n_out, dtype=np.float64))
+                    self.running_mean.append(as_param(np.zeros(n_out), np.float64))
+                    self.running_var.append(as_param(np.ones(n_out), np.float64))
 
         # Optimizer state
-        self._mW = [np.zeros_like(w) for w in self.W]
-        self._vW = [np.zeros_like(w) for w in self.W]
-        self._mb = [np.zeros_like(b) for b in self.b]
-        self._vb = [np.zeros_like(b) for b in self.b]
-        self._mgamma = [np.zeros_like(g) for g in self.gamma]
-        self._vgamma = [np.zeros_like(g) for g in self.gamma]
-        self._mbeta = [np.zeros_like(bt) for bt in self.beta]
-        self._vbeta = [np.zeros_like(bt) for bt in self.beta]
+        self._mW = [as_param(np.zeros_like(w)) for w in self.W]
+        self._vW = [as_param(np.zeros_like(w)) for w in self.W]
+        self._mb = [as_param(np.zeros_like(b)) for b in self.b]
+        self._vb = [as_param(np.zeros_like(b)) for b in self.b]
+        self._mgamma = [as_param(np.zeros_like(g)) for g in self.gamma]
+        self._vgamma = [as_param(np.zeros_like(g)) for g in self.gamma]
+        self._mbeta = [as_param(np.zeros_like(bt)) for bt in self.beta]
+        self._vbeta = [as_param(np.zeros_like(bt)) for bt in self.beta]
 
     def _activate(self, z):
         name = self.activation_name
@@ -423,7 +461,7 @@ class MulticlassMLP:
     def _activate_grad(self, z):
         name = self.activation_name
         if name == "relu":
-            return (z > 0.0).astype(np.float64)
+            return (z > 0.0).astype(z.dtype)
         if name == "gelu":
             c = np.sqrt(2.0 / np.pi)
             inner = c * (z + 0.044715 * z ** 3)
@@ -528,6 +566,13 @@ class MulticlassMLP:
         raise ValueError(f"Unknown norm cache kind: {kind!r}")
 
     def _forward(self, X, training: bool = True):
+        gpu_enter(self, lambda **kw: _mlp_move(self, **kw))
+        try:
+            return self._forward_body(X, training)
+        finally:
+            gpu_exit(self, lambda **kw: _mlp_move(self, **kw))
+
+    def _forward_body(self, X, training: bool = True):
         activations = [X]
         pre_acts = []
         norm_caches = []
@@ -545,7 +590,7 @@ class MulticlassMLP:
             pre_acts.append(z)
             a = self._activate(z)
             if self.dropout > 0.0 and training:
-                mask = (self._rng.rand(*a.shape) >= self.dropout).astype(np.float64)
+                mask = np.asarray(self._rng.rand(*a.shape) >= self.dropout, dtype=a.dtype)
                 a = a * mask / (1.0 - self.dropout)
                 drop_masks.append(mask)
             else:
@@ -560,7 +605,7 @@ class MulticlassMLP:
 
     def _compute_loss_and_delta(self, probs, y):
         m, k = probs.shape
-        y_onehot = np.zeros((m, k), dtype=np.float64)
+        y_onehot = np.zeros((m, k), dtype=probs.dtype)
         y_onehot[np.arange(m), y] = 1.0
 
         if self.loss_type == "ce":
@@ -708,11 +753,16 @@ class MulticlassMLP:
         self.running_var = [v.copy() for v in snap["running_var"]]
 
     def evaluate(self, X, y) -> tuple[float, float]:
-        probs = self.predict_proba(X)
-        _, data_loss, _ = self._compute_loss_and_delta(probs, y)
-        preds = np.argmax(probs, axis=1)
-        acc = float(np.mean(preds == y) * 100.0)
-        return data_loss, acc
+        gpu_enter(self, lambda **kw: _mlp_move(self, **kw))
+        try:
+            probs = self._forward(as_compute(X), training=False)[0][-1]
+            y = as_device(y)
+            _, data_loss, _ = self._compute_loss_and_delta(probs, y)
+            preds = np.argmax(probs, axis=1)
+            acc = float(np.mean(preds == y) * 100.0)
+            return data_loss, acc
+        finally:
+            gpu_exit(self, lambda **kw: _mlp_move(self, **kw))
 
     def fit(
         self,
@@ -724,14 +774,31 @@ class MulticlassMLP:
         verbose: bool = False,
         print_every: int = 10,
     ):
-        X = np.asarray(X, dtype=np.float64)
-        y = np.asarray(y, dtype=np.int64)
-        if X_val is not None:
-            X_val = np.asarray(X_val, dtype=np.float64)
-            y_val = np.asarray(y_val, dtype=np.int64)
+        with prefer_cpu_if_small(getattr(X, "size", 0)):
+            return self._fit_small(X, y, X_val, y_val, early_stop_patience, verbose, print_every)
 
+    def _fit_small(self, X, y, X_val, y_val, early_stop_patience, verbose, print_every):
+        X = as_compute(X)
+        y = as_device(y)
+        if X_val is not None:
+            X_val = as_compute(X_val)
+            y_val = as_device(y_val)
+        if GPU:
+            self.W, self.b, self.gamma, self.beta, self.running_mean, self.running_var = cast_lists(
+                self.W, self.b, self.gamma, self.beta, self.running_mean, self.running_var
+            )
+            self._mW, self._vW, self._mb, self._vb, self._mgamma, self._vgamma, self._mbeta, self._vbeta = cast_lists(
+                self._mW, self._vW, self._mb, self._vb, self._mgamma, self._vgamma, self._mbeta, self._vbeta
+            )
+        gpu_enter(self, lambda **kw: _mlp_move(self, **kw))
+        try:
+            return self._fit_body(X, y, X_val, y_val, early_stop_patience, verbose, print_every)
+        finally:
+            gpu_exit(self, lambda **kw: _mlp_move(self, **kw))
+
+    def _fit_body(self, X, y, X_val, y_val, early_stop_patience, verbose, print_every):
         n = X.shape[0]
-        rng = np.random.RandomState(self.seed + 101)
+        rng = host_rng(self.seed + 101)
         best_val = float("inf")
         best_snap = None
         wait = 0
@@ -740,7 +807,7 @@ class MulticlassMLP:
         for epoch in range(self.n_epochs):
             lr_t = self._get_lr(epoch)
             self.lr_history_.append(lr_t)
-            perm = rng.permutation(n)
+            perm = np.asarray(rng.permutation(n))
             epoch_loss = 0.0
             epoch_correct = 0
 
@@ -796,8 +863,8 @@ class MulticlassMLP:
         return self
 
     def predict_proba(self, X):
-        X = np.asarray(X, dtype=np.float64)
-        return self._forward(X, training=False)[0][-1]
+        X = as_compute(X)
+        return asnumpy(self._forward(X, training=False)[0][-1])
 
     def predict(self, X):
-        return np.argmax(self.predict_proba(X), axis=1)
+        return asnumpy(np.argmax(self._forward(as_compute(X), training=False)[0][-1], axis=1))

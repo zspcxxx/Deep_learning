@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import numpy as np
+from dllab.xp import as_compute, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
 
 
 def sigmoid(z):
@@ -28,11 +28,11 @@ class BackpropNN:
         self.n_in, self.n_hidden = n_in, n_hidden
         self.lr, self.n_iters = learning_rate, n_iters
         self.activation_name = activation
-        rng = np.random.RandomState(seed)
-        self.W1 = rng.randn(n_in, n_hidden) * np.sqrt(1.0 / n_in)
-        self.b1 = np.zeros(n_hidden)
-        self.W2 = rng.randn(n_hidden, 1) * np.sqrt(1.0 / n_hidden)
-        self.b2 = np.zeros(1)
+        rng = host_rng(seed)
+        self.W1 = as_param(rng.randn(n_in, n_hidden) * (1.0 / n_in) ** 0.5)
+        self.b1 = as_param(np.zeros(n_hidden))
+        self.W2 = as_param(rng.randn(n_hidden, 1) * (1.0 / n_hidden) ** 0.5)
+        self.b2 = as_param(np.zeros(1))
         self.loss_: list[float] = []
         self.accuracy_: list[float] = []
 
@@ -43,6 +43,7 @@ class BackpropNN:
         return sigmoid_grad(z) if self.activation_name == "sigmoid" else relu_grad(z)
 
     def forward(self, X):
+        X = as_compute(X)
         z1 = X @ self.W1 + self.b1
         a1 = self._activate(z1)
         z2 = a1 @ self.W2 + self.b2
@@ -73,6 +74,12 @@ class BackpropNN:
         self.b2 -= self.lr * grads["db2"]
 
     def fit(self, X, y, verbose: bool = False, print_every: int = 500):
+        with prefer_cpu_if_small(getattr(X, "size", 0)):
+            return self._fit_steps(X, y, verbose, print_every)
+
+    def _fit_steps(self, X, y, verbose, print_every):
+        X, y = as_compute(X), as_compute(y)
+        cast_params((("W1", self, "W1"), ("b1", self, "b1"), ("W2", self, "W2"), ("b2", self, "b2")))
         for epoch in range(self.n_iters):
             cache = self.forward(X)
             loss = self.compute_loss(cache["a2"], y)
@@ -85,30 +92,29 @@ class BackpropNN:
         return self
 
     def predict_proba(self, X):
-        return self.forward(X)["a2"].ravel()
+        X = as_compute(X)
+        return asnumpy(self.forward(X)["a2"].ravel())
 
     def predict(self, X):
         return (self.predict_proba(X) >= 0.5).astype(int)
 
 
 def gradient_check(model: BackpropNN, X, y, eps: float = 1e-5):
+    X, y = as_compute(X), as_compute(y)
     cache = model.forward(X)
     grads = model.backward(X, y, cache)
     results = {}
     for name in ["W1", "b1", "W2", "b2"]:
         param = getattr(model, name)
         num_grad = np.zeros_like(param)
-        it = np.nditer(param, flags=["multi_index"])
-        while not it.finished:
-            idx = it.multi_index
-            old = param[idx]
+        for idx in __import__("numpy").ndindex(param.shape):
+            old = float(param[idx])
             param[idx] = old + eps
             loss_plus = model.compute_loss(model.forward(X)["a2"], y)
             param[idx] = old - eps
             loss_minus = model.compute_loss(model.forward(X)["a2"], y)
             param[idx] = old
             num_grad[idx] = (loss_plus - loss_minus) / (2 * eps)
-            it.iternext()
         ana_grad = grads["d" + name]
         rel_err = np.abs(num_grad - ana_grad) / (np.abs(num_grad) + np.abs(ana_grad) + 1e-8)
         results[name] = {

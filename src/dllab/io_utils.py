@@ -13,6 +13,9 @@ def _json_default(obj: Any):
         return obj.item()
     if isinstance(obj, np.ndarray):
         return obj.tolist()
+    getter = getattr(obj, "get", None)
+    if callable(getter) and type(obj).__module__.startswith("cupy"):
+        return np.asarray(getter()).tolist()
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 

@@ -8,6 +8,7 @@ from dllab.data_store import cached_dataset
 from dllab.datasets import generate_xor_dataset
 from dllab.io_utils import dump_metrics
 from dllab.mlp import MLP
+from dllab.xp import asnumpy
 from dllab.paths import ensure_artifacts
 from dllab.plotting import plt, save_figure
 
@@ -33,6 +34,7 @@ COLORS = {
 def activation_stats(model: MLP, X: np.ndarray) -> list[dict]:
     """Mean / std of each hidden activation right after init (or current weights)."""
     acts, _, _, _ = model._forward(X)
+    acts = [asnumpy(a) for a in acts]
     rows = []
     # acts[0]=input, acts[1..-2]=hidden, acts[-1]=sigmoid out
     for i, a in enumerate(acts[1:-1], start=1):
@@ -137,7 +139,7 @@ def run() -> dict:
         fresh = MLP(LAYER_SIZES, learning_rate=LR, n_iters=1, activation="relu", seed=SEED, init=scheme)
         acts, _, _, _ = fresh._forward(X)
         # middle hidden layer
-        mid = acts[2].ravel()
+        mid = asnumpy(acts[2]).ravel()
         ax.hist(mid, bins=40, color=COLORS[scheme], alpha=0.85, density=True)
         ax.set_title(f"{scheme}\nstd={mid.std():.3f}")
         ax.set_xlabel("a (layer 2)")

@@ -30,6 +30,8 @@ pip install -U pip
 pip install -e .
 ```
 
+有 CUDA 的机器会用 GPU 训练大矩阵（CuPy，float32）。不到约 26 万个数的小网络仍用 CPU，因为启动核函数比计算本身还慢。没有 CuPy 时全部用 NumPy。Jetson 上安装：`pip install cupy-cuda13x`。强制 CPU：`DLLAB_GPU=0`。感知机是逐样本更新，仍在 CPU 上跑。
+
 ## 单独跑某一个实验
 
 ```bash
