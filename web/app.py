@@ -64,7 +64,8 @@ def lesson_list() -> list[dict]:
             state = {**state, "status": "running"}
         out.append({
             "id": item["id"], "name": item["name"], "title": item["title"], "help": item["help"],
-            "doc": item["doc"], **state,
+            "doc": item["doc"], "gpu": item["gpu"], "gpu_label": item["gpu_label"], "gpu_note": item["gpu_note"],
+            **state,
         })
     return out
 
@@ -91,6 +92,7 @@ def lesson_page(lesson_id: str):
     notes = get_notes(item["id"])
     meta = {
         "id": item["id"], "name": item["name"], "title": item["title"], "help": item["help"], "doc": item["doc"],
+        "gpu": item["gpu"], "gpu_label": item["gpu_label"], "gpu_note": item["gpu_note"],
         "intro": notes.intro, "steps": notes.steps,
     }
     return render_template(

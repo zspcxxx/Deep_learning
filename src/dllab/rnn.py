@@ -6,7 +6,7 @@ step ("all", next-token prediction with an optional padding mask).
 """
 from __future__ import annotations
 
-from dllab.xp import as_compute, as_device, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
+from dllab.xp import as_compute, as_device, as_param, asnumpy, cast_params, host_np, host_rng, np, prefer_cpu_if_small
 
 
 def _sigmoid(z):
@@ -22,7 +22,7 @@ class RNNCell:
         self.H = hidden
         self.Wx = as_param(rng.randn(n_in, hidden) * (1.0 / n_in) ** 0.5, dtype)
         self.Wh = as_param(rng.randn(hidden, hidden) * (1.0 / hidden) ** 0.5, dtype)
-        self.b = as_param(np.zeros(hidden), dtype)
+        self.b = as_param(host_np.zeros(hidden), dtype)
 
     def init_state(self, n: int):
         return np.zeros((n, self.H), dtype=self.Wx.dtype)
@@ -67,7 +67,7 @@ class LSTMCell:
         self.H = hidden
         self.Wx = as_param(rng.randn(n_in, 4 * hidden) * (1.0 / n_in) ** 0.5, dtype)
         self.Wh = as_param(rng.randn(hidden, 4 * hidden) * (1.0 / hidden) ** 0.5, dtype)
-        self.b = as_param(np.zeros(4 * hidden), dtype)
+        self.b = as_param(host_np.zeros(4 * hidden), dtype)
         self.b[hidden : 2 * hidden] = forget_bias
 
     def init_state(self, n: int):
@@ -145,7 +145,7 @@ class GRUCell:
         self.H = hidden
         self.Wx = as_param(rng.randn(n_in, 3 * hidden) * (1.0 / n_in) ** 0.5, dtype)
         self.Wh = as_param(rng.randn(hidden, 3 * hidden) * (1.0 / hidden) ** 0.5, dtype)
-        self.b = as_param(np.zeros(3 * hidden), dtype)
+        self.b = as_param(host_np.zeros(3 * hidden), dtype)
         self.b[:hidden] = update_bias
 
     def init_state(self, n: int):
@@ -243,7 +243,7 @@ class RecurrentNet:
         else:
             raise ValueError(f"unknown cell {cell!r}")
         self.Wy = as_param(rng.randn(hidden, n_out) * (1.0 / hidden) ** 0.5, dtype)
-        self.by = as_param(np.zeros(n_out), dtype)
+        self.by = as_param(host_np.zeros(n_out), dtype)
         self.dtype = dtype
         self.loss_: list[float] = []
         self.grad_norm_: list[float] = []

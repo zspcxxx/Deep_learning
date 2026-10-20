@@ -124,9 +124,36 @@ LESSONS = [
 ]
 
 
+# Where each lesson computes when CuPy is available (measured on a Jetson Thor):
+# "train" = training runs on the GPU, "infer" = only batched forward passes for plots, "cpu" = never.
+GPU_LABELS = {
+    "train": "GPU 训练",
+    "infer": "仅推理用 GPU",
+    "cpu": "仅 CPU",
+}
+_GPU_USE = {
+    "01": ("cpu", "感知机逐个样本更新权重，没有大矩阵可算"),
+    "02": ("infer", "训练集只有几百个点，训练在 CPU；画决策边界时对 120×120 网格的批量前向推理在 GPU"),
+    "03-visual": ("cpu", "只手算一组 2 维固定数字"),
+    "03": ("cpu", "数据和网络都很小，训练在 CPU；梯度检查固定用 CPU float64"),
+    "04": ("cpu", "只画激活函数、Softmax 曲线和逐层梯度连乘，不训练网络"),
+    "05": ("infer", "训练集小，训练在 CPU；画决策边界时的批量前向推理在 GPU"),
+    "06": ("infer", "训练集小，训练在 CPU；统计初始激活值和画决策边界的前向推理在 GPU"),
+    "07": ("infer", "训练集小，训练在 CPU；画决策边界时的批量前向推理在 GPU"),
+    "08": ("infer", "训练集小，训练在 CPU；画决策边界时的批量前向推理在 GPU"),
+    "09": ("train", "MNIST 训练集 60000×784 超过阈值，训练和评估都在 GPU（float32）"),
+    "10": ("train", "CNN 和对照 MLP 的训练、评估都在 GPU（float32）"),
+    "11": ("train", "普通深层网络与残差网络的训练都在 GPU（float32）"),
+    "12": ("cpu", "循环网络参数少、逐时间步计算，GPU 启动开销大于计算量，全部在 CPU"),
+    "13": ("cpu", "编码器–解码器参数少、逐时间步计算，全部在 CPU"),
+    "14": ("cpu", "注意力网络只有几千个参数，全部在 CPU"),
+}
+
 for _item in LESSONS:
     # Run / summary name, e.g. "03_backprop_visual" (also the lesson file stem).
     _item["name"] = _item["module"].split(".", 1)[1]
+    _item["gpu"], _item["gpu_note"] = _GPU_USE[_item["id"]]
+    _item["gpu_label"] = GPU_LABELS[_item["gpu"]]
 
 
 def find_lesson(key: str) -> dict:

@@ -3,7 +3,10 @@
 <header class="hero">
   <h1>实验看板</h1>
   <p class="lead">每个实验都可以直接在这里运行。点进实验页面能看到实时运行日志、逐步出现的过程注解，以及运行结束后的结果解读和图表说明。
-    实验按 CPU 顺序执行，同一时间只运行一个。</p>
+    实验按顺序执行，同一时间只运行一个。每张卡片标出该实验的计算设备：
+    <span class="gpu-tag" data-gpu="train">GPU 训练</span> 训练在 GPU 上，
+    <span class="gpu-tag" data-gpu="infer">仅推理用 GPU</span> 训练在 CPU、画图前的批量推理在 GPU，
+    <span class="gpu-tag" data-gpu="cpu">仅 CPU</span> 不使用 GPU。</p>
   <div class="stats" id="stats"></div>
 </header>
 
@@ -12,6 +15,8 @@
   <article class="lesson-card" data-id="{{ l.id }}">
     <div class="card-head">
       <span class="num">{{ l.id }}</span>
+      <span class="gpu-tag" data-gpu="{{ l.gpu }}" title="{{ l.gpu_note }}">{{ l.gpu_label }}</span>
+      <span class="spacer"></span>
       <span class="badge" data-status="{{ l.status or 'none' }}"></span>
     </div>
     <h3><a href="/lesson/{{ l.id }}">{{ l.title }}</a></h3>

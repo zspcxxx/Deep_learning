@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dllab.xp import (
-    GPU, as_compute, as_device, as_param, asnumpy, cast_lists, gpu_enter, gpu_exit, host_rng, move_lists, np,
+    GPU, as_compute, as_device, as_param, asnumpy, cast_lists, gpu_enter, gpu_exit, host_np, host_rng, move_lists, np,
     prefer_cpu_if_small,
 )
 
@@ -65,7 +65,7 @@ class MLP:
         for i in range(len(self.layer_sizes) - 1):
             n_in, n_out = self.layer_sizes[i], self.layer_sizes[i + 1]
             if scheme == "zeros":
-                self.W.append(as_param(np.zeros((n_in, n_out))))
+                self.W.append(as_param(host_np.zeros((n_in, n_out))))
             elif scheme == "small":
                 self.W.append(as_param(rng.randn(n_in, n_out) * 0.01))
             elif scheme == "large":
@@ -76,12 +76,12 @@ class MLP:
                 self.W.append(as_param(rng.randn(n_in, n_out) * (1.0 / n_in) ** 0.5))
             else:
                 raise ValueError(f"Unknown init scheme: {self.init!r}")
-            self.b.append(as_param(np.zeros(n_out)))
+            self.b.append(as_param(host_np.zeros(n_out)))
             if self.batch_norm and i < n_hidden:
-                self.gamma.append(as_param(np.ones(n_out)))
-                self.beta.append(as_param(np.zeros(n_out)))
-                self.running_mean.append(as_param(np.zeros(n_out)))
-                self.running_var.append(as_param(np.ones(n_out)))
+                self.gamma.append(as_param(host_np.ones(n_out)))
+                self.beta.append(as_param(host_np.zeros(n_out)))
+                self.running_mean.append(as_param(host_np.zeros(n_out)))
+                self.running_var.append(as_param(host_np.ones(n_out)))
 
     @staticmethod
     def _relu(z):
@@ -411,7 +411,7 @@ class MulticlassMLP:
             # Use Xavier on the output classification head when hidden layers use He
             scheme = "xavier" if (i == n_hidden and self.init == "he") else self.init
             if scheme == "zeros":
-                w = as_param(np.zeros((n_in, n_out)), np.float64)
+                w = as_param(host_np.zeros((n_in, n_out)), np.float64)
             elif scheme == "small":
                 w = as_param(rng.randn(n_in, n_out) * 0.01)
             elif scheme == "large":
@@ -423,24 +423,24 @@ class MulticlassMLP:
             else:
                 raise ValueError(f"Unknown init scheme: {self.init!r}")
             self.W.append(w)
-            self.b.append(as_param(np.zeros(n_out), np.float64))
+            self.b.append(as_param(host_np.zeros(n_out), np.float64))
 
             if self.norm and i < n_hidden:
-                self.gamma.append(as_param(np.ones(n_out), np.float64))
-                self.beta.append(as_param(np.zeros(n_out), np.float64))
+                self.gamma.append(as_param(host_np.ones(n_out), np.float64))
+                self.beta.append(as_param(host_np.zeros(n_out), np.float64))
                 if self.norm == "bn":
-                    self.running_mean.append(as_param(np.zeros(n_out), np.float64))
-                    self.running_var.append(as_param(np.ones(n_out), np.float64))
+                    self.running_mean.append(as_param(host_np.zeros(n_out), np.float64))
+                    self.running_var.append(as_param(host_np.ones(n_out), np.float64))
 
         # Optimizer state
-        self._mW = [as_param(np.zeros_like(w)) for w in self.W]
-        self._vW = [as_param(np.zeros_like(w)) for w in self.W]
-        self._mb = [as_param(np.zeros_like(b)) for b in self.b]
-        self._vb = [as_param(np.zeros_like(b)) for b in self.b]
-        self._mgamma = [as_param(np.zeros_like(g)) for g in self.gamma]
-        self._vgamma = [as_param(np.zeros_like(g)) for g in self.gamma]
-        self._mbeta = [as_param(np.zeros_like(bt)) for bt in self.beta]
-        self._vbeta = [as_param(np.zeros_like(bt)) for bt in self.beta]
+        self._mW = [as_param(host_np.zeros_like(w)) for w in self.W]
+        self._vW = [as_param(host_np.zeros_like(w)) for w in self.W]
+        self._mb = [as_param(host_np.zeros_like(b)) for b in self.b]
+        self._vb = [as_param(host_np.zeros_like(b)) for b in self.b]
+        self._mgamma = [as_param(host_np.zeros_like(g)) for g in self.gamma]
+        self._vgamma = [as_param(host_np.zeros_like(g)) for g in self.gamma]
+        self._mbeta = [as_param(host_np.zeros_like(bt)) for bt in self.beta]
+        self._vbeta = [as_param(host_np.zeros_like(bt)) for bt in self.beta]
 
     def _activate(self, z):
         name = self.activation_name

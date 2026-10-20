@@ -90,7 +90,16 @@ nav.top .brand { font-weight: 800; color: var(--ink); }
   background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 16px 18px; box-shadow: var(--shadow);
 }
-.card-head { display: flex; justify-content: space-between; align-items: center; }
+.card-head { display: flex; gap: 8px; align-items: center; }
+
+.gpu-tag {
+  display: inline-block; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line);
+  font-size: 12px; font-weight: 700; white-space: nowrap; background: #eef2f7; color: var(--muted);
+}
+.gpu-tag[data-gpu="train"] { background: #e9f8e5; border-color: #9fd88f; color: #2f7d1e; }
+.gpu-tag[data-gpu="infer"] { background: var(--warn-soft); border-color: #f5c77a; color: var(--warn); }
+.gpu-line { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
+.verdict .gpu-used { margin-left: auto; color: var(--muted); font-size: 13px; }
 .lesson-card .num { font-family: var(--mono); color: var(--accent); font-weight: 700; }
 .lesson-card h3 { margin: 6px 0 4px; font-size: 1.1rem; }
 .lesson-card h3 a { color: var(--ink); }

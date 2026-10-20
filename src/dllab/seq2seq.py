@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as _numpy
 
 from dllab.rnn import GRUCell
-from dllab.xp import as_device, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
+from dllab.xp import as_device, as_param, asnumpy, cast_params, host_np, host_rng, np, prefer_cpu_if_small
 
 
 def _on_small(method):
@@ -48,7 +48,7 @@ class EncoderDecoder:
         self.encoder = GRUCell(vocab, hidden, rng, dtype, update_bias=update_bias)
         self.decoder = GRUCell(dec_in, hidden, rng, dtype, update_bias=update_bias)
         self.Wy = as_param(rng.randn(hidden, vocab) * (1.0 / hidden) ** 0.5, dtype)
-        self.by = as_param(np.zeros(vocab), dtype)
+        self.by = as_param(host_np.zeros(vocab), dtype)
         if attention:
             scale = (1.0 / hidden) ** 0.5
             self.Wa = as_param(rng.randn(hidden, hidden) * scale, dtype)

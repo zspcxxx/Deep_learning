@@ -14,6 +14,7 @@
       <div class="kicker">实验 {{ lesson.id }}</div>
       <h1>{{ lesson.title }}</h1>
       <p class="lead">{{ lesson.intro or lesson.help }}</p>
+      <p class="gpu-line"><span class="gpu-tag" data-gpu="{{ lesson.gpu }}">{{ lesson.gpu_label }}</span> {{ lesson.gpu_note }}</p>
     </div>
     <div class="controls">
       <span class="badge big" id="status" data-status="none"></span>

@@ -7,7 +7,7 @@ Generic layers, the training loop and gradient_check live in dllab.nn.
 from __future__ import annotations
 
 from dllab.nn import Dense, Dropout, Flatten, ReLU, Sequential, gradient_check
-from dllab.xp import as_param, asnumpy, gpu_enter, gpu_exit, host_rng, np
+from dllab.xp import as_param, asnumpy, gpu_enter, gpu_exit, host_np, host_rng, np
 
 __all__ = ["Conv2D", "MaxPool2", "SimpleCNN", "augment_flip_crop", "col2im", "gradient_check", "im2col"]
 
@@ -43,7 +43,7 @@ class Conv2D:
     def __init__(self, c_in: int, c_out: int, k: int, pad: int, rng, dtype):
         self.k, self.pad = k, pad
         self.W = as_param(rng.randn(c_out, c_in, k, k) * (2.0 / (c_in * k * k)) ** 0.5, dtype)
-        self.b = as_param(np.zeros(c_out), dtype)
+        self.b = as_param(host_np.zeros(c_out), dtype)
 
     def forward(self, x, training: bool):
         cols, ho, wo = im2col(x, self.k, self.pad)

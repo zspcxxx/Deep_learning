@@ -9,11 +9,16 @@ import traceback
 from datetime import datetime, timezone
 from importlib import import_module
 
-from dllab.catalog import LESSONS as CATALOG
+from dllab.catalog import GPU_LABELS, LESSONS as CATALOG
 from dllab.io_utils import dump_metrics
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT, ensure_artifacts
+from dllab.xp import describe_usage, gpu_usage, reset_gpu_usage
 
-LESSONS = [(item["name"], item["module"]) for item in CATALOG]
+LESSONS = [(item["name"], item["module"], item["gpu"]) for item in CATALOG]
+
+
+def gpu_label_mismatch(expected: str, usage: dict) -> bool:
+    return usage["available"] and usage["used"] != (expected != "cpu")
 
 
 def run_all() -> dict:
@@ -24,7 +29,7 @@ def run_all() -> dict:
         "lessons": [],
         "passed": True,
     }
-    for name, module_name in LESSONS:
+    for name, module_name, expected_gpu in LESSONS:
         print("\n" + "#" * 80)
         print(f"# {name}")
         print("#" * 80)
@@ -32,7 +37,9 @@ def run_all() -> dict:
         entry = {"name": name, "status": "running"}
         try:
             mod = import_module(module_name)
+            reset_gpu_usage()
             metrics = mod.run()
+            metrics["gpu"] = gpu_usage()
             elapsed = time.time() - t0
             passed = bool(metrics.get("passed", True))
             entry.update({
@@ -43,7 +50,9 @@ def run_all() -> dict:
             })
             if not passed:
                 summary["passed"] = False
-            print(f"[OK] {name} in {elapsed:.1f}s  passed={passed}")
+            print(f"[OK] {name} in {elapsed:.1f}s  passed={passed}  {describe_usage(metrics['gpu'])}")
+            if gpu_label_mismatch(expected_gpu, metrics["gpu"]):
+                print(f"[WARN] {name}: catalog 标注为 {GPU_LABELS[expected_gpu]}，与实测不符，请更新 src/dllab/catalog.py")
         except Exception as exc:
             elapsed = time.time() - t0
             entry.update({

@@ -25,6 +25,40 @@ GPU = _cupy is not None
 _GPU_MIN_ELEMENTS = 262_144
 _force_cpu = False
 
+_usage = {"allocations": 0, "peak_bytes": 0}
+if GPU:
+    _pool = _cupy.get_default_memory_pool()
+
+    def _counting_malloc(size):
+        mem = _pool.malloc(size)
+        _usage["allocations"] += 1
+        _usage["peak_bytes"] = max(_usage["peak_bytes"], _pool.used_bytes())
+        return mem
+
+    _cupy.cuda.set_allocator(_counting_malloc)
+
+
+def reset_gpu_usage() -> None:
+    _usage.update(allocations=0, peak_bytes=0)
+
+
+def gpu_usage() -> dict:
+    """What actually ran on the GPU since reset_gpu_usage(): every CuPy array allocation is counted."""
+    return {
+        "available": GPU,
+        "used": _usage["allocations"] > 0,
+        "allocations": _usage["allocations"],
+        "peak_mb": round(_usage["peak_bytes"] / 2**20, 1),
+    }
+
+
+def describe_usage(usage: dict) -> str:
+    if not usage["available"]:
+        return "GPU 使用: 否（本机没有可用的 CuPy / CUDA，全部用 NumPy 在 CPU 上计算）"
+    if not usage["used"]:
+        return f"GPU 使用: 否（没有超过 {_GPU_MIN_ELEMENTS} 个数的矩阵，全部在 CPU 上计算）"
+    return f"GPU 使用: 是（CuPy 显存分配 {usage['allocations']} 次，峰值 {usage['peak_mb']} MB）"
+
 
 def on_gpu() -> bool:
     return GPU and not _force_cpu
@@ -38,6 +72,8 @@ class _Np:
 
 
 np = _Np()
+# Initial parameters are built on the host; `np` here would allocate on the GPU first.
+host_np = _numpy
 
 
 class prefer_cpu_if_small:
@@ -58,6 +94,11 @@ class prefer_cpu_if_small:
         global _force_cpu
         _force_cpu = self._prev
         return False
+
+
+def force_cpu() -> prefer_cpu_if_small:
+    """NumPy float64 whatever the size: finite-difference checks are meaningless in float32."""
+    return prefer_cpu_if_small(0)
 
 
 def asnumpy(a):

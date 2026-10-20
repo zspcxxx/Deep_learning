@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import numpy as _numpy
 
-from dllab.xp import as_device, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
+from dllab.xp import as_device, as_param, asnumpy, cast_params, host_np, host_rng, np, prefer_cpu_if_small
 
 
 def _on_small(method):
@@ -70,9 +70,9 @@ class LookupNet:
         scale = (1.0 / d_model) ** 0.5
         in_dim = n_keys + n_values
         self.We = as_param(rng.randn(in_dim, d_model) * scale, dtype)
-        self.be = as_param(np.zeros(d_model), dtype)
+        self.be = as_param(host_np.zeros(d_model), dtype)
         self.Wq_in = as_param(rng.randn(n_keys, d_model) * scale, dtype)
-        self.bq_in = as_param(np.zeros(d_model), dtype)
+        self.bq_in = as_param(host_np.zeros(d_model), dtype)
         if mode == "attention":
             self.Wq = as_param(rng.randn(d_model, d_model) * scale, dtype)
             self.Wk = as_param(rng.randn(d_model, d_model) * scale, dtype)
@@ -80,7 +80,7 @@ class LookupNet:
             self.Wo = as_param(rng.randn(d_model, n_values) * scale, dtype)
         else:
             self.Wo = as_param(rng.randn(2 * d_model, n_values) * scale, dtype)
-        self.bo = as_param(np.zeros(n_values), dtype)
+        self.bo = as_param(host_np.zeros(n_values), dtype)
         self.loss_: list[float] = []
         self.grad_norm_: list[float] = []
         self._last_weights = None

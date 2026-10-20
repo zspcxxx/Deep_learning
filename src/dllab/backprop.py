@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dllab.xp import as_compute, as_param, asnumpy, cast_params, host_rng, np, prefer_cpu_if_small
+from dllab.xp import as_compute, as_param, asnumpy, cast_params, force_cpu, host_np, host_rng, np, prefer_cpu_if_small
 
 
 def sigmoid(z):
@@ -30,9 +30,9 @@ class BackpropNN:
         self.activation_name = activation
         rng = host_rng(seed)
         self.W1 = as_param(rng.randn(n_in, n_hidden) * (1.0 / n_in) ** 0.5)
-        self.b1 = as_param(np.zeros(n_hidden))
+        self.b1 = as_param(host_np.zeros(n_hidden))
         self.W2 = as_param(rng.randn(n_hidden, 1) * (1.0 / n_hidden) ** 0.5)
-        self.b2 = as_param(np.zeros(1))
+        self.b2 = as_param(host_np.zeros(1))
         self.loss_: list[float] = []
         self.accuracy_: list[float] = []
 
@@ -92,14 +92,20 @@ class BackpropNN:
         return self
 
     def predict_proba(self, X):
-        X = as_compute(X)
-        return asnumpy(self.forward(X)["a2"].ravel())
+        with prefer_cpu_if_small(getattr(X, "size", 0)):
+            X = as_compute(X)
+            return asnumpy(self.forward(X)["a2"].ravel())
 
     def predict(self, X):
         return (self.predict_proba(X) >= 0.5).astype(int)
 
 
 def gradient_check(model: BackpropNN, X, y, eps: float = 1e-5):
+    with force_cpu():
+        return _gradient_check(model, X, y, eps)
+
+
+def _gradient_check(model: BackpropNN, X, y, eps: float):
     X, y = as_compute(X), as_compute(y)
     cache = model.forward(X)
     grads = model.backward(X, y, cache)

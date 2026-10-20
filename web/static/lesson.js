@@ -87,6 +87,12 @@ function handleEvent(ev) {
   }
 }
 
+function gpuUsageText(g) {
+  if (!g.available) return "本次实测：未使用 GPU（本机没有可用的 CuPy / CUDA）";
+  if (!g.used) return "本次实测：未使用 GPU，全部在 CPU 上计算";
+  return `本次实测：使用了 GPU（显存分配 ${g.allocations} 次，峰值 ${g.peak_mb} MB）`;
+}
+
 function renderResult(rec) {
   setStatus(rec.status);
   stopTimer(rec.elapsed_sec);
@@ -98,6 +104,7 @@ function renderResult(rec) {
     h("span", { class: "badge big", dataset: { status: rec.status }, text: STATUS_TEXT[rec.status] || rec.status }),
     h("span", { text: VERDICT[rec.status] || "" }),
     rec.status === "error" ? h("code", { text: `returncode=${rec.returncode}` }) : null,
+    rec.result && rec.result.gpu ? h("span", { class: "gpu-used", text: gpuUsageText(rec.result.gpu) }) : null,
   ].filter(Boolean));
   $("verdict").dataset.status = rec.status;
 

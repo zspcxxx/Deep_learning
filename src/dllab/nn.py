@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as _numpy
 
 from dllab.xp import (
-    as_device, as_param, asnumpy, cast_params, gpu_enter, gpu_exit, host_rng, move_params, np,
+    as_device, as_param, asnumpy, cast_params, gpu_enter, gpu_exit, host_np, host_rng, move_params, np,
     on_gpu, prefer_cpu_if_small,
 )
 
@@ -48,7 +48,7 @@ class Dense:
         else:
             raise ValueError(f"unknown init {init!r}")
         self.W = as_param(w, dtype)
-        self.b = as_param(np.zeros(n_out), dtype)
+        self.b = as_param(host_np.zeros(n_out), dtype)
 
     def forward(self, x, training: bool):
         self._x = x

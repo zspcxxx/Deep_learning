@@ -41,14 +41,18 @@ def main() -> int:
         return 2
 
     print(f"\n=== {item['title']} ===")
-    from dllab.xp import describe
+    from dllab.xp import describe, describe_usage, gpu_usage, reset_gpu_usage
 
     print(describe())
+    print(f"本课计算设备: {item['gpu_label']}（{item['gpu_note']}）")
     print(f"原理介绍: docs/{item['doc']}")
     print("单独运行: python scripts/run_lesson.py " + item["id"])
     print()
     mod = import_module(item["module"])
+    reset_gpu_usage()
     metrics = mod.run()
+    metrics["gpu"] = gpu_usage()
+    print("\n" + describe_usage(metrics["gpu"]))
     if args.result_json:
         dump_metrics(args.result_json, metrics)
     passed = bool(metrics.get("passed", True))
