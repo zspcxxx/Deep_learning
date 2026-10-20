@@ -1,0 +1,170 @@
+{
+  "1409.0473_bahdanau_attention.pdf": {
+    "arxiv": "1409.0473",
+    "title": "Neural Machine Translation by Jointly Learning to Align and Translate",
+    "year": 2014,
+    "bytes": 444482,
+    "sha256": "84801c8410da51b449d379d2fa4939a416123f2c93991077a680f863026022a7"
+  },
+  "1706.03762_transformer.pdf": {
+    "arxiv": "1706.03762",
+    "title": "Attention Is All You Need",
+    "year": 2017,
+    "bytes": 2215244,
+    "sha256": "bdfaa68d8984f0dc02beaca527b76f207d99b666d31d1da728ee0728182df697"
+  },
+  "1810.04805_bert.pdf": {
+    "arxiv": "1810.04805",
+    "title": "BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding",
+    "year": 2018,
+    "bytes": 775166,
+    "sha256": "5692a5514787a8c6727b4ff3b726a3385798bc68e12138d1d4af83947e2acf6e"
+  },
+  "2005.14165_gpt3.pdf": {
+    "arxiv": "2005.14165",
+    "title": "Language Models are Few-Shot Learners",
+    "year": 2020,
+    "bytes": 6768044,
+    "sha256": "97fd272f1fdfc18677462d0292f5fbf26ca86b4d1b485c2dba03269b643a0e83"
+  },
+  "1910.10683_t5.pdf": {
+    "arxiv": "1910.10683",
+    "title": "Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer",
+    "year": 2019,
+    "bytes": 1190021,
+    "sha256": "ad07e47cedf437a4156419ce5d3076e08a3e59bbfd6dac7cc53df1009cdcbe7f"
+  },
+  "2010.11929_vit.pdf": {
+    "arxiv": "2010.11929",
+    "title": "An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale",
+    "year": 2020,
+    "bytes": 3743814,
+    "sha256": "8ce7b83971a14508ca711a27c875c9b6914c4f6767cf3150fb1ca6c07aa056d6"
+  },
+  "2302.13971_llama.pdf": {
+    "arxiv": "2302.13971",
+    "title": "LLaMA: Open and Efficient Foundation Language Models",
+    "year": 2023,
+    "bytes": 726566,
+    "sha256": "2e663675ae36ad12adb2f5a05281bac2747ecf8d23d92bedd9f937a89fee7136"
+  },
+  "1512.03385_resnet.pdf": {
+    "arxiv": "1512.03385",
+    "title": "Deep Residual Learning for Image Recognition",
+    "year": 2015,
+    "bytes": 819383,
+    "sha256": "1e0651b6810ecba34a3dbc5b5b0209226f889004607c1f203540a48d64e5a93a"
+  },
+  "1607.06450_layer_norm.pdf": {
+    "arxiv": "1607.06450",
+    "title": "Layer Normalization",
+    "year": 2016,
+    "bytes": 612446,
+    "sha256": "c464f839fb8d59f7fde92f9b4caa67c2d1f2f196b88f93fb60502249df0aaef7"
+  },
+  "2002.04745_pre_ln.pdf": {
+    "arxiv": "2002.04745",
+    "title": "On Layer Normalization in the Transformer Architecture",
+    "year": 2020,
+    "bytes": 779713,
+    "sha256": "e1fa0519ed8e09a676d56c983e99ead5effd7ef840ae86a186729287469bf883"
+  },
+  "1910.07467_rmsnorm.pdf": {
+    "arxiv": "1910.07467",
+    "title": "Root Mean Square Layer Normalization",
+    "year": 2019,
+    "bytes": 555031,
+    "sha256": "a38ab771022fc10525d2b6b23de40307b2ca7b2bf463f5219da6a0ba1c41225f"
+  },
+  "1606.08415_gelu.pdf": {
+    "arxiv": "1606.08415",
+    "title": "Gaussian Error Linear Units (GELUs)",
+    "year": 2016,
+    "bytes": 2767669,
+    "sha256": "ef59863c8e36d4b64c43ced6b399a95412b4f232ff1ce83e84cf10b8a786b6a8"
+  },
+  "2002.05202_swiglu.pdf": {
+    "arxiv": "2002.05202",
+    "title": "GLU Variants Improve Transformer",
+    "year": 2020,
+    "bytes": 109135,
+    "sha256": "7398ae8b163722a6b5410fb975722adbe6b5f6f9c7f1efa584f1c6b79eaa93e2"
+  },
+  "1803.02155_relative_position.pdf": {
+    "arxiv": "1803.02155",
+    "title": "Self-Attention with Relative Position Representations",
+    "year": 2018,
+    "bytes": 235373,
+    "sha256": "8086e2e5e139fd576631ce0ec4560c5ee66225bec260d631a3e8fe7f1f13d50b"
+  },
+  "2104.09864_rope.pdf": {
+    "arxiv": "2104.09864",
+    "title": "RoFormer: Enhanced Transformer with Rotary Position Embedding",
+    "year": 2021,
+    "bytes": 599289,
+    "sha256": "e9a481fbe1c8a20b7b1fa566b13102a1896c7829fa9a8b4c80528452a5ddaf79"
+  },
+  "2108.12409_alibi.pdf": {
+    "arxiv": "2108.12409",
+    "title": "Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation",
+    "year": 2021,
+    "bytes": 759030,
+    "sha256": "26223f5ecbc5983d0cb183c5fd61d09c814247a57b855b2b15717009664db70a"
+  },
+  "1412.6980_adam.pdf": {
+    "arxiv": "1412.6980",
+    "title": "Adam: A Method for Stochastic Optimization",
+    "year": 2014,
+    "bytes": 584641,
+    "sha256": "eab9c73ae2ceda884b94830bda99312254bac4806f6c9f045cbab90721ecda31"
+  },
+  "1711.05101_adamw.pdf": {
+    "arxiv": "1711.05101",
+    "title": "Decoupled Weight Decay Regularization",
+    "year": 2017,
+    "bytes": 6063896,
+    "sha256": "9d5af48931e773d6983d167e15c06ef594475b751c1f263827f5ed3c7a00d0d8"
+  },
+  "1512.00567_label_smoothing.pdf": {
+    "arxiv": "1512.00567",
+    "title": "Rethinking the Inception Architecture for Computer Vision",
+    "year": 2015,
+    "bytes": 517626,
+    "sha256": "80e30acdfa89bcb41a00c8b221cb9a1dc44256897e75af8762f171ec9dc77b85"
+  },
+  "1508.07909_bpe.pdf": {
+    "arxiv": "1508.07909",
+    "title": "Neural Machine Translation of Rare Words with Subword Units",
+    "year": 2015,
+    "bytes": 193216,
+    "sha256": "f4e5a6bbbe0d87459997fffe892f8be485e33903cc71f923c2884639fbf96401"
+  },
+  "2001.08361_scaling_laws.pdf": {
+    "arxiv": "2001.08361",
+    "title": "Scaling Laws for Neural Language Models",
+    "year": 2020,
+    "bytes": 2493004,
+    "sha256": "a41bd7877fd1a6bcbba096b2619618bd2f90e02488f2365644903eb2f7c6a494"
+  },
+  "1911.02150_mqa.pdf": {
+    "arxiv": "1911.02150",
+    "title": "Fast Transformer Decoding: One Write-Head is All You Need",
+    "year": 2019,
+    "bytes": 142627,
+    "sha256": "3250947d7be32f1a15531ab3062134edd431b9cf79e669d324ab5cbddd9a2094"
+  },
+  "2305.13245_gqa.pdf": {
+    "arxiv": "2305.13245",
+    "title": "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints",
+    "year": 2023,
+    "bytes": 269116,
+    "sha256": "ba9094fe73db9bf515d47ae8b2d502fee9d8a6c7b1327e197ddb160f4c63b94a"
+  },
+  "2205.14135_flash_attention.pdf": {
+    "arxiv": "2205.14135",
+    "title": "FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness",
+    "year": 2022,
+    "bytes": 2630825,
+    "sha256": "ca7f9fda10b90fc05dd291a3accc85e9c1a4a860b99b31928dab03ed3fcb14e4"
+  }
+}

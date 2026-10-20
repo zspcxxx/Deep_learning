@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>16 Transformer 技术全景与架构图 · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <div class="lesson-menu" data-lesson-menu></div>
+  <span class="spacer"></span>
+  <a href="/">实验看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#how">怎么读这一课</a></li>
+      <li><a href="#diagram">详细技术架构图</a></li>
+      <li><a href="#walk">一次前向传播</a></li>
+      <li><a href="#input">输入表示</a></li>
+      <li><a href="#attention">注意力</a></li>
+      <li><a href="#block">块结构</a></li>
+      <li><a href="#output">输出与损失</a></li>
+      <li><a href="#training">训练</a></li>
+      <li><a href="#inference">推理与效率</a></li>
+      <li><a href="#families">三种架构家族</a></li>
+      <li><a href="#project">和本项目的对照</a></li>
+      <li><a href="#refs">论文库（本地 PDF）</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">第 16 课</span>
+        <span class="chip teal">阅读课，无需运行</span>
+        <span class="chip amber">技术汇总 + 架构图</span>
+      </div>
+      <h1>Transformer 技术全景与详细架构图</h1>
+      <p class="lead">第 15 课亲手拼过一个小 Transformer。这一课不跑代码，把完整 Transformer 用到的每一项技术汇总起来：
+        原论文的编码器–解码器结构、注意力内部的每一步、块的两种写法、训练配方、推理加速，以及后来演化出的常见变体。
+        每一项都标出它在本项目哪一课里实现过，没实现过的也写清楚做什么、为什么。</p>
+    </div>
+
+    <h2 id="how">怎么读这一课</h2>
+    <ul>
+      <li>先看<a href="#diagram">架构图</a>：左边两栏是原论文的编码器（左）和解码器（右），数据<strong>自下而上</strong>流动；右侧六个面板是各模块的内部和变体。</li>
+      <li>图里每个框右上角的蓝色标签（如 <code>L14</code>）表示本项目第 14 课里亲手写过这个零件，可以回去对照代码。</li>
+      <li>再按下面的分类表逐项读。表格的“本项目”一列为空，说明本项目没有实现它，只需要知道它解决什么问题。</li>
+    </ul>
+
+    <h2 id="diagram">详细技术架构图</h2>
+    <div class="diagram" style="padding:8px;">
+      <a href="16_transformer_architecture.svg" target="_blank" title="在新标签页打开原尺寸大图">
+        <img src="16_transformer_architecture.svg" alt="Transformer 详细技术架构图：编码器–解码器主体，以及多头注意力、掩码、Post-LN 与 Pre-LN、前馈与归一化变体、位置编码、训练与推理六个放大面板" style="display:block;width:100%;height:auto;">
+      </a>
+      <div class="cap">点击图片在新标签页打开原尺寸（1720 × 1630）大图。图由 <code>scripts/build_transformer_diagram.py</code> 生成。</div>
+    </div>
+
+    <h2 id="walk">一次前向传播：张量形状怎么变</h2>
+    <p>以翻译为例。B 是批大小，S、T 是源句和目标句长度，d 是模型宽度（原论文 512），h 是头数（8），V 是词表大小。</p>
+    <pre class="formula">源句 token id         (B, S)
+  → 嵌入 × √d + 位置编码 (B, S, d)
+  → N 个编码器层         (B, S, d)        每层：自注意力 → Add & Norm → FFN → Add & Norm
+  = memory              (B, S, d)
+
+目标句右移一位         (B, T)            &lt;bos&gt; y₁ … y_(T−1)，训练时用真值（teacher forcing）
+  → 嵌入 × √d + 位置编码 (B, T, d)
+  → N 个解码器层         (B, T, d)        每层：带因果掩码的自注意力 → 交叉注意力(K、V = memory) → FFN
+  → Linear d → V        (B, T, V)        logits
+  → softmax             (B, T, V)        每个位置一个词表分布，和真值 y₁ … y_T 算交叉熵
+
+注意力内部：Q、K、V   (B, h, T, d/h)    分数 Q Kᵀ (B, h, T, T)；交叉注意力是 (B, h, T, S)</pre>
+
+    <h2 id="input">输入表示</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>分词（BPE / WordPiece / SentencePiece）</td><td>把文本切成子词，控制词表大小，又不会遇到没见过的词</td><td>从字符开始反复合并最常见的相邻片段</td><td>— （L12 用字符级）</td></tr>
+      <tr><td>Token 嵌入</td><td>把 id 变成 d 维向量</td><td>查表 E（V × d）；原论文再乘 √d，让嵌入和位置编码尺度相当</td><td>L14、L15</td></tr>
+      <tr><td>正弦位置编码</td><td>告诉模型每个 token 在第几位</td><td>PE(pos, 2i) = sin(pos / 10000^(2i/d))，奇数维用 cos；不用学，能外推到更长序列</td><td>—</td></tr>
+      <tr><td>可学习位置向量</td><td>同上</td><td>每个位置一个可训练向量，加在嵌入上（BERT、GPT-2）</td><td>L15</td></tr>
+      <tr><td>RoPE 旋转位置编码</td><td>只关心相对距离</td><td>按位置把 Q、K 的每对维度旋转一个角度，点积只依赖两者的距离（LLaMA、Qwen 等）</td><td>—</td></tr>
+      <tr><td>ALiBi</td><td>不加位置向量也能分先后</td><td>给注意力分数加一个与距离成正比的负偏置，越远越小</td><td>—</td></tr>
+      <tr><td>权重共享（weight tying）</td><td>省参数、输入输出用同一套“词义”</td><td>输出层 Linear 的权重 = 嵌入矩阵的转置</td><td>—</td></tr>
+    </table>
+    <div class="callout warn"><strong>为什么必须有位置信息</strong>注意力只按内容打分，把输入顺序打乱，每个位置的输出只是跟着换位置。第 15 课去掉位置向量后，排序任务的整句准确率从 99.6% 掉到 0%。</div>
+
+    <h2 id="attention">注意力</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>缩放点积注意力</td><td>每个位置按相关程度，从所有位置取信息</td><td>softmax(Q Kᵀ / √d_k + M) V</td><td>L14、L15</td></tr>
+      <tr><td>Q / K / V 线性投影</td><td>同一个输入扮演“提问”“被找”“被取走的内容”三种角色</td><td>Q = XW_Q，K = XW_K，V = XW_V</td><td>L14、L15</td></tr>
+      <tr><td>除以 √d_k</td><td>防止 softmax 过尖、梯度消失</td><td>点积方差约为 d_k，除以 √d_k 拉回 1 左右</td><td>L14</td></tr>
+      <tr><td>多头注意力</td><td>同时关注不同方面（语法、指代、位置…）</td><td>把 d 维切成 h 份各算一次注意力，拼接后乘 W_O；总计算量和单头差不多</td><td>L15</td></tr>
+      <tr><td>padding mask</td><td>让补齐用的空位不参与注意力</td><td>对应分数加 −∞，softmax 后权重为 0</td><td>—</td></tr>
+      <tr><td>因果掩码</td><td>生成第 t 个词时不能偷看后面</td><td>上三角位置加 −∞；训练时所有位置仍能并行计算</td><td>—</td></tr>
+      <tr><td>交叉注意力</td><td>解码器“回头看”源句</td><td>Q 来自解码器，K、V 来自编码器输出</td><td>L13（加性注意力版本）</td></tr>
+      <tr><td>自注意力</td><td>序列内部互相看</td><td>Q、K、V 都来自同一序列</td><td>L15</td></tr>
+    </table>
+
+    <h2 id="block">块结构</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>残差连接</td><td>让几十层也能训练，梯度可沿捷径原样回传</td><td>每个子层都写成 x + Sublayer(x)</td><td>L11、L15</td></tr>
+      <tr><td>LayerNorm</td><td>把每个 token 的特征拉回稳定尺度，不依赖批大小</td><td>γ · (x − μ) / σ + β，μ、σ 在特征维上算</td><td>L07（BN）、L09、L15</td></tr>
+      <tr><td>Post-LN</td><td>原论文写法</td><td>LayerNorm(x + Sublayer(x))；深层时依赖 warmup 才稳</td><td>—</td></tr>
+      <tr><td>Pre-LN</td><td>现在的主流写法</td><td>x + Sublayer(LayerNorm(x))，最后再加一个 LayerNorm；更容易训练深层</td><td>L15</td></tr>
+      <tr><td>RMSNorm</td><td>更省的归一化</td><td>γ · x / RMS(x)，去掉减均值和 β（T5、LLaMA）</td><td>L09</td></tr>
+      <tr><td>逐位置前馈网络 FFN</td><td>每个位置各自做一次非线性变换，参数大多在这里</td><td>W₂ φ(W₁x + b₁) + b₂，宽度 d_ff ≈ 4d，所有位置共享权重</td><td>L02、L15</td></tr>
+      <tr><td>激活函数</td><td>提供非线性</td><td>ReLU（原论文）、GELU（BERT、GPT）</td><td>L04、L09、L15</td></tr>
+      <tr><td>SwiGLU</td><td>门控 FFN，效果更好</td><td>(Swish(xW₁) ⊙ xV) W₂，d_ff ≈ 8d/3 以保持参数量（PaLM、LLaMA）</td><td>—</td></tr>
+    </table>
+    <div class="callout ok"><strong>第 15 课的消融结论</strong>在 4 层、学习率 0.1 的设置下，去掉残差、去掉 LayerNorm 都会让排序任务整句准确率掉到 1% 以下；FFN 去掉激活函数影响很小，因为 softmax 注意力本身就是非线性的。</div>
+
+    <h2 id="output">输出与损失</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>输出线性层 + softmax</td><td>把每个位置的向量变成词表上的概率</td><td>logits = h W + b，再 softmax</td><td>L01、L09、L15</td></tr>
+      <tr><td>交叉熵</td><td>衡量预测分布和真值差多少</td><td>−log p(真值)，对所有位置取平均</td><td>L09、L15</td></tr>
+      <tr><td>Teacher forcing</td><td>训练时并行算所有位置的损失</td><td>解码器输入用右移一位的真值，而不是自己上一步的预测</td><td>L13</td></tr>
+      <tr><td>Label smoothing</td><td>防止模型对答案过度自信</td><td>真值概率设为 1 − ε，其余均分 ε（原论文 ε = 0.1）</td><td>—</td></tr>
+    </table>
+
+    <h2 id="training">训练</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>初始化</td><td>让每层输出一开始就有合适的尺度</td><td>权重 ~ N(0, 1/fan_in) 或 Xavier；GPT-2 还会按层数缩小残差分支的初始化</td><td>L06、L11、L15</td></tr>
+      <tr><td>Adam / AdamW</td><td>按每个参数的梯度历史自适应调步长</td><td>原论文 β₁ = 0.9、β₂ = 0.98、ε = 1e-9；AdamW 把权重衰减和梯度更新分开</td><td>L09、L15</td></tr>
+      <tr><td>Warmup + 衰减</td><td>开头用小步子，避免 Adam 统计量还不准时被推飞</td><td>原论文 lr = d^(−0.5) · min(step^(−0.5), step · warmup^(−1.5))，warmup 4000 步；现在常用线性 warmup + 余弦衰减</td><td>L05、L09、L15</td></tr>
+      <tr><td>Dropout</td><td>正则化</td><td>加在嵌入和每个子层输出上，原论文 p = 0.1；还有注意力权重上的 dropout</td><td>L08、L09、L15</td></tr>
+      <tr><td>权重衰减</td><td>正则化</td><td>每步把权重乘以 (1 − lr · λ)，通常不对 LayerNorm 和偏置做</td><td>L08、L09、L15</td></tr>
+      <tr><td>梯度裁剪</td><td>防止偶发的大梯度把参数推飞</td><td>全局梯度范数超过阈值就整体缩小</td><td>L12、L15</td></tr>
+      <tr><td>早停与验证集</td><td>选泛化最好的那一步</td><td>按验证损失回滚到最好的参数</td><td>L08、L09、L15</td></tr>
+      <tr><td>混合精度</td><td>省显存、加速</td><td>前向反向用 fp16 / bf16，主权重用 fp32；fp16 要配合 loss scaling</td><td>— （本项目 GPU 路径用 float32）</td></tr>
+    </table>
+
+    <h2 id="inference">推理与效率</h2>
+    <table>
+      <tr><th>技术</th><th>做什么</th><th>关键做法</th><th>本项目</th></tr>
+      <tr><td>自回归解码</td><td>一个一个生成</td><td>把已生成的序列喂回解码器，取下一个位置的分布</td><td>L12、L13</td></tr>
+      <tr><td>Greedy / Beam search</td><td>选输出序列</td><td>greedy 每步取最大；beam 同时保留 k 条最好的候选（翻译常用 4–5）</td><td>L13（greedy）</td></tr>
+      <tr><td>温度 / top-k / top-p 采样</td><td>让生成更多样</td><td>logits 除以温度；只在概率最高的 k 个或累计概率 p 以内抽样</td><td>L12（温度）</td></tr>
+      <tr><td>KV cache</td><td>生成时不重复计算历史</td><td>把每层已算过的 K、V 存起来，新 token 只算自己的 Q、K、V</td><td>—</td></tr>
+      <tr><td>MQA / GQA</td><td>缩小 KV cache</td><td>多个查询头共用一组（或几组）K、V 头</td><td>—</td></tr>
+      <tr><td>FlashAttention</td><td>省显存、加速长序列</td><td>分块计算 softmax，不把 T × T 的分数矩阵整个写到显存</td><td>—</td></tr>
+      <tr><td>复杂度</td><td>长序列为什么贵</td><td>自注意力的时间约 O(T² · d)，显存约 O(T²)；FFN 是 O(T · d²)</td><td>—</td></tr>
+    </table>
+
+    <h2 id="families">三种架构家族</h2>
+    <div class="card-grid">
+      <div class="card"><h4>Encoder-only（BERT、RoBERTa）</h4><p>只用编码器栈，双向注意力。预训练时遮住部分 token 再预测（MLM）。适合分类、抽取、检索向量。</p></div>
+      <div class="card"><h4>Decoder-only（GPT、LLaMA）</h4><p>只用解码器栈，去掉交叉注意力，用因果掩码预测下一个 token。今天的大语言模型几乎都是这种。第 15 课的模型结构上属于编码器栈（没有因果掩码）。</p></div>
+      <div class="card"><h4>Encoder–decoder（原论文、T5）</h4><p>编码器读完整个输入，解码器边生成边用交叉注意力回看。适合翻译、摘要。第 13 课的 seq2seq 是同一思路的 RNN 版本。</p></div>
+    </div>
+
+    <h2 id="project">和本项目的对照</h2>
+    <table>
+      <tr><th></th><th>原论文（base）</th><th>本项目第 15 课</th></tr>
+      <tr><td>结构</td><td>编码器 6 层 + 解码器 6 层</td><td>只有编码器 4 层（排序任务输入输出等长）</td></tr>
+      <tr><td>宽度</td><td>d = 512，h = 8，d_ff = 2048</td><td>d = 32，h = 4，d_ff = 64</td></tr>
+      <tr><td>位置信息</td><td>正弦位置编码</td><td>可学习位置向量</td></tr>
+      <tr><td>归一化</td><td>Post-LN</td><td>Pre-LN</td></tr>
+      <tr><td>激活</td><td>ReLU</td><td>GELU</td></tr>
+      <tr><td>优化</td><td>Adam + 反平方根学习率，warmup 4000 步</td><td>AdamW + 线性 warmup 100 步 + 余弦，梯度裁剪</td></tr>
+      <tr><td>正则</td><td>Dropout 0.1，label smoothing 0.1</td><td>Dropout 0.1，权重衰减 0.01，早停</td></tr>
+      <tr><td>参数量</td><td>约 6500 万</td><td>约 3.5 万</td></tr>
+      <tr><td>反向传播</td><td>框架自动求导</td><td>全部手写，并做梯度检查（L03）</td></tr>
+    </table>
+    <p>把第 15 课的模型扩成完整的编码器–解码器，需要补上的只有三样：解码器里的因果掩码、交叉注意力（Q 来自解码器，K、V 来自编码器输出），以及推理时的逐个生成。这三样分别在第 13、14 课里出现过它们的原型。</p>
+
+    <h2 id="refs">论文库</h2>
+    <p>下面 24 篇论文已下载到本地 <code>docs/papers/</code>，点“本地 PDF”直接在浏览器里看；“arXiv”是原始页面。建议先读原论文，再按需要读对应的零件。</p>
+    <div class="callout warn"><strong>本地没有 PDF？</strong>PDF 不随仓库提交（arXiv 论文大多不允许转载）。运行 <code>python scripts/fetch_papers.py</code> 会从 arXiv 下载缺失的文件，并按 <code>docs/papers/manifest.json</code> 里的 SHA-256 校验。</div>
+    <table class="papers">
+      <tr><th>类别</th><th>年份</th><th>论文</th><th>讲了什么</th><th>本项目</th><th>阅读</th></tr>
+      <tr><td rowspan="2">原论文与前身</td><td>2014</td><td>Bahdanau et al., Neural Machine Translation by Jointly Learning to Align and Translate</td><td>第一次在 seq2seq 里加注意力，解码时回看源句</td><td>L13</td><td><a href="papers/1409.0473_bahdanau_attention.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1409.0473" target="_blank">arXiv</a></td></tr>
+      <tr><td>2017</td><td><strong>Vaswani et al., Attention Is All You Need</strong></td><td>Transformer 原论文：只用注意力，不要循环和卷积。本课架构图主体照它画</td><td>L15、L16</td><td><a href="papers/1706.03762_transformer.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1706.03762" target="_blank">arXiv</a></td></tr>
+      <tr><td rowspan="5">架构家族</td><td>2018</td><td>Devlin et al., BERT</td><td>encoder-only，掩码语言模型预训练</td><td>—</td><td><a href="papers/1810.04805_bert.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1810.04805" target="_blank">arXiv</a></td></tr>
+      <tr><td>2019</td><td>Raffel et al., T5: Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer</td><td>encoder–decoder，把所有任务都写成“文本到文本”</td><td>—</td><td><a href="papers/1910.10683_t5.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1910.10683" target="_blank">arXiv</a></td></tr>
+      <tr><td>2020</td><td>Brown et al., GPT-3: Language Models are Few-Shot Learners</td><td>decoder-only 放大到 1750 亿参数，出现少样本学习能力</td><td>—</td><td><a href="papers/2005.14165_gpt3.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2005.14165" target="_blank">arXiv</a></td></tr>
+      <tr><td>2020</td><td>Dosovitskiy et al., ViT: An Image is Worth 16x16 Words</td><td>把图像切成小块当 token，Transformer 用到视觉上</td><td>L10 对照</td><td><a href="papers/2010.11929_vit.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2010.11929" target="_blank">arXiv</a></td></tr>
+      <tr><td>2023</td><td>Touvron et al., LLaMA</td><td>现代大模型的典型配方：Pre-RMSNorm、SwiGLU、RoPE</td><td>—</td><td><a href="papers/2302.13971_llama.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2302.13971" target="_blank">arXiv</a></td></tr>
+      <tr><td rowspan="6">块结构</td><td>2015</td><td>He et al., Deep Residual Learning for Image Recognition</td><td>残差连接，让上百层网络可以训练</td><td>L11</td><td><a href="papers/1512.03385_resnet.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1512.03385" target="_blank">arXiv</a></td></tr>
+      <tr><td>2016</td><td>Ba et al., Layer Normalization</td><td>按特征维归一化，不依赖批大小</td><td>L07、L09、L15</td><td><a href="papers/1607.06450_layer_norm.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1607.06450" target="_blank">arXiv</a></td></tr>
+      <tr><td>2020</td><td>Xiong et al., On Layer Normalization in the Transformer Architecture</td><td>分析 Post-LN 为什么离不开 warmup，Pre-LN 为什么更好训</td><td>L15</td><td><a href="papers/2002.04745_pre_ln.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2002.04745" target="_blank">arXiv</a></td></tr>
+      <tr><td>2019</td><td>Zhang &amp; Sennrich, Root Mean Square Layer Normalization</td><td>RMSNorm：去掉减均值，更省</td><td>L09</td><td><a href="papers/1910.07467_rmsnorm.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1910.07467" target="_blank">arXiv</a></td></tr>
+      <tr><td>2016</td><td>Hendrycks &amp; Gimpel, Gaussian Error Linear Units (GELUs)</td><td>GELU 激活，BERT、GPT 的默认选择</td><td>L04、L09、L15</td><td><a href="papers/1606.08415_gelu.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1606.08415" target="_blank">arXiv</a></td></tr>
+      <tr><td>2020</td><td>Shazeer, GLU Variants Improve Transformer</td><td>SwiGLU 等门控前馈网络</td><td>—</td><td><a href="papers/2002.05202_swiglu.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2002.05202" target="_blank">arXiv</a></td></tr>
+      <tr><td rowspan="3">位置信息</td><td>2018</td><td>Shaw et al., Self-Attention with Relative Position Representations</td><td>用相对位置代替绝对位置</td><td>—</td><td><a href="papers/1803.02155_relative_position.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1803.02155" target="_blank">arXiv</a></td></tr>
+      <tr><td>2021</td><td>Su et al., RoFormer: Rotary Position Embedding</td><td>RoPE：旋转 Q、K，点积只依赖相对距离</td><td>—</td><td><a href="papers/2104.09864_rope.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2104.09864" target="_blank">arXiv</a></td></tr>
+      <tr><td>2021</td><td>Press et al., Train Short, Test Long (ALiBi)</td><td>给注意力分数加距离偏置，训练短、推理长</td><td>—</td><td><a href="papers/2108.12409_alibi.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2108.12409" target="_blank">arXiv</a></td></tr>
+      <tr><td rowspan="5">训练</td><td>2014</td><td>Kingma &amp; Ba, Adam: A Method for Stochastic Optimization</td><td>Adam 优化器</td><td>L09、L12–L15</td><td><a href="papers/1412.6980_adam.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1412.6980" target="_blank">arXiv</a></td></tr>
+      <tr><td>2017</td><td>Loshchilov &amp; Hutter, Decoupled Weight Decay Regularization</td><td>AdamW：权重衰减和梯度更新分开</td><td>L09、L15</td><td><a href="papers/1711.05101_adamw.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1711.05101" target="_blank">arXiv</a></td></tr>
+      <tr><td>2015</td><td>Szegedy et al., Rethinking the Inception Architecture</td><td>提出 label smoothing（Transformer 原论文沿用）</td><td>—</td><td><a href="papers/1512.00567_label_smoothing.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1512.00567" target="_blank">arXiv</a></td></tr>
+      <tr><td>2015</td><td>Sennrich et al., Neural Machine Translation of Rare Words with Subword Units</td><td>BPE 子词分词</td><td>—</td><td><a href="papers/1508.07909_bpe.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1508.07909" target="_blank">arXiv</a></td></tr>
+      <tr><td>2020</td><td>Kaplan et al., Scaling Laws for Neural Language Models</td><td>损失随参数量、数据量、计算量按幂律下降</td><td>—</td><td><a href="papers/2001.08361_scaling_laws.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2001.08361" target="_blank">arXiv</a></td></tr>
+      <tr><td rowspan="3">推理与效率</td><td>2019</td><td>Shazeer, Fast Transformer Decoding: One Write-Head is All You Need</td><td>MQA：所有头共享一组 K、V，KV cache 变小</td><td>—</td><td><a href="papers/1911.02150_mqa.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/1911.02150" target="_blank">arXiv</a></td></tr>
+      <tr><td>2023</td><td>Ainslie et al., GQA</td><td>分组共享 K、V，介于多头和 MQA 之间</td><td>—</td><td><a href="papers/2305.13245_gqa.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2305.13245" target="_blank">arXiv</a></td></tr>
+      <tr><td>2022</td><td>Dao et al., FlashAttention</td><td>分块计算注意力，不存 T × T 矩阵，省显存又更快</td><td>—</td><td><a href="papers/2205.14135_flash_attention.pdf" target="_blank">本地 PDF</a> · <a href="https://arxiv.org/abs/2205.14135" target="_blank">arXiv</a></td></tr>
+    </table>
+
+    <div class="footer-nav">
+      <a href="15_transformer.html">← 15 综合串联</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+<script src="learn-nav.js"></script>
+</body>
+</html>

@@ -23,6 +23,7 @@
     ]],
     ["综合", [
       ["15_transformer.html", "15", "综合串联：从零组装 Transformer", "前 14 课的零件拼起来，再一个个拿掉"],
+      ["16_transformer_architecture.html", "16", "Transformer 技术全景与架构图", "阅读课：技术汇总 + 详细架构图"],
     ]],
   ];
 

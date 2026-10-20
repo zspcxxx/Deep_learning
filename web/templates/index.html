@@ -31,6 +31,22 @@
     </div>
   </article>
   {% endfor %}
+  {% for r in readings %}
+  <article class="lesson-card reading">
+    <div class="card-head">
+      <span class="num">{{ r.id }}</span>
+      <span class="gpu-tag">阅读课</span>
+      <span class="spacer"></span>
+      <span class="badge">无需运行</span>
+    </div>
+    <h3><a href="/learn/{{ r.doc }}">{{ r.title }}</a></h3>
+    <p class="help">{{ r.help }}</p>
+    <p class="meta"></p>
+    <div class="actions">
+      <a class="btn primary" href="/learn/{{ r.doc }}">阅读</a>
+    </div>
+  </article>
+  {% endfor %}
 </section>
 <p class="footnote">命令行同样可用：<code>python scripts/run_lesson.py 05</code> 跑单个实验，<code>python scripts/run_verify.py</code> 顺序跑完全部。
   <a href="/api/summary">summary JSON</a></p>

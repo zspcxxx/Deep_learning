@@ -7,3 +7,6 @@ artifacts/
 *.log
 .pytest_cache/
 .DS_Store
+# arXiv PDFs are fetched by scripts/fetch_papers.py; only the manifest is committed.
+docs/papers/*.pdf
+docs/papers/*.part

@@ -22,6 +22,7 @@
 | 13 编码器–解码器 Seq2Seq | [docs/13_seq2seq.html](docs/13_seq2seq.html) | `/learn/13` | `python scripts/run_lesson.py 13` |
 | 14 注意力机制 | [docs/14_attention.html](docs/14_attention.html) | `/learn/14` | `python scripts/run_lesson.py 14` |
 | 15 综合串联：从零组装 Transformer | [docs/15_transformer.html](docs/15_transformer.html) | `/learn/15` | `python scripts/run_lesson.py 15` |
+| 16 Transformer 技术全景与架构图（阅读课） | [docs/16_transformer_architecture.html](docs/16_transformer_architecture.html) | `/learn/16` | 无需运行 |
 
 ## 环境（一次）
 
@@ -155,4 +156,6 @@ python scripts/run_verify.py
 - `lessons/`：每个实验的剧本
 - `web/`：`app.py`（看板 / 实验页 / API）、`templates/`、`static/`
 - `scripts/run_lesson.py`：单实验启动器（`--result-json` 供网页读取指标）
-- `scripts/run_verify.py`：顺序跑完全部
+- `scripts/run_verify.py`：顺序跑完全部（第 16 课是阅读课，不在其中）
+- `scripts/build_transformer_diagram.py`：重新生成第 16 课的架构图 `docs/16_transformer_architecture.svg`
+- `scripts/fetch_papers.py`：把第 16 课论文库的 24 篇 Transformer 相关论文从 arXiv 下载到 `docs/papers/`，按 `manifest.json` 校验 SHA-256（`--verify` 只校验不下载）。PDF 不随仓库提交，网页里在 `/learn/papers/<文件名>.pdf` 查看

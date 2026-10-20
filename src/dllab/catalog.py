@@ -132,6 +132,22 @@ LESSONS = [
 ]
 
 
+# Reading-only lessons: a doc page, nothing to run, so they stay out of LESSONS (run_verify, summary).
+READINGS = [
+    {
+        "id": "16",
+        "title": "Transformer 技术全景与架构图",
+        "doc": "16_transformer_architecture.html",
+        "help": "不需要运行：汇总 Transformer 用到的全部技术，附详细技术架构图，并标出每个零件在本项目哪一课实现过",
+    },
+]
+
+
+def find_reading(key: str) -> dict | None:
+    needle = key.strip().lower()
+    return next((r for r in READINGS if needle in (r["id"], r["doc"])), None)
+
+
 # Where each lesson computes when CuPy is available (measured on a Jetson Thor):
 # "train" = training runs on the GPU, "infer" = only batched forward passes for plots, "cpu" = never.
 GPU_LABELS = {

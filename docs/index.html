@@ -31,7 +31,7 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">入门路径</span>
-        <span class="chip teal">15 个实验</span>
+        <span class="chip teal">15 个实验 + 1 节阅读课</span>
         <span class="chip amber">可读 + 可跑</span>
       </div>
       <h1>从一条直线到识别手写数字</h1>
@@ -102,9 +102,13 @@
         <rect x="920" y="130" width="130" height="54" rx="10" fill="#1f6feb" stroke="#1f6feb" stroke-width="2"/>
         <text x="985" y="152" text-anchor="middle" font-size="12" fill="#ffffff" font-family="Noto Sans SC,sans-serif">15 Transformer</text>
         <text x="985" y="170" text-anchor="middle" font-size="10" fill="#dbeafe" font-family="Noto Sans SC,sans-serif">全部串起来</text>
+        <line x1="1050" y1="157" x2="1070" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="1072" y="130" width="130" height="54" rx="10" fill="#ffffff" stroke="#1f6feb" stroke-width="2" stroke-dasharray="5 4"/>
+        <text x="1137" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">16 技术全景</text>
+        <text x="1137" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">阅读课 · 架构图</text>
         <path d="M1137,74 L1137,102 L73,102 L73,128" fill="none" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
       </svg>
-      <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。第 15 课把前面所有零件拼成一个 Transformer，适合最后用来复习。</div>
+      <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。第 15 课把前面所有零件拼成一个 Transformer，适合最后用来复习；第 16 课是阅读课，汇总完整 Transformer 的全部技术并附详细架构图。</div>
     </div>
 
     <div class="lesson-cards">
@@ -183,6 +187,11 @@
         <h3>综合串联：从零组装 Transformer</h3>
         <p>用前 14 课的零件拼出一个小 Transformer 给数字排序；再一次拿掉一个零件，位置编码、残差、LayerNorm、warmup、初始化各自重现它那一课的失败。</p>
       </a>
+      <a class="lesson-card" href="16_transformer_architecture.html">
+        <div class="num">READING 16 · 无需运行</div>
+        <h3>Transformer 技术全景与架构图</h3>
+        <p>汇总完整 Transformer 用到的全部技术：编码器–解码器、注意力内部、Post-LN / Pre-LN、训练配方、KV cache 等，附详细技术架构图，并标出每个零件出自本项目哪一课。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -240,7 +249,7 @@ python lessons/15_transformer.py</pre>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">十五个实验分别带走什么</h2>
+    <h2 id="map">每一课分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -258,6 +267,7 @@ python lessons/15_transformer.py</pre>
       <tr><td><a href="13_seq2seq.html">13</a></td><td>编码器–解码器</td><td>Teacher forcing；固定向量装不下长序列，注意力按位置对齐源序列</td><td>约 4 分钟</td></tr>
       <tr><td><a href="14_attention.html">14</a></td><td>注意力机制</td><td>Q/K/V 缩放点积按键查值；记忆变长后平均池化失败，注意力仍能找对</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="15_transformer.html">15</a></td><td>综合串联：Transformer</td><td>前 14 课的零件各在模型何处；拿掉位置编码 / 残差 / LayerNorm / warmup 或放大初始化，各自重现对应那一课的失败</td><td>约 1.5 分钟</td></tr>
+      <tr><td><a href="16_transformer_architecture.html">16</a></td><td>Transformer 技术全景（阅读课）</td><td>完整 Transformer 的全部技术汇总与详细架构图；原论文、现代变体与本项目实现逐项对照</td><td>无需运行</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

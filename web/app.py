@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import json
 
-from flask import Flask, Response, abort, jsonify, render_template, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory
 
-from dllab.catalog import LESSONS, find_lesson
+from dllab.catalog import LESSONS, READINGS, find_lesson, find_reading
 from dllab.notes import get_notes
 from dllab.paths import ARTIFACTS_DIR, PROJECT_ROOT
 from dllab.runner import RUNS_DIR, SUMMARY_PATH, BusyError, RunManager
@@ -78,11 +78,14 @@ def run_brief(run) -> dict | None:
 
 @app.get("/")
 def index():
-    return render_template("index.html", lessons=lesson_list())
+    return render_template("index.html", lessons=lesson_list(), readings=READINGS)
 
 
 @app.get("/lesson/<lesson_id>")
 def lesson_page(lesson_id: str):
+    reading = find_reading(lesson_id)
+    if reading:
+        return redirect(f"/learn/{reading['doc']}")
     try:
         item = find_lesson(lesson_id)
     except KeyError:
@@ -196,11 +199,19 @@ def learn_index():
     return send_from_directory(DOCS, "index.html")
 
 
+@app.get("/learn/papers/<name>")
+def learn_paper(name: str):
+    papers = DOCS / "papers"
+    if not name.endswith(".pdf") or not (papers / name).is_file():
+        abort(404)
+    return send_from_directory(papers, name, mimetype="application/pdf")
+
+
 @app.get("/learn/<key>")
 def learn_page(key: str):
     # Support both short keys (/learn/01) and relative filenames
     # (/learn/01_perceptron.html) so docs work via Flask and file://.
-    if key.endswith((".html", ".css", ".js")):
+    if key.endswith((".html", ".css", ".js", ".svg")):
         name = key
     else:
         name = DOC_FILES.get(key)
@@ -208,7 +219,10 @@ def learn_page(key: str):
             try:
                 name = find_lesson(key)["doc"]
             except KeyError:
-                abort(404)
+                reading = find_reading(key)
+                if reading is None:
+                    abort(404)
+                name = reading["doc"]
     path = (DOCS / name).resolve()
     if DOCS.resolve() not in path.parents and path != DOCS.resolve():
         abort(403)
