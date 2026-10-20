@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GQA：从多头检查点训练广义多查询 Transformer</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
+  a { color: #1f6feb; }
+</style>
+</head>
+<body>
+<p class="banner">中文导读译自 arXiv:2305.13245（对照 <a href="../en/2305.13245_gqa.pdf">英文 PDF</a>）。MQA 与多头之间的插值；开源 LLM 推理常用。</p>
+<h1>GQA：从多头检查点训练广义多查询 Transformer</h1>
+<p class="subtitle">GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints</p>
+<div class="authors">Joshua Ainslie*，James Lee-Thorp*，Michiel de Jong*，Yury Zemlyanskiy，Federico Lebrón，Sumit Sanghai（Google Research）</div>
+<div class="abstract"><h2>摘要</h2><p>MQA 只用一组 KV 头，显著加速解码，但可能掉点，且不一定值得单独再训推理专用模型。本文：（1）给出配方，用约原预训练 5% 的算力，把已有多头检查点上训成 MQA；（2）提出分组查询注意力（GQA）——KV 头数介于 1 与查询头数之间。上训后的 GQA 质量接近多头，速度接近 MQA。</p></div>
+<h2>1 从 MHA 到 MQA 再到 GQA</h2>
+<p><b>MHA</b>：\(n_q=n_{kv}=h\)。<b>MQA</b>：\(n_{kv}=1\)。<b>GQA</b>：查询头分成 \(G\) 组，每组共享一套 KV，故 \(1&lt;n_{kv}&lt;h\)。是带宽与质量的连续谱。</p>
+<h2>2 上训（uptraining）</h2>
+<p>不必从零开始：从 MHA 检查点出发，将 KV 头平均/投影到目标结构，再继续训一小段（约 5% 原算力），即可得到快推理变体。适合已有 T5、LLaMA 等多头权重的团队。</p>
+<h2>3 实践含义</h2>
+<p>常见部署是「训练用 MHA、推理用 GQA」。课程手写多头足够；知道推理配置有这一档即可。与 MQA、FlashAttention 同属「让解码便宜」的工具箱。</p>
+<h2>参考文献（节选）</h2>
+<div class="refs"><p>Joshua Ainslie et al. GQA. arXiv:2305.13245, 2023.</p><p>Noam Shazeer. Fast Transformer Decoding (MQA). 2019.</p><p>Hugo Touvron et al. LLaMA. 2023.</p></div>
+<hr>
+<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与关键数字，并非逐句全译。图表未嵌入；完整证明、表格与附录见英文原文。</p>
+</body>
+</html>

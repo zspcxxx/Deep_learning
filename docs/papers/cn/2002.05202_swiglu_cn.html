@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GLU 变体改进 Transformer</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
+  a { color: #1f6feb; }
+</style>
+</head>
+<body>
+<p class="banner">中文导读译自 arXiv:2002.05202（对照 <a href="../en/2002.05202_swiglu.pdf">英文 PDF</a>）。LLaMA 等采用 SwiGLU；对照第 15 课 GELU-FFN。</p>
+<h1>GLU 变体改进 Transformer</h1>
+<p class="subtitle">GLU Variants Improve Transformer</p>
+<div class="authors">Noam Shazeer，Google</div>
+<div class="abstract"><h2>摘要</h2><p>门控线性单元（GLU）是两路线性投影的逐元素乘积，其中一路先过激活（经典为 sigmoid）。把激活换成其他函数可得多种变体。本文将它们用于 Transformer 的位置前馈子层，发现相对常用的 ReLU 或 GELU，若干变体能提升质量。</p></div>
+<h2>1 标准 FFN</h2>
+<p>原版：\(\mathrm{FFN}(x)=\max(0,xW_1+b_1)W_2+b_2\)。T5 等实现常去掉偏置。也有人把中间激活换成 GELU 或 Swish。</p>
+<h2>2 GLU 族</h2>
+<p>Dauphin et al. 的 GLU：\(\sigma(xW)\otimes(xV)\)。变体包括 Bilinear（无激活）、ReGLU、GEGLU、SwiGLU（Swish 门控）等。嵌入 Transformer 时写成三矩阵形式，例如</p>
+<div class="formula">\[\mathrm{FFN_{SwiGLU}}(x)=(\mathrm{Swish}(xW)\otimes xV)W_2.\]</div>
+<p>为保持参数量与算力与双矩阵 FFN 相当，把中间宽度 \(d_{ff}\) 缩小（文中约乘 \(2/3\)）。</p>
+<h2>3 T5 实验</h2>
+<p>在 T5 base 的填段预训练上，GEGLU / SwiGLU 的 held-out 困惑度优于 ReLU / GELU / Swish；更长训练后优势仍在。说明收益来自门控结构，而非暗中加宽。</p>
+<h2>4 影响</h2>
+<p>LLaMA 公开写明使用 SwiGLU；许多开源 LLM 的 MLP 即「上投影分两路、SiLU/Swish 门控、再下投影」。与第 04 课激活函数、第 15 课 FFN 对照即可。</p>
+<h2>参考文献（节选）</h2>
+<div class="refs"><p>Noam Shazeer. GLU Variants Improve Transformer. arXiv:2002.05202, 2020.</p><p>Yann N. Dauphin et al. Language Modeling with Gated Convolutional Networks. ICML, 2017.</p><p>Colin Raffel et al. T5. 2019.</p></div>
+<hr>
+<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与关键数字，并非逐句全译。图表未嵌入；完整证明、表格与附录见英文原文。</p>
+</body>
+</html>

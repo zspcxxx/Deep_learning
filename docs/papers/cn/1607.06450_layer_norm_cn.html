@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>层归一化（Layer Normalization）</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 1100px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; width: 100%; font-size: 0.85em; }
+  th, td { border: 1px solid #999; padding: 0.3em 0.4em; text-align: center; vertical-align: top; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figure { margin: 1.2em 0; }
+  figcaption { font-size: 0.95em; color: #444; }
+  blockquote { margin: 0.8em 0; padding: 0.3em 1em; border-left: 3px solid #ccc; color: #333; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  code { font-family: Consolas, monospace; }
+  sup { font-size: 0.75em; }
+  .small { font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>层归一化</h1>
+
+<div class="authors">
+Jimmy Lei Ba，University of Toronto，jimmy@psi.toronto.edu<br>
+Jamie Ryan Kiros，University of Toronto，rikros@cs.toronto.edu<br>
+Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.edu
+</div>
+
+<div class="abstract">
+<h2>摘要</h2>
+<p>训练最先进的深度神经网络在计算上非常昂贵。减少训练时间的一种方法是归一化神经元的激活。最近提出的一种称为批归一化（batch normalization）的技术，使用一个神经元在训练小批量样本上的汇总输入分布来计算均值和方差，然后用这些统计量归一化该神经元在每个训练样本上的汇总输入。这显著减少了前馈神经网络的训练时间。然而，批归一化的效果依赖于小批量大小，并且如何将其应用于循环神经网络并不显然。在本文中，我们通过从单个训练样本上某一层中所有神经元的汇总输入计算用于归一化的均值和方差，将批归一化转置为层归一化（layer normalization）。与批归一化一样，我们也为每个神经元赋予各自的自适应偏置和增益，它们在归一化之后、非线性之前应用。与批归一化不同，层归一化在训练和测试时执行完全相同的计算。通过在每个时间步分别计算归一化统计量，它也可以直接应用于循环神经网络。层归一化在稳定循环网络中的隐藏状态动态方面非常有效。实证上，我们表明与先前发表的技术相比，层归一化可以显著减少训练时间。</p>
+</div>
+
+<h2>1 引言</h2>
+<p>使用某种版本随机梯度下降训练的深度神经网络已被证明在计算机视觉 [Krizhevsky et al., 2012] 和语音处理 [Hinton et al., 2012] 的各种监督学习任务上大幅优于先前方法。但最先进的深度神经网络通常需要很多天训练。通过在不同机器上为不同训练样本子集计算梯度，或将神经网络本身拆分到多台机器上 [Dean et al., 2012]，可以加速学习，但这可能需要大量通信和复杂软件。随着并行化程度增加，它还往往导致收益迅速递减。一种正交方法是修改神经网络前向传播中执行的计算，使学习更容易。最近，批归一化 [Ioffe and Szegedy, 2015] 被提出通过在深度神经网络中加入额外归一化阶段来减少训练时间。该归一化使用每个汇总输入在训练数据上的均值和标准差对其进行标准化。使用批归一化训练的前馈神经网络即使使用简单 SGD 也收敛更快。除了训练时间改进之外，来自批量统计的随机性在训练期间起到正则化器的作用。</p>
+<p>尽管简单，批归一化需要维护汇总输入统计量的运行平均。在固定深度的前馈网络中，为每个隐藏层分别存储统计量是直接的。然而，循环神经网络（RNN）中循环神经元的汇总输入通常随序列长度变化，因此将批归一化应用于 RNN 似乎需要为不同时间步使用不同统计量。此外，批归一化不能应用于在线学习任务，也不能应用于小批量必须很小的极大规模分布式模型。</p>
+<p>本文引入层归一化，一种简单的归一化方法，用于提高各种神经网络模型的训练速度。与批归一化不同，所提出的方法直接从隐藏层内神经元的汇总输入估计归一化统计量，因此归一化不会在训练样本之间引入任何新依赖。我们表明层归一化对 RNN 很有效，并改善了若干现有 RNN 模型的训练时间和泛化性能。</p>
+
+<h2>2 背景</h2>
+<p>前馈神经网络是从输入模式 \(\mathbf{x}\) 到输出向量 \(y\) 的非线性映射。考虑深度前馈神经网络中的第 \(l\) 个隐藏层，令 \(a^{l}\) 为该层神经元汇总输入的向量表示。汇总输入通过权重矩阵 \(W^{l}\) 和自底向上输入 \(h^{l}\) 的线性投影计算如下：</p>
+<div class="formula">\(a_{i}^{l}=w_{i}^{l\top}h^{l},\qquad h_{i}^{l+1}=f(a_{i}^{l}+b_{i}^{l})\)&nbsp;&nbsp;&nbsp;&nbsp;(1)</div>
+<p>其中 \(f(\cdot)\) 是逐元素非线性函数，\(w_{i}^{l}\) 是第 \(i\) 个隐藏单元的输入权重，\(b_{i}^{l}\) 是标量偏置参数。神经网络中的参数使用基于梯度的优化算法学习，梯度通过反向传播计算。</p>
+<p>深度学习的一个挑战是：某一层权重对应的梯度高度依赖于前一层神经元的输出，特别是当这些输出以高度相关的方式变化时。批归一化 [Ioffe and Szegedy, 2015] 被提出以减少这种不良的“协变量偏移”。该方法在训练样本上归一化每个隐藏单元的汇总输入。具体地，对于第 \(l\) 层第 \(i\) 个汇总输入，批归一化方法根据数据分布下的方差重新缩放汇总输入：</p>
+<div class="formula">\(\bar{a}_i^l=\frac{g_i^l}{\sigma_i^l}(a_i^l-\mu_i^l),\qquad \mu_i^l=\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}[a_i^l],\qquad \sigma_i^l=\sqrt{\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}[(a_i^l-\mu_i^l)^2]}\)&nbsp;&nbsp;&nbsp;&nbsp;(2)</div>
+<p>其中 \(\bar{a}_{i}^{l}\) 是第 \(l\) 层第 \(i\) 个隐藏单元归一化后的汇总输入，\(g_{i}\) 是在非线性激活函数之前缩放归一化激活的增益参数。注意期望是在整个训练数据分布下取的。通常精确计算式（2）中的期望是不切实际的，因为这需要用当前权重集对整个训练数据集进行前向传播。取而代之，\(\mu\) 和 \(\sigma\) 使用当前小批量中的经验样本估计。这限制了小批量大小，并且难以应用于循环神经网络。</p>
+
+<h2>3 层归一化</h2>
+<p>我们现在考虑层归一化方法，它旨在克服批归一化的缺点。</p>
+<p>注意，一层输出的变化往往会导致下一层汇总输入的高度相关变化，尤其是对于输出可能大幅变化的 ReLU 单元。这表明可以通过固定每一层内汇总输入的均值和方差来减少“协变量偏移”问题。因此，我们在同一层的所有隐藏单元上计算层归一化统计量如下：</p>
+<div class="formula">\(\mu^{l}=\frac{1}{H}\sum_{i=1}^{H}a_{i}^{l},\qquad \sigma^{l}=\sqrt{\frac{1}{H}\sum_{i=1}^{H}(a_{i}^{l}-\mu^{l})^{2}}\)&nbsp;&nbsp;&nbsp;&nbsp;(3)</div>
+<p>其中 \(H\) 表示一层中的隐藏单元数。式（2）与式（3）的区别在于：在层归一化下，一层中所有隐藏单元共享相同的归一化项 \(\mu\) 和 \(\sigma\)，但不同训练样本具有不同的归一化项。与批归一化不同，层归一化不对小批量大小施加任何约束，并且可以在批大小为 1 的纯在线模式下使用。</p>
+
+<h3>3.1 层归一化循环神经网络</h3>
+<p>最近的序列到序列模型 [Sutskever et al., 2014] 利用紧凑的循环神经网络解决自然语言处理中的序列预测问题。NLP 任务中常见不同训练样本具有不同句子长度。这在 RNN 中很容易处理，因为每个时间步使用相同权重。但当我们以显而易见的方式将批归一化应用于 RNN 时，需要为序列中的每个时间步计算和存储单独统计量。如果测试序列比任何训练序列都长，这就有问题。层归一化没有这个问题，因为其归一化项只依赖于当前时间步一层的汇总输入。它也只有一组在所有时间步共享的增益和偏置参数。</p>
+<p>在标准 RNN 中，循环层的汇总输入由当前输入 \(\mathbf{x}^t\) 和先前隐藏状态向量 \(\mathbf{h}^{t-1}\) 计算，即 \(\mathbf{a}^t=W_{hh}h^{t-1}+W_{xh}\mathbf{x}^t\)。层归一化循环层使用类似式（3）的额外归一化项重新中心化和重新缩放其激活：</p>
+<div class="formula">\(\mathbf{h}^t=f\left[\frac{\mathbf{g}}{\sigma^t}\odot(\mathbf{a}^t-\mu^t)+\mathbf{b}\right],\quad \mu^t=\frac{1}{H}\sum_{i=1}^{H}a_i^t,\quad \sigma^t=\sqrt{\frac{1}{H}\sum_{i=1}^{H}(a_i^t-\mu^t)^2}\)&nbsp;&nbsp;&nbsp;&nbsp;(4)</div>
+<p>其中 \(W_{hh}\) 是循环隐藏到隐藏权重，\(W_{xh}\) 是自底向上输入到隐藏权重。\(\odot\) 是两个向量的逐元素乘法。\(\mathbf{b}\) 和 \(\mathbf{g}\) 定义为与 \(\mathbf{h}^t\) 同维的偏置和增益参数。</p>
+<p>在标准 RNN 中，循环单元汇总输入的平均幅度倾向于在每个时间步增长或收缩，导致梯度爆炸或消失。在层归一化 RNN 中，归一化项使其对一层所有汇总输入的重新缩放具有不变性，从而产生稳定得多的隐藏到隐藏动态。</p>
+
+<h2>4 相关工作</h2>
+<p>批归一化此前已被扩展到循环神经网络 [Laurent et al., 2015, Amodei et al., 2015, Cooijmans et al., 2016]。先前工作 [Cooijmans et al., 2016] 表明，循环批归一化的最佳性能通过为每个时间步保留独立归一化统计量获得。作者表明，将循环批归一化层中的增益参数初始化为 0.1 会对模型最终性能产生显著差异。我们的工作也与权重归一化 [Salimans and Kingma, 2016] 相关。在权重归一化中，不使用方差，而是使用输入权重的 L2 范数来归一化神经元的汇总输入。应用权重归一化或使用期望统计量的批归一化，等价于对原始前馈神经网络采用不同参数化。ReLU 网络中的重新参数化已在 Path-normalized SGD [Neyshabur et al., 2015] 中研究。然而，我们提出的层归一化方法不是原始神经网络的重新参数化。因此，层归一化模型具有与其他方法不同的不变性质，我们将在下一节研究。</p>
+
+<h2>5 分析</h2>
+<p>在本节中，我们研究不同归一化方案的不变性质。</p>
+
+<h3>5.1 权重和数据变换下的不变性</h3>
+<p>所提出的层归一化与批归一化和权重归一化相关。尽管它们的归一化标量计算方式不同，这些方法可以总结为通过两个标量 \(\mu\) 和 \(\sigma\) 归一化神经元的汇总输入 \(a_{i}\)。它们在归一化之后还为每个神经元学习自适应偏置 \(b\) 和增益 \(g\)。</p>
+<div class="formula">\(h_{i}=f(\frac{g_{i}}{\sigma_{i}}(a_{i}-\mu_{i})+b_{i})\)&nbsp;&nbsp;&nbsp;&nbsp;(5)</div>
+<p>注意，对于层归一化和批归一化，\(\mu\) 和 \(\sigma\) 分别根据式（2）和式（3）计算。在权重归一化中，\(\mu\) 为 0，且 \(\sigma=\|w\|_2\)。</p>
+
+<table>
+<caption>表 1：归一化方法下的不变性质。</caption>
+<thead>
+<tr><th></th><th>权重矩阵重缩放</th><th>权重矩阵重中心化</th><th>权重向量重缩放</th><th>数据集重缩放</th><th>数据集重中心化</th><th>单个训练样本重缩放</th></tr>
+</thead>
+<tbody>
+<tr><td>批归一化</td><td>不变</td><td>否</td><td>不变</td><td>不变</td><td>不变</td><td>否</td></tr>
+<tr><td>权重归一化</td><td>不变</td><td>否</td><td>不变</td><td>否</td><td>否</td><td>否</td></tr>
+<tr><td>层归一化</td><td>不变</td><td>不变</td><td>否</td><td>不变</td><td>否</td><td>不变</td></tr>
+</tbody>
+</table>
+
+<p>表 1 强调了三种归一化方法的以下不变性结果。</p>
+<p><b>权重重缩放和重中心化：</b>首先观察，在批归一化和权重归一化下，对单个神经元输入权重 \(w_{i}\) 的任何重缩放都不会影响神经元归一化后的汇总输入。准确地说，在批归一化和权重归一化下，如果权重向量按 \(\delta\) 缩放，两个标量 \(\mu\) 和 \(\sigma\) 也会按 \(\delta\) 缩放。归一化后的汇总输入在缩放前后保持不变。因此批归一化和权重归一化对权重的重缩放不变。另一方面，层归一化对单个权重向量的单独缩放不变。相反，层归一化对所有权重矩阵的整体缩放不变，并且对权重矩阵中所有输入权重的平移不变。设有两组模型参数 \(\theta\)、\(\theta'\)，其权重矩阵 \(W\) 和 \(W'\) 相差一个缩放因子 \(\delta\)，且 \(W'\) 中所有输入权重还平移一个常数向量 \(\gamma\)，即 \(W'=\delta W+\mathbf{1}\gamma^{\top}\)。在层归一化下，两个模型有效计算相同输出：</p>
+<div class="formula">\(\begin{aligned}\mathbf{h}'&=f(\frac{\mathbf{g}}{\sigma'}(W'\mathbf{x}-\mu')+\mathbf{b})\\&=f(\frac{\mathbf{g}}{\sigma'}((\delta W+\mathbf{1}\gamma^{\top})\mathbf{x}-\mu')+\mathbf{b})\\&=f(\frac{\mathbf{g}}{\sigma'}(W\mathbf{x}-\mu)+\mathbf{b})=\mathbf{h}.\end{aligned}\)&nbsp;&nbsp;&nbsp;&nbsp;(6)</div>
+<p>注意，如果只在权重之前对输入应用归一化，模型将不会对权重的重缩放和重中心化不变。</p>
+<p><b>数据重缩放和重中心化：</b>我们可以通过验证神经元汇总输入在这些变化下保持不变，表明所有归一化方法对数据集重缩放不变。此外，层归一化对单个训练样本的重缩放不变，因为式（3）中的归一化标量 \(\mu\) 和 \(\sigma\) 只依赖当前输入数据。令 \(\mathbf{x}'\) 为将 \(\mathbf{x}\) 按 \(\delta\) 重缩放得到的新数据点。则我们有</p>
+<div class="formula">\(h_i'=f(\frac{g_i}{\delta'}(w_i^{\top}\mathbf{x}'-\mu')+b_i)=f(\frac{g_i}{\delta\sigma}(\delta w_i^{\top}\mathbf{x}-\delta\mu)+b_i)=h_i.\)&nbsp;&nbsp;&nbsp;&nbsp;(7)</div>
+<p>很容易看出，在层归一化下，重缩放单个数据点不会改变模型预测。与层归一化中权重矩阵重中心化类似，我们也可以表明批归一化对数据集重中心化不变。</p>
+
+<h3>5.2 学习期间参数空间的几何</h3>
+<p>我们已经研究了模型预测在参数重中心化和重缩放下的不变性。然而，即使模型表达相同的底层函数，学习在不同参数化下也可能表现非常不同。在本节中，我们通过参数空间的几何和流形分析学习行为。我们表明归一化标量 \(\sigma\) 可以隐式降低学习率并使学习更稳定。</p>
+
+<h4>5.2.1 黎曼度量</h4>
+<p>统计模型中的可学习参数形成一个光滑流形，由模型所有可能的输入—输出关系组成。对于输出为概率分布的模型，衡量该流形上两点分离的一种自然方式是它们模型输出分布之间的 Kullback-Leibler 散度。在 KL 散度度量下，参数空间是一个黎曼流形。</p>
+<p>黎曼流形的曲率完全由其黎曼度量捕获，其二次形式记为 \(ds^{2}\)。即参数空间中某点切空间中的无穷小距离。直观上，它衡量模型输出沿参数空间切方向的变化。KL 下的黎曼度量此前已被研究 [Amari, 1998]，并表明在二阶泰勒展开下可用 Fisher 信息矩阵很好地近似：</p>
+<div class="formula">\(ds^{2}=\mathrm{D}_{\mathrm{KL}}[P(y|\mathbf{x};\theta)\|P(y|\mathbf{x};\theta+\delta)]\approx\frac{1}{2}\delta^{\top}F(\theta)\delta,\)</div>
+<div class="formula">\(F(\theta)=\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x}),y\sim P(y|\mathbf{x})}\left[\frac{\partial\log P(y|\mathbf{x};\theta)}{\partial\theta}\frac{\partial\log P(y|\mathbf{x};\theta)}{\partial\theta}^{\top}\right],\)&nbsp;&nbsp;&nbsp;&nbsp;(9)</div>
+<p>其中 \(\delta\) 是对参数的小改变。上述黎曼度量给出了参数空间的几何视角。以下对黎曼度量的分析为归一化方法如何帮助训练神经网络提供了一些洞见。</p>
+
+<h4>5.2.2 归一化广义线性模型的几何</h4>
+<p>我们将几何分析集中在广义线性模型上。以下分析结果可以很容易地通过 Fisher 信息矩阵的块对角近似应用于理解深度神经网络，其中每个块对应单个神经元的参数。</p>
+<p>广义线性模型（GLM）可以看作使用权重向量 \(w\) 和偏置标量 \(b\) 参数化来自指数族的输出分布。为与前几节一致，GLM 的对数似然可以用汇总输入 \(a\) 写成如下：</p>
+<div class="formula">\(\log P(y|\mathbf{x};w,b)=\frac{(a+b)y-\eta(a+b)}{\phi}+c(y,\phi),\)</div>
+<div class="formula">\(\mathbb{E}[y|\mathbf{x}]=f(a+b)=f(w^{\top}\mathbf{x}+b),\quad \mathrm{Var}[y|\mathbf{x}]=\phi f'(a+b),\)&nbsp;&nbsp;&nbsp;&nbsp;(10)</div>
+<p>其中 \(f(\cdot)\) 是传递函数，相当于神经网络中的非线性，\(f'(\cdot)\) 是传递函数的导数，\(\eta(\cdot)\) 是实值函数，\(c(\cdot)\) 是对数配分函数。\(\phi\) 是缩放输出方差的常数。假设 \(H\) 维输出向量 \(\mathbf{y}=[y_1,y_2,\dots,y_H]\) 使用 \(H\) 个独立 GLM 建模，且 \(\log P(\mathbf{y}|\mathbf{x};W,\mathbf{b})=\sum_{i=1}^{H}\log P(y_i|\mathbf{x};w_i,b_i)\)。令 \(W\) 为权重矩阵，其行是各个 GLM 的权重向量，\(\mathbf{b}\) 表示长度为 \(H\) 的偏置向量，\(\mathrm{vec}(\cdot)\) 表示 Kronecker 向量算子。多维 GLM 关于其参数 \(\theta=[w_1^{\top},b_1,\dots,w_H^{\top},b_H]^{\top}=\mathrm{vec}([W,\mathbf{b}]^{\top})\) 的 Fisher 信息矩阵就是数据特征与输出协方差矩阵的期望 Kronecker 积：</p>
+<div class="formula">\(F(\theta)=\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\left[\frac{\mathrm{Cov}[y|\mathbf{x}]}{\phi^2}\otimes\begin{bmatrix}\mathbf{x}\mathbf{x}^{\top}&\mathbf{x}\\\mathbf{x}^{\top}&1\end{bmatrix}\right].\)&nbsp;&nbsp;&nbsp;&nbsp;(12)</div>
+<p>我们通过 \(\mu\) 和 \(\sigma\) 将归一化方法应用于原始模型中的汇总输入 \(a\)，得到归一化 GLM。不失一般性，我们将 \(\bar{F}\) 记为带额外增益参数 \(\theta=\mathrm{vec}([W,\mathbf{b},\mathbf{g}]^{\top})\) 的归一化多维 GLM 下的 Fisher 信息矩阵：</p>
+<div class="formula">\(\bar{F}(\theta)=\begin{bmatrix}\bar{F}_{11}&\dots&\bar{F}_{1H}\\\vdots&\ddots&\vdots\\\bar{F}_{H1}&\dots&\bar{F}_{HH}\end{bmatrix},\quad \bar{F}_{ij}=\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\left[\frac{\mathrm{Cov}[y_i,y_j|\mathbf{x}]}{\phi^2}\right]\begin{bmatrix}\frac{g_i g_j}{\sigma_i\sigma_j}\chi_i\chi_j^{\top}&\chi_i\frac{g_i}{\sigma_i}&\chi_i\frac{g_i(a_j-\mu_j)}{\sigma_i\sigma_j}\\\chi_j^{\top}\frac{g_j}{\sigma_j}&1&\frac{g_j-\mu_j}{\sigma_j}\\\chi_j^{\top}\frac{g_j(a_i-\mu_i)}{\sigma_i\sigma_j}&\frac{g_i-\mu_i}{\sigma_i}&\frac{(a_i-\mu_i)(a_j-\mu_j)}{\sigma_i\sigma_j}\end{bmatrix}\)&nbsp;&nbsp;&nbsp;&nbsp;(13)</div>
+<div class="formula">\(\chi_{i}=\mathbf{x}-\frac{\partial\mu_{i}}{\partial w_{i}}-\frac{a_{i}-\mu_{i}}{\sigma_{i}}\frac{\partial\sigma_{i}}{\partial w_{i}}.\)&nbsp;&nbsp;&nbsp;&nbsp;(14)</div>
+<p><b>通过权重向量增长隐式降低学习率：</b>注意，与标准 GLM 相比，沿权重向量 \(w_{i}\) 方向的块 \(\bar{F}_{ij}\) 被增益参数和归一化标量 \(\sigma_{i}\) 缩放。如果权重向量 \(w_{i}\) 的范数增长为两倍，即使模型输出保持不变，Fisher 信息矩阵也会不同。沿 \(w_{i}\) 方向的曲率将变化 \(1/2\) 倍，因为 \(\sigma_{i}\) 也会变为两倍。因此，对于归一化模型中相同的参数更新，权重向量的范数有效控制权重向量的学习率。在学习过程中，改变大范数权重向量的方向更困难。因此，归一化方法对权重向量具有隐式“早停”效果，并有助于稳定学习趋向收敛。</p>
+<p><b>学习输入权重的幅度：</b>在归一化模型中，输入权重的幅度由增益参数显式参数化。我们比较在归一化 GLM 中更新增益参数与在原始参数化下更新等效权重幅度时模型输出的变化。\(\bar{F}\) 中沿增益参数的方向捕获输入权重幅度的几何。我们表明，标准 GLM 中沿输入权重幅度的黎曼度量按其输入的范数缩放，而批归一化和层归一化模型中学习增益参数只依赖预测误差的幅度。因此，归一化模型中学习输入权重幅度对输入及其参数的缩放比标准模型更稳健。详细推导见附录。</p>
+
+<h2>6 实验结果</h2>
+<p>我们在 6 个任务上进行层归一化实验，重点是循环神经网络：图像—句子排序、问答、上下文语言建模、生成建模、手写序列生成和 MNIST 分类。除非另有说明，实验中层归一化的默认初始化是将自适应增益设为 1、偏置设为 0。</p>
+
+<h3>6.1 图像和语言的顺序嵌入</h3>
+<p>在本实验中，我们将层归一化应用于 Vendrov et al. [2016] 最近提出的顺序嵌入（order-embeddings）模型，用于学习图像和句子的联合嵌入空间。我们遵循 Vendrov et al. [2016] 相同的实验协议，并修改其公开代码以加入层归一化<sup>1</sup>，该代码使用 Theano [Team et al., 2016]。来自 Microsoft COCO 数据集 [Lin et al., 2014] 的图像和句子被嵌入到公共向量空间，其中 GRU [Cho et al., 2014] 用于编码句子，预训练 VGG ConvNet [Simonyan and Zisserman, 2015]（10 裁剪）的输出用于编码图像。顺序嵌入模型将图像和句子表示为二级偏序，并用非对称评分函数替换 Kiros et al. [2014] 中使用的余弦相似度评分函数。</p>
+<p>我们训练两个模型：基线顺序嵌入模型，以及将层归一化应用于 GRU 的相同模型。每 300 次迭代后，我们在留出验证集上计算 Recall@K（R@K）值，并在 R@K 改善时保存模型。然后最佳模型在 5 个单独测试集上评估，每个测试集包含 1000 张图像和 5000 条标题，报告平均结果。两个模型都使用 Adam [Kingma and Ba, 2014] 和相同初始超参数，并且都使用与 Vendrov et al. [2016] 相同的架构选择。关于如何将层归一化应用于 GRU 的描述见附录。</p>
+<p>图 1 展示了有和没有层归一化的模型验证曲线。我们绘制图像检索任务的 R@1、R@5 和 R@10。我们观察到层归一化在所有指标上提供每次迭代的加速，并在基线模型所需时间的 60% 内收敛到其最佳验证模型。表 2 报告了测试集结果，我们观察到层归一化也比原始模型带来更好的泛化。我们报告的结果是 RNN 嵌入模型的最先进结果，只有 Wang et al. [2016] 的结构保持模型在该任务上报告了更好结果。然而，他们是在不同条件下评估（1 个测试集而不是 5 个平均），因此不能直接比较。</p>
+
+<figure>
+<figcaption>图 1：使用顺序嵌入时有和没有层归一化的 Recall@K 曲线。</figcaption>
+</figure>
+
+<table>
+<caption>表 2：标题和图像检索在 5 个测试划分上的平均结果。R@K 是 Recall@K（越高越好）。Mean r 是平均排名（越低越好）。Sym 对应对称基线，OE 表示顺序嵌入。</caption>
+<thead>
+<tr><th rowspan="2">模型</th><th colspan="4">MSCOCO 标题检索</th><th colspan="4">图像检索</th></tr>
+<tr><th>R@1</th><th>R@5</th><th>R@10</th><th>Mean r</th><th>R@1</th><th>R@5</th><th>R@10</th><th>Mean r</th></tr>
+</thead>
+<tbody>
+<tr><td>Sym [Vendrov et al., 2016]</td><td>45.4</td><td>88.7</td><td>95.8</td><td>36.3</td><td>85.8</td><td>85.8</td><td>9.0</td><td>—</td></tr>
+<tr><td>OE [Vendrov et al., 2016]</td><td>46.7</td><td>88.9</td><td>95.7</td><td>37.9</td><td>85.9</td><td>85.9</td><td>8.1</td><td>—</td></tr>
+<tr><td>OE (ours)</td><td>46.6</td><td>79.3</td><td>89.1</td><td>5.2</td><td>37.8</td><td>73.6</td><td>85.7</td><td>7.9</td></tr>
+<tr><td>OE + LN</td><td>48.5</td><td>80.6</td><td>89.8</td><td>5.1</td><td>38.9</td><td>74.3</td><td>86.3</td><td>7.6</td></tr>
+</tbody>
+</table>
+
+<h3>6.2 教机器阅读和理解</h3>
+<p>为了将层归一化与最近提出的循环批归一化 [Cooijmans et al., 2016] 比较，我们在 Hermann et al. [2015] 提出的 CNN 语料上训练一个单向注意力读者模型。这是一个问答任务，必须通过填空回答关于段落的查询描述。数据被匿名化，实体被赋予随机标记以防止退化解，这些标记在训练和评估期间一致地置换。我们遵循 Cooijmans et al. [2016] 相同的实验协议，并修改其公开代码以加入层归一化<sup>2</sup>，该代码使用 Theano [Team et al., 2016]。我们获得了 Cooijmans et al. [2016] 使用的预处理数据集，它与 Hermann et al. [2015] 原始实验的不同之处在于每个段落限制为 4 句。在 Cooijmans et al. [2016] 中，使用了两种循环批归一化变体：一种只将 BN 应用于 LSTM，另一种在模型各处应用 BN。在我们的实验中，我们只在 LSTM 内应用层归一化。</p>
+<p>该实验结果见图 2。我们观察到层归一化不仅训练更快，而且在验证集上收敛到比基线和 BN 变体更好的结果。在 Cooijmans et al. [2016] 中，认为 BN 中的尺度参数必须仔细选择，并在实验中设为 0.1。我们尝试了层归一化的 1.0 和 0.1 尺度初始化，发现前者模型表现显著更好。这表明层归一化不像循环 BN 那样对初始尺度敏感。<sup>3</sup></p>
+
+<figure>
+<figcaption>图 2：注意力读者模型的验证曲线。BN 结果取自 [Cooijmans et al., 2016]。</figcaption>
+</figure>
+
+<h3>6.3 Skip-thought 向量</h3>
+<p>Skip-thoughts [Kiros et al., 2015] 是 skip-gram 模型 [Mikolov et al., 2013] 的推广，用于学习无监督分布式句子表示。给定连续文本，一个句子用编码器 RNN 编码，解码器 RNN 用于预测周围句子。Kiros et al. [2015] 表明该模型可以产生通用句子表示，在多个任务上无需微调就表现良好。然而，训练该模型耗时，需要数天训练才能产生有意义结果。</p>
+<p>在本实验中，我们确定层归一化能在多大程度上加速训练。使用 Kiros et al. [2015] 的公开代码<sup>4</sup>，我们在 BookCorpus 数据集 [Zhu et al., 2015] 上训练两个模型：一个带层归一化，一个不带。这些实验使用 Theano [Team et al., 2016] 进行。我们遵循 Kiros et al. [2015] 的实验设置，使用相同超参数训练 2400 维句子编码器。鉴于状态大小，可以想象层归一化会产生比不带时更慢的每次迭代更新。然而，我们发现只要使用 CNMeM<sup>5</sup>，两个模型之间没有显著差异。我们每 50,000 次迭代对两个模型做检查点，并在五个任务上评估性能：语义相关性（SICK）[Marelli et al., 2014]、电影评论情感（MR）[Pang and Lee, 2005]、客户产品评论（CR）[Hu and Liu, 2004]、主观/客观分类（SUBJ）[Pang and Lee, 2004] 和观点极性（MPQA）[Wiebe et al., 2005]。我们绘制两个模型在每个检查点上的所有任务性能，以确定 LN 是否能改善性能速率。</p>
+<p>实验结果见图 3。我们观察到应用层归一化既带来相对基线的加速，也在 1M 次迭代后带来更好的最终结果，如表 3 所示。我们还让带层归一化的模型训练总共一个月，在除一个任务外的所有任务上带来进一步性能提升。我们注意到，原始报告结果与我们结果之间的性能差异很可能是因为公开代码没有在解码器每个时间步进行条件化，而原始模型有。</p>
+
+<figure>
+<figcaption>图 3：带和不带层归一化的 skip-thought 向量在下游任务上的性能随训练迭代的变化。原始线是 [Kiros et al., 2015] 中报告的结果。带误差的图使用 10 折交叉验证。最佳效果见彩色版本。</figcaption>
+</figure>
+
+<table>
+<caption>表 3：Skip-thoughts 结果。前两个评估列表示 Pearson 和 Spearman 相关，第三列是均方误差，其余表示分类准确率。除 MSE 外，所有评估都是越高越好。我们的模型训练了 1M 次迭代，例外是 (†) 训练了 1 个月（约 1.7M 次迭代）。</caption>
+<thead>
+<tr><th>方法</th><th>SICK(r)</th><th>SICK(ρ)</th><th>SICK(MSE)</th><th>MR</th><th>CR</th><th>SUBJ</th><th>MPQA</th></tr>
+</thead>
+<tbody>
+<tr><td>Original [Kiros et al., 2015]</td><td>0.848</td><td>0.778</td><td>0.287</td><td>75.5</td><td>79.3</td><td>92.1</td><td>86.9</td></tr>
+<tr><td>Ours</td><td>0.842</td><td>0.767</td><td>0.298</td><td>77.3</td><td>81.8</td><td>92.6</td><td>87.9</td></tr>
+<tr><td>Ours + LN</td><td>0.854</td><td>0.785</td><td>0.277</td><td>79.5</td><td>82.6</td><td>93.4</td><td>89.0</td></tr>
+<tr><td>Ours + LN †</td><td>0.858</td><td>0.788</td><td>0.270</td><td>79.4</td><td>83.1</td><td>93.7</td><td>89.3</td></tr>
+</tbody>
+</table>
+
+<h3>6.4 使用 DRAW 建模二值化 MNIST</h3>
+<p>我们还在 MNIST 数据集上进行了生成建模实验。Deep Recurrent Attention Writer（DRAW）[Gregor et al., 2015] 此前在建模 MNIST 数字分布方面取得了最先进性能。该模型使用差分注意力机制和循环神经网络依次生成图像片段。我们使用 64 个 glimpse 和 256 个 LSTM 隐藏单元评估层归一化对 DRAW 模型的影响。模型使用 Adam [Kingma and Ba, 2014] 优化器默认设置和 128 的小批量大小训练。此前关于二值化 MNIST 的出版物使用各种训练协议生成数据集。在本实验中，我们使用 Larochelle and Murray [2011] 的固定二值化。数据集被分为 50,000 训练、10,000 验证和 10,000 测试图像。</p>
+<p>图 4 显示前 100 个 epoch 的测试变分界。它突出了应用层归一化的加速收益：层归一化 DRAW 的收敛速度几乎是基线模型的两倍。200 个 epoch 后，基线模型在测试数据上收敛到 82.36 nats 的变分对数似然，层归一化模型达到 82.09 nats。</p>
+
+<figure>
+<figcaption>图 4：有和没有层归一化的 DRAW 模型测试负对数似然。</figcaption>
+</figure>
+
+<h3>6.5 手写序列生成</h3>
+<p>此前的实验主要考察 NLP 任务中的 RNN，其长度在 10 到 40 范围内。为了展示层归一化在更长序列上的有效性，我们使用 IAM Online Handwriting Database [Liwicki and Bunke, 2005] 进行手写生成任务。IAM-OnDB 由从 221 个不同书写者收集的手写行组成。给定输入字符串，目标是预测白板上对应手写行的 x 和 y 笔坐标序列。总共有 12179 个手写行序列。输入字符串通常超过 25 个字符，平均手写行长度约为 700。</p>
+<p>我们使用与 Graves [2013] 第（5.2）节相同的模型架构。模型架构由三个 400 个 LSTM 单元的隐藏层组成，在输出层产生 20 个双变量高斯混合分量，以及一个大小为 3 的输入层。字符序列用 one-hot 向量编码，因此窗口向量大小为 57。窗口参数使用 10 个高斯函数的混合，需要大小为 30 的参数向量。总权重数增加到约 3.7M。模型使用大小为 8 的小批量和 Adam [Kingma and Ba, 2014] 优化器训练。</p>
+<p>小批量大小与非常长序列的结合，使得非常稳定的隐藏动态很重要。图 5 表明层归一化收敛到与基线模型相当的对数似然，但快得多。</p>
+
+<figure>
+<figcaption>图 5：有和没有层归一化的手写序列生成模型负对数似然。模型使用小批量大小 8 和序列长度 500 训练。</figcaption>
+</figure>
+
+<h3>6.6 置换不变 MNIST</h3>
+<p>除了 RNN，我们还研究了前馈网络中的层归一化。我们在研究充分的置换不变 MNIST 分类问题上展示层归一化与批归一化的比较。从前面的分析看，层归一化对输入重缩放不变，这对内部隐藏层是理想的。但对于 logit 输出而言这是不必要的，因为预测置信度由 logit 的尺度决定。我们只对全连接隐藏层应用层归一化，不包括最后的 softmax 层。</p>
+<p>所有模型使用 55000 个训练数据点和 Adam [Kingma and Ba, 2014] 优化器训练。对于较小批量，批归一化的方差项使用无偏估计器计算。图 6 的实验结果突出表明，层归一化对小批量大小稳健，并且相比应用于所有层的批归一化表现出更快的训练收敛。</p>
+
+<figure>
+<figcaption>图 6：置换不变 MNIST 784-1000-1000-10 模型在层归一化和批归一化下的负对数似然与测试误差。（左）模型使用批量大小 128 训练。（右）模型使用批量大小 4 训练。</figcaption>
+</figure>
+
+<h3>6.7 卷积网络</h3>
+<p>我们还尝试了卷积神经网络。在初步实验中，我们观察到层归一化相比没有归一化的基线模型带来加速，但批归一化优于其他方法。在全连接层中，一层中所有隐藏单元倾向于对最终预测做出相似贡献，对一层汇总输入进行重中心化和重缩放效果良好。然而，对于卷积神经网络，相似贡献的假设不再成立。大量隐藏单元的感受野位于图像边界附近，很少被激活，因此与同一层中其余隐藏单元具有非常不同的统计量。我们认为需要进一步研究才能使层归一化在 ConvNet 中良好工作。</p>
+
+<h2>7 结论</h2>
+<p>在本文中，我们引入层归一化以加速神经网络训练。我们提供了理论分析，比较了层归一化与批归一化、权重归一化的不变性质。我们表明层归一化对每个训练样本的特征平移和缩放不变。</p>
+<p>实证上，我们表明循环神经网络从所提出方法中受益最多，尤其是对于长序列和小批量。</p>
+
+<h2>致谢</h2>
+<p>本研究由 NSERC、CFI 和 Google 的资助支持。</p>
+
+<h2>参考文献</h2>
+<div class="refs">
+<p>Alex Krizhevsky, Ilya Sutskever, and Geoffrey E Hinton. Imagenet classification with deep convolutional neural networks. In NIPS, 2012.</p>
+<p>Geoffrey Hinton, Li Deng, Dong Yu, George E Dahl, Abdel-rahman Mohamed, Navdeep Jaitly, Andrew Senior, Vincent Vanhoucke, Patrick Nguyen, Tara N Sainath, et al. Deep neural networks for acoustic modeling in speech recognition: The shared views of four research groups. IEEE, 2012.</p>
+<p>Jeffrey Dean, Greg Corrado, Rajat Monga, Kai Chen, Matthieu Devin, Mark Mao, Andrew Senior, Paul Tucker, Ke Yang, Quoc V Le, et al. Large scale distributed deep networks. In NIPS, 2012.</p>
+<p>Sergey Ioffe and Christian Szegedy. Batch normalization: Accelerating deep network training by reducing internal covariate shift. ICML, 2015.</p>
+<p>Ilya Sutskever, Oriol Vinyals, and Quoc V Le. Sequence to sequence learning with neural networks. In Advances in neural information processing systems, pages 3104–3112, 2014.</p>
+<p>César Laurent, Gabriel Pereyra, Philemon Brakel, Ying Zhang, and Yoshua Bengio. Batch normalized recurrent neural networks. arXiv preprint arXiv:1510.01378, 2015.</p>
+<p>Dario Amodei, Rishita Anubhai, Eric Battenberg, Carl Case, Jared Casper, Bryan Catanzaro, Jingdong Chen, Mike Chrzanowski, Adam Coates, Greg Diamos, et al. Deep speech 2: End-to-end speech recognition in english and mandarin. arXiv preprint arXiv:1512.02595, 2015.</p>
+<p>Tim Cooijmans, Nicolas Ballas, César Laurent, and Aaron Courville. Recurrent batch normalization. arXiv preprint arXiv:1603.09025, 2016.</p>
+<p>Tim Salimans and Diederik P Kingma. Weight normalization: A simple reparameterization to accelerate training of deep neural networks. arXiv preprint arXiv:1602.07868, 2016.</p>
+<p>Behnam Neyshabur, Ruslan R Salakhutdinov, and Nati Srebro. Path-sgd: Path-normalized optimization in deep neural networks. In Advances in Neural Information Processing Systems, pages 2413–2421, 2015.</p>
+<p>Shun-Ichi Amari. Natural gradient works efficiently in learning. Neural computation, 1998.</p>
+<p>Ivan Vendrov, Ryan Kiros, Sanja Fidler, and Raquel Urtasun. Order-embeddings of images and language. ICLR, 2016.</p>
+<p>The Theano Development Team, Rami Al-Rfou, Guillaume Alain, Amjad Almahairi, Christof Angermueller, Dzmitry Bahdanau, Nicolas Ballas, Frédéric Bastien, Justin Bayer, Anatoly Belikov, et al. Theano: A python framework for fast computation of mathematical expressions. arXiv preprint arXiv:1605.02688, 2016.</p>
+<p>Tsung-Yi Lin, Michael Maire, Serge Belongie, James Hays, Pietro Perona, Deva Ramanan, Piotr Dollár, and C Lawrence Zitnick. Microsoft coco: Common objects in context. ECCV, 2014.</p>
+<p>Kyunghyun Cho, Bart Van Merriënboer, Caglar Gulcehre, Dzmitry Bahdanau, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical machine translation. EMNLP, 2014.</p>
+<p>Karen Simonyan and Andrew Zisserman. Very deep convolutional networks for large-scale image recognition. ICLR, 2015.</p>
+<p>Ryan Kiros, Ruslan Salakhutdinov, and Richard S Zemel. Unifying visual-semantic embeddings with multimodal neural language models. arXiv preprint arXiv:1411.2539, 2014.</p>
+<p>D. Kingma and J. L. Ba. Adam: a method for stochastic optimization. ICLR, 2014. arXiv:1412.6980.</p>
+<p>Liwei Wang, Yin Li, and Svetlana Lazebnik. Learning deep structure-preserving image-text embeddings. CVPR, 2016.</p>
+<p>Karl Moritz Hermann, Tomas Kocisky, Edward Grefenstette, Lasse Espeholt, Will Kay, Mustafa Suleyman, and Phil Blunsom. Teaching machines to read and comprehend. In NIPS, 2015.</p>
+<p>Ryan Kiros, Yukun Zhu, Ruslan R Salakhutdinov, Richard Zemel, Raquel Urtasun, Antonio Torralba, and Sanja Fidler. Skip-thought vectors. In NIPS, 2015.</p>
+<p>Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781, 2013.</p>
+<p>Yukun Zhu, Ryan Kiros, Rich Zemel, Ruslan Salakhutdinov, Raquel Urtasun, Antonio Torralba, and Sanja Fidler. Aligning books and movies: Towards story-like visual explanations by watching movies and reading books. In ICCV, 2015.</p>
+<p>Marco Marelli, Luisa Bentivogli, Marco Baroni, Raffaella Bernardi, Stefano Menini, and Roberto Zamparelli. Semeval-2014 task 1: Evaluation of compositional distributional semantic models on full sentences through semantic relatedness and textual entailment. SemEval-2014, 2014.</p>
+<p>Bo Pang and Lillian Lee. Seeing stars: Exploiting class relationships for sentiment categorization with respect to rating scales. In ACL, pages 115–124, 2005.</p>
+<p>Minqing Hu and Bing Liu. Mining and summarizing customer reviews. In Proceedings of the tenth ACM SIGKDD international conference on Knowledge discovery and data mining, 2004.</p>
+<p>Bo Pang and Lillian Lee. A sentimental education: Sentiment analysis using subjectivity summarization based on minimum cuts. In ACL, 2004.</p>
+<p>Janyce Wiebe, Theresa Wilson, and Claire Cardie. Annotating expressions of opinions and emotions in language. Language resources and evaluation, 2005.</p>
+<p>K. Gregor, I. Danihelka, A. Graves, and D. Wierstra. DRAW: a recurrent neural network for image generation. arXiv:1502.04623, 2015.</p>
+<p>Hugo Larochelle and Iain Murray. The neural autoregressive distribution estimator. In AISTATS, volume 6, page 622, 2011.</p>
+<p>Marcus Liwicki and Horst Bunke. Iam-ondb-an on-line english sentence database acquired from handwritten text on a whiteboard. In ICDAR, 2005.</p>
+<p>Alex Graves. Generating sequences with recurrent neural networks. arXiv preprint arXiv:1308.0850, 2013.</p>
+</div>
+
+<h2>补充材料</h2>
+
+<h3>层归一化在各实验中的应用</h3>
+<p>本节描述层归一化如何应用于本文各实验。为记号方便，我们将层归一化定义为映射 \(LN:\mathbb{R}^{D}\to\mathbb{R}^{D}\)，具有两组自适应参数：增益 \(\alpha\) 和偏置 \(\beta\)。</p>
+<div class="formula">\(LN(\mathbf{z};\alpha,\beta)=\frac{(\mathbf{z}-\mu)}{\sigma}\odot\alpha+\beta,\)&nbsp;&nbsp;&nbsp;&nbsp;(15)</div>
+<div class="formula">\(\mu=\frac{1}{D}\sum_{i=1}^{D}z_{i},\quad \sigma=\sqrt{\frac{1}{D}\sum_{i=1}^{D}(z_{i}-\mu)^{2}},\)&nbsp;&nbsp;&nbsp;&nbsp;(16)</div>
+<p>其中 \(z_{i}\) 是向量 \(\mathbf{z}\) 的第 \(i\) 个元素。</p>
+
+<h4>教机器阅读和理解与手写序列生成</h4>
+<p>这些实验使用的基本 LSTM 方程为：</p>
+<div class="formula">\(\begin{pmatrix}\mathbf{f}_{t}\\\mathbf{i}_{t}\\\mathbf{o}_{t}\end{pmatrix}=\mathbf{W}_{h}\mathbf{h}_{t-1}+\mathbf{W}_{x}\mathbf{x}_{t}+b\)&nbsp;&nbsp;&nbsp;&nbsp;(19)</div>
+<div class="formula">\(\mathbf{c}_{t}=\sigma(\mathbf{f}_{t})\odot\mathbf{c}_{t-1}+\sigma(\mathbf{i}_{t})\odot\tanh(\mathbf{g}_{t})\)</div>
+<div class="formula">\(\mathbf{h}_{t}=\sigma(\mathbf{o}_{t})\odot\tanh(\mathbf{c}_{t})\)</div>
+<p>加入层归一化的版本修改如下：</p>
+<div class="formula">\(\begin{pmatrix}\mathbf{f}_{t}\\\mathbf{i}_{t}\\\mathbf{o}_{t}\end{pmatrix}=LN(\mathbf{W}_{h}\mathbf{h}_{t-1};\alpha_{1},\beta_{1})+LN(\mathbf{W}_{x}\mathbf{x}_{t};\alpha_{2},\beta_{2})+b\)&nbsp;&nbsp;&nbsp;&nbsp;(21)</div>
+<div class="formula">\(\mathbf{c}_{t}=\sigma(\mathbf{f}_{t})\odot\mathbf{c}_{t-1}+\sigma(\mathbf{i}_{t})\odot\tanh(\mathbf{g}_{t})\)</div>
+<div class="formula">\(\mathbf{h}_{t}=\sigma(\mathbf{o}_{t})\odot\tanh(LN(\mathbf{c}_{t};\alpha_{3},\beta_{3}))\)</div>
+<p>其中 \(\alpha_{i},\beta_{i}\) 分别是加性和乘性参数。每个 \(\alpha_{i}\) 初始化为零向量，每个 \(\beta_{i}\) 初始化为全 1 向量。</p>
+
+<h4>顺序嵌入与 Skip-thoughts</h4>
+<p>这些实验利用一种门控循环单元变体，定义如下：</p>
+<div class="formula">\(\begin{pmatrix}\mathbf{z}_{t}\\\mathbf{r}_{t}\end{pmatrix}=\mathbf{W}_{h}\mathbf{h}_{t-1}+\mathbf{W}_{x}\mathbf{x}_{t}\)&nbsp;&nbsp;&nbsp;&nbsp;(24)</div>
+<div class="formula">\(\hat{\mathbf{h}}_{t}=\tanh(\mathbf{W}\mathbf{x}_{t}+\sigma(\mathbf{r}_{t})\odot(\mathbf{U}\mathbf{h}_{t-1}))\)</div>
+<div class="formula">\(\mathbf{h}_{t}=(1-\sigma(\mathbf{z}_{t}))\mathbf{h}_{t-1}+\sigma(\mathbf{z}_{t})\hat{\mathbf{h}}_{t}\)</div>
+<p>层归一化应用如下：</p>
+<div class="formula">\(\begin{pmatrix}\mathbf{z}_{t}\\\mathbf{r}_{t}\end{pmatrix}=LN(\mathbf{W}_{h}\mathbf{h}_{t-1};\alpha_{1},\beta_{1})+LN(\mathbf{W}_{x}\mathbf{x}_{t};\alpha_{2},\beta_{2})\)&nbsp;&nbsp;&nbsp;&nbsp;(27)</div>
+<div class="formula">\(\hat{\mathbf{h}}_{t}=\tanh(LN(\mathbf{W}\mathbf{x}_{t};\alpha_{3},\beta_{3})+\sigma(\mathbf{r}_{t})\odot LN(\mathbf{U}\mathbf{h}_{t-1};\alpha_{4},\beta_{4}))\)</div>
+<div class="formula">\(\mathbf{h}_{t}=(1-\sigma(\mathbf{z}_{t}))\mathbf{h}_{t-1}+\sigma(\mathbf{z}_{t})\hat{\mathbf{h}}_{t}\)</div>
+<p>如前，\(\alpha_{i}\) 初始化为零向量，每个 \(\beta_{i}\) 初始化为全 1 向量。</p>
+
+<h4>DRAW 与置换不变 MNIST 中的 LSTM 层归一化</h4>
+<p>在这些实验中，层归一化仅应用于 LSTM 隐藏状态的输出：</p>
+<div class="formula">\(\begin{pmatrix}\mathbf{f}_t\\\mathbf{i}_t\\\mathbf{o}_t\\\mathbf{g}_t\end{pmatrix}=\mathbf{W}_h\mathbf{h}_{t-1}+\mathbf{W}_x\mathbf{x}_t+b\)&nbsp;&nbsp;&nbsp;&nbsp;(30)</div>
+<div class="formula">\(\mathbf{c}_t=\sigma(\mathbf{f}_t)\odot\mathbf{c}_{t-1}+\sigma(\mathbf{i}_t)\odot\tanh(\mathbf{g}_t)\)</div>
+<div class="formula">\(\mathbf{h}_t=\sigma(\mathbf{o}_t)\odot\tanh(LN(\mathbf{c}_t;\alpha,\beta))\)</div>
+<p>其中 \(\alpha,\beta\) 分别是加性和乘性参数。\(\alpha\) 初始化为零向量，\(\beta\) 初始化为全 1 向量。</p>
+
+<h3>学习输入权重的幅度</h3>
+<p>我们现在比较归一化 GLM 与原始参数化之间，梯度下降改变等效权重幅度时的更新。在归一化模型中，权重幅度由增益参数显式参数化。假设有一个梯度更新将权重向量的范数改变 \(\delta_{g}\)。我们可以将梯度更新投影到标准 GLM 的权重向量上。KL 度量，即梯度更新改变模型预测的程度，对于归一化模型只依赖预测误差的幅度。具体来说，</p>
+<p>在批归一化下：</p>
+<div class="formula">\(ds^{2}=\frac{1}{2}\operatorname{vec}([0,0,\delta_{g}]^{\top})^{\top}\bar{F}(\operatorname{vec}([W,\mathbf{b},\mathbf{g}]^{\top}))\operatorname{vec}([0,0,\delta_{g}]^{\top})=\frac{1}{2}\delta_{g}^{\top}\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\left[\frac{\operatorname{Cov}[\mathbf{y}|\mathbf{x}]}{\phi^{2}}\right]\delta_{g}.\)</div>
+<p>在层归一化下：</p>
+<div class="formula">\(\begin{aligned}ds^{2}&=\frac{1}{2}\operatorname{vec}([0,0,\delta_{g}]^{\top})^{\top}\bar{F}(\operatorname{vec}([W,\mathbf{b},\mathbf{g}]^{\top}))\operatorname{vec}([0,0,\delta_{g}]^{\top})\\&=\frac{1}{2}\delta_{g}^{\top}\frac{1}{\phi^{2}}\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\begin{bmatrix}\operatorname{Cov}(y_{1},y_{1}|\mathbf{x})\frac{(a_{1}-\mu)^{2}}{\sigma^{2}}&\dots&\operatorname{Cov}(y_{1},y_{H}|\mathbf{x})\frac{(a_{1}-\mu)(a_{H}-\mu)}{\sigma^{2}}\\\vdots&\ddots&\vdots\\\operatorname{Cov}(y_{H},y_{1}|\mathbf{x})\frac{(a_{H}-\mu)(a_{1}-\mu)}{\sigma^{2}}&\dots&\operatorname{Cov}(y_{H},y_{H}|\mathbf{x})\frac{(a_{H}-\mu)^{2}}{\sigma^{2}}\end{bmatrix}\delta_{g}\end{aligned}\)&nbsp;&nbsp;&nbsp;&nbsp;(33)</div>
+<p>在权重归一化下：</p>
+<div class="formula">\(\begin{aligned}ds^{2}&=\frac{1}{2}\operatorname{vec}([0,0,\delta_{g}]^{\top})^{\top}\bar{F}(\operatorname{vec}([W,\mathbf{b},\mathbf{g}]^{\top}))\operatorname{vec}([0,0,\delta_{g}]^{\top})\\&=\frac{1}{2}\delta_{g}^{\top}\frac{1}{\phi^{2}}\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\begin{bmatrix}\operatorname{Cov}(y_{1},y_{1}|\mathbf{x})\frac{a_{1}^{2}}{\|w_{1}\|_{2}^{2}}&\dots&\operatorname{Cov}(y_{1},y_{H}|\mathbf{x})\frac{a_{1}a_{H}}{\|w_{1}\|_{2}\|w_{H}\|_{2}}\\\vdots&\ddots&\vdots\\\operatorname{Cov}(y_{H},y_{1}|\mathbf{x})\frac{a_{H}a_{1}}{\|w_{H}\|_{2}\|w_{1}\|_{2}}&\dots&\operatorname{Cov}(y_{H},y_{H}|\mathbf{x})\frac{a_{H}^{2}}{\|w_{H}\|_{2}^{2}}\end{bmatrix}\delta_{g}.\end{aligned}\)&nbsp;&nbsp;&nbsp;&nbsp;(34)</div>
+<p>而标准 GLM 中的 KL 度量与其激活 \(a_{i}=w_{i}^{\top}\mathbf{x}\) 相关，即同时依赖当前权重和输入数据。我们将第 \(i\) 个神经元增益参数 \(\delta_{g}i\) 的梯度更新投影到其权重向量，在标准 GLM 模型中为 \(\delta_{g}i\frac{w_{i}}{\|w_{i}\|_{2}}\)：</p>
+<div class="formula">\(\begin{aligned}&\frac{1}{2}\operatorname{vec}([\delta_{g}i\frac{w_{i}}{\|w_{i}\|_{2}},0,\delta_{g}j\frac{w_{j}}{\|w_{j}\|_{2}},0]^{\top})^{\top}F([w_{i}^{\top},b_{i},w_{j}^{\top},b_{j}]^{\top})\operatorname{vec}([\delta_{g}i\frac{w_{i}}{\|w_{i}\|_{2}},0,\delta_{g}j\frac{w_{j}}{\|w_{j}\|_{2}},0]^{\top})\\&=\frac{\delta_{g}i\delta_{g}j}{2\phi^{2}}\mathbb{E}_{\mathbf{x}\sim P(\mathbf{x})}\left[\operatorname{Cov}(y_{i},y_{j}|\mathbf{x})\frac{a_{i}a_{j}}{\|w_{i}\|_{2}\|w_{j}\|_{2}}\right]\end{aligned}\)&nbsp;&nbsp;&nbsp;&nbsp;(35)</div>
+<p>因此，批归一化和层归一化模型对输入及其参数的缩放比标准模型更稳健。</p>
+
+<hr>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 6 未嵌入图片，仅保留图注说明。原文中部分 OCR 噪声和重复段落已按上下文整理修正。公式按原文编号保留，复杂矩阵公式以可读文本形式呈现。</p>
+
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>高斯误差线性单元（GELUs）</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
+  a { color: #1f6feb; }
+</style>
+</head>
+<body>
+
+<p class="banner">中文导读译自 arXiv:1606.08415（对照 <a href="../en/1606.08415_gelu.pdf">英文 PDF</a>）。图表未嵌入，仅保留图注与实验数字；附录中关于 SiLU / Swish 命名史从略。</p>
+
+<h1>高斯误差线性单元（GELUs）</h1>
+<p class="subtitle">Gaussian Error Linear Units (GELUs)</p>
+
+<div class="authors">
+Dan Hendrycks*，加州大学伯克利分校，hendrycks@berkeley.edu<br>
+Kevin Gimpel，芝加哥丰田工业大学，kgimpel@ttic.edu
+</div>
+
+<div class="abstract">
+<h2>摘要</h2>
+<p>我们提出高斯误差线性单元（Gaussian Error Linear Unit，GELU），一种表现良好的神经网络激活函数。GELU 定义为 \(x\Phi(x)\)，其中 \(\Phi(x)\) 是标准高斯分布的累积分布函数。与 ReLU（\(x\cdot\mathbf{1}_{x&gt;0}\)）按输入符号做硬门控不同，GELU 按输入取值大小对其加权。我们在计算机视觉、自然语言处理与语音任务上，将 GELU 与 ReLU、ELU 对照，在所考察任务上均观察到性能提升。</p>
+</div>
+
+<h2>1 引言</h2>
+<p>早期人工神经元使用二值阈值单元（Hopfield, 1982；McCulloch &amp; Pitts, 1943）。Sigmoid 把硬阈值决策平滑化，使神经元具有“发放率”解释，并可用反向传播训练。但网络变深后，用 Sigmoid 训练往往不如非光滑、概率意味更弱的 ReLU（Nair &amp; Hinton, 2010）有效——ReLU 按输入符号做硬门控。尽管统计动机较弱，ReLU 仍是常用工程方案，收敛常快于、优于 Sigmoid。在此基础上，ELU（Clevert et al., 2016）允许类 ReLU 非线性输出负值，有时能加快训练。总之，只要网络不是深层线性分类器，激活函数的选择仍是必要的架构决策。</p>
+<p>深层非线性分类器极易拟合数据，设计者往往还要在隐藏层加噪声或使用 Dropout（Srivastava et al., 2014）等随机正则；这一选择通常与激活函数分开。部分随机正则可使网络表现得像网络集成（伪集成，Bachman et al., 2014），显著提高精度。例如 Dropout 通过随机乘零改变部分激活决策。非线性与 Dropout 共同决定神经元输出，但二者长期彼此独立：常见随机正则不依赖输入，而非线性又往往需要这类正则。</p>
+<p>本文引入新的非线性——高斯误差线性单元（GELU）。它与随机正则相关：可视为对 Adaptive Dropout（Ba &amp; Frey, 2013）的一种改写后的期望。这提示我们用更概率化的视角看待神经元输出。实验表明，在计算机视觉、自然语言处理与自动语音识别任务上，GELU 可匹配或超过带 ReLU / ELU 的模型。</p>
+
+<h2>2 GELU 的形式</h2>
+<p>我们结合 Dropout、Zoneout 与 ReLU 的性质来动机化该激活。ReLU 确定性地把输入乘以 0 或 1；Dropout 随机地把输入乘以 0；RNN 正则 Zoneout（Krueger et al., 2016）则随机地把输入乘以 1。我们合并这些行为：仍用 0/1 掩码乘输入，但掩码取值既随机又依赖输入。具体地，令神经元输入 \(x\) 乘以 \(m\sim\mathrm{Bernoulli}(\Phi(x))\)，其中 \(\Phi(x)=P(X\le x)\)，\(X\sim\mathcal{N}(0,1)\) 为标准正态的 CDF。选用该分布是因为神经元输入常近似正态（尤其配合 Batch Normalization）。此时 \(x\) 越小，“被丢弃”的概率越高，因而变换随机却仍依赖输入。</p>
+<p>这种掩码保留随机性，同时依赖输入取值；随机 0/1 掩码相当于对输入做随机的零变换或恒等变换。这类似 Adaptive Dropout，但 Adaptive Dropout 与非线性联用，且用 logistic 而非标准正态。我们发现仅用这种随机正则（不加其他非线性）也能在 MNIST、TIMIT 上训出有竞争力的网络。</p>
+<p>实际中往往需要确定性决策，由此得到新的非线性：对上述随机正则在输入 \(x\) 上的期望变换，即 \(\Phi(x)\cdot x+(1-\Phi(x))\cdot 0=x\Phi(x)\)。直观上，它按 \(x\) 相对其他输入有多大来缩放 \(x\)。由于高斯 CDF 常用误差函数计算，定义</p>
+<div class="formula">\[\mathrm{GELU}(x)=x\,P(X\le x)=x\Phi(x)=x\cdot\tfrac12\bigl(1+\mathrm{erf}(x/\sqrt{2})\bigr).\]</div>
+<p>若更看重前向速度，可用近似</p>
+<div class="formula">\[0.5x\bigl(1+\tanh[\sqrt{2/\pi}\,(x+0.044715x^3)]\bigr)\]</div>
+<p>或 \(x\sigma(1.702x)\)。</p>
+<p>也可换用其他 CDF。例如用 Logistic CDF \(\sigma(x)\) 得到我们称为 Sigmoid Linear Unit（SiLU）的 \(x\sigma(x)\)。也可令 \(X\sim\mathcal{N}(\mu,\sigma^2)\) 并把 \(\mu,\sigma\) 设为可学习超参；本文始终取 \(\mu=0,\sigma=1\)，因而实验中不引入新超参。下一节表明，GELU 在多项任务上超过 ReLU 与 ELU。</p>
+<p><em>图 1：</em>GELU（\(\mu=0,\sigma=1\)）、ReLU 与 ELU（\(\alpha=1\)）的曲线对照。</p>
+
+<h2>3 实验</h2>
+<p>我们在以下任务上比较 GELU、ELU 与 ReLU：MNIST 分类、MNIST 自编码、推文词性标注、TIMIT 帧识别，以及 CIFAR-10/100 分类。因与 ReLU 过于相近，未单独评估 LReLU。</p>
+
+<h3>3.1 MNIST 分类</h3>
+<p>我们复现 Clevert et al. (2016) 的设定：全连接网络 8 层、宽 128，训练 50 个 epoch、批大小 128，比较 GELU、ReLU、ELU（\(\alpha=1\)）。与原文不同，我们使用 Adam，并展示有无 Dropout 时的表现；权重按行单位范数初始化。在验证集上于 \(\{10^{-3},10^{-4},10^{-5}\}\) 中调学习率，报告五次运行的中位数。图 2 显示有无 Dropout 时 GELU 常有最低的训练 log loss；图 3 显示对加噪输入，GELU 的鲁棒性不低于 ELU / ReLU。尽管动机来自不同随机过程，GELU 与 Dropout 搭配良好。</p>
+
+<h3>3.2 MNIST 自编码器</h3>
+<p>网络宽度为 1000–500–250–30–250–500–1000，Adam、批大小 64，均方误差。学习率取 \(10^{-3}\) 与 \(10^{-4}\)（\(0.01\) 时 ELU 发散，GELU / ReLU 也较差）。图 4 表明 GELU 对学习率更宽容，且显著优于其他非线性。</p>
+
+<h3>3.3 推文词性标注</h3>
+<p>在小规模 NLP 数据上检验泛化：25 类 POS 标注推文，双层网络（宽 256），输入为当前词与左右邻接词的预训练词向量拼接，Dropout keep 概率 0.8，Adam。各学习率训练五次，测试错误率中位数：GELU 12.57%，ReLU 12.67%，ELU 12.91%。</p>
+
+<h3>3.4 TIMIT 帧分类</h3>
+<p>五层、宽 2048 的分类器，39 个音素标签，Dropout 0.5；输入 11 帧、每帧 26 维 MFCC / 能量 / 导数特征，预测中心帧。Adam 调学习率。验证最优对应的测试错误率中位数：GELU 29.3%，ReLU 29.5%，ELU 29.6%（见图 5）。</p>
+
+<h3>3.5 CIFAR-10 / 100</h3>
+<p>较浅的 9 层 CNN（Salimans &amp; Kingma, 2016 的结构与流程，加 BatchNorm，无数据增强）上，Adam 训练 200 epoch，第 100 epoch 起学习率线性降到 0。测试错误率中位数：GELU 7.89%，ReLU 8.16%，ELU 8.41%（图 6）。</p>
+<p>在 CIFAR-100 上使用宽残差网络（40 层，widen=4）。ELU 在残差网络上可能梯度爆炸，故采用对 ELU 更友好的 Conv–Activation–Conv–Activation–BatchNorm 块。错误率中位数：GELU 20.74%，ReLU 21.77%，ELU 22.98%（图 7）。</p>
+
+<table>
+<caption>表：主要实验结果摘要（中位数）</caption>
+<thead>
+<tr><th>任务</th><th>指标</th><th>GELU</th><th>ReLU</th><th>ELU</th></tr>
+</thead>
+<tbody>
+<tr><td>推文 POS</td><td>错误率 ↓</td><td>12.57%</td><td>12.67%</td><td>12.91%</td></tr>
+<tr><td>TIMIT</td><td>错误率 ↓</td><td>29.3%</td><td>29.5%</td><td>29.6%</td></tr>
+<tr><td>CIFAR-10</td><td>错误率 ↓</td><td>7.89%</td><td>8.16%</td><td>8.41%</td></tr>
+<tr><td>CIFAR-100 WideResNet</td><td>错误率 ↓</td><td>20.74%</td><td>21.77%</td><td>22.98%</td></tr>
+</tbody>
+</table>
+
+<h2>4 讨论</h2>
+<p>多项实验中 GELU 优于既有非线性，但与 ReLU、ELU 仍有联系：若 \(\mu=0\) 且 \(\sigma\to 0\)，GELU 退化为 ReLU；二者在渐近意义下也可对齐。GELU 可视为对 ReLU 的平滑：ReLU \(=x\cdot\mathbf{1}(x&gt;0)\)，而 GELU \(=x\Phi(x)\)，CDF 平滑了指示函数，恰如 Sigmoid 平滑了硬阈值。与 ReLU 不同，GELU 与 ELU 均可取负。若改用标准 Cauchy 的 CDF，ELU（\(\alpha=1/\pi\)）在负半轴上与 \(xP(C\le x)\) 渐近一致。</p>
+<p>重要差别在于：GELU 非凸、非单调，在正半轴也非线性、处处有曲率；ReLU / ELU 凸且单调，正半轴线性。更大的曲率与非单调性可能使 GELU 更易逼近复杂函数。再者，ReLU 按符号门控，GELU 按“相对其他输入有多大”加权；且 GELU 是某随机正则的期望，具有概率解释。</p>
+<p>实践建议：（1）配合带动量的优化器；（2）用足够接近高斯 CDF 的近似。\(x\sigma(x)\)（SiLU）通常优于 ReLU / ELU 但弱于 GELU；本文实验采用 tanh 近似式。</p>
+
+<h2>5 结论</h2>
+<p>在本文评估的多个数据集上，GELU 持续超过 ELU 与 ReLU 的精度，可作为既有激活函数的可行替代。BERT、GPT 等后续 Transformer 广泛采用 GELU，使其成为现代语言模型的默认选择之一（亦见本课第 04、09、15 课）。</p>
+
+<h2>参考文献</h2>
+<div class="refs">
+<p>Jimmy Ba and Brendan Frey. Adaptive dropout for training deep neural networks. NeurIPS, 2013.</p>
+<p>Djork-Arné Clevert, Thomas Unterthiner, and Sepp Hochreiter. Fast and accurate deep network learning by exponential linear units (ELUs). ICLR, 2016.</p>
+<p>Dan Hendrycks and Kevin Gimpel. Gaussian Error Linear Units (GELUs). arXiv:1606.08415, 2016.</p>
+<p>Diederik Kingma and Jimmy Ba. Adam: A Method for Stochastic Optimization. ICLR, 2015.</p>
+<p>Vinod Nair and Geoffrey E. Hinton. Rectified linear units improve restricted boltzmann machines. ICML, 2010.</p>
+<p>Nitish Srivastava et al. Dropout: A simple way to prevent neural networks from overfitting. JMLR, 2014.</p>
+</div>
+
+<hr>
+<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与实验数字，并非逐句全译；图未嵌入。完整公式、曲线与附录见英文原文。</p>
+
+</body>
+</html>

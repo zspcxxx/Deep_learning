@@ -199,12 +199,21 @@ def learn_index():
     return send_from_directory(DOCS, "index.html")
 
 
-@app.get("/learn/papers/<name>")
-def learn_paper(name: str):
-    papers = DOCS / "papers"
-    if not name.endswith(".pdf") or not (papers / name).is_file():
+@app.get("/learn/papers/<lang>/<name>")
+def learn_paper(lang: str, name: str):
+    if lang not in {"en", "cn"} or "/" in name or "\\" in name or ".." in name:
         abort(404)
-    return send_from_directory(papers, name, mimetype="application/pdf")
+    papers = DOCS / "papers" / lang
+    path = papers / name
+    if not path.is_file():
+        abort(404)
+    if lang == "en":
+        if not name.endswith(".pdf"):
+            abort(404)
+        return send_from_directory(papers, name, mimetype="application/pdf")
+    if not name.endswith(".html"):
+        abort(404)
+    return send_from_directory(papers, name)
 
 
 @app.get("/learn/<key>")

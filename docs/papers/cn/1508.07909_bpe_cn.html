@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>使用子词单元进行稀有词的神经机器翻译</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 1050px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; }
+  pre.algorithm { background: #f5f5f5; border: 1px solid #ccc; padding: 0.8em 1em; overflow-x: auto; font-family: Consolas, "Courier New", monospace; font-size: 0.9em; line-height: 1.5; }
+  table { border-collapse: collapse; margin: 1em auto; width: 100%; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.5em; text-align: center; vertical-align: top; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figure { margin: 1.2em 0; }
+  figcaption { font-size: 0.95em; color: #444; }
+  blockquote { margin: 0.8em 0; padding: 0.3em 1em; border-left: 3px solid #ccc; color: #333; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  code { font-family: Consolas, monospace; }
+  sup { font-size: 0.75em; }
+</style>
+</head>
+<body>
+
+<h1>使用子词单元进行稀有词的神经机器翻译</h1>
+
+<div class="authors">
+Rico Sennrich，Barry Haddow，Alexandra Birch<br>
+爱丁堡大学信息学院<br>
+{rico.sennrich,a.birch}@ed.ac.uk，bhaddow@inf.ed.ac.uk
+</div>
+
+<div class="abstract">
+<h2>摘要</h2>
+<p>神经机器翻译（NMT）模型通常使用固定词表，但翻译是一个开放词表问题。先前工作通过回退到词典来处理未登录词（out-of-vocabulary words）的翻译。在本文中，我们引入一种更简单且更有效的方法：通过将稀有词和未知词编码为子词单元序列，使 NMT 模型能够进行开放词表翻译。其直觉是：多种词类可以通过比词更小的单元进行翻译，例如人名（通过字符复制或音译）、复合词（通过组合式翻译）、同源词和借词（通过音系和形态变换）。我们讨论了不同分词技术的适用性，包括简单的字符 \(n\)-gram 模型和基于字节对编码（byte pair encoding）压缩算法的分词，并实证表明：在 WMT 15 英→德和英→俄翻译任务上，子词模型相比回退词典基线分别最多提升 1.1 和 1.3 BLEU。</p>
+</div>
+
+<h2>1 引言</h2>
+<p>神经机器翻译最近已显示出令人印象深刻的结果（Kalchbrenner and Blunsom, 2013; Sutskever et al., 2014; Bahdanau et al., 2015）。然而，稀有词的翻译仍是一个开放问题。神经模型的词表通常限于 30 000—50 000 个词，但翻译是一个开放词表问题；尤其对于具有能产性构词过程（如黏附和复合构词）的语言，翻译模型需要能够深入词级以下的机制。例如，考虑德语复合词 Abwasser/behandlungs/anlange（“污水处理厂”），将其表示为可变长度的分段形式，直观上比将其编码为固定长度向量更有吸引力。</p>
+<p>对于词级 NMT 模型，未登录词的翻译已通过回退到词典查找来处理（Jean et al., 2015; Luong et al., 2015b）。我们注意到，这类技术所做的假设在实践中往往并不成立。例如，源词和目标词之间并不总是存在一一对应关系，因为语言之间的形态综合程度存在差异，如我们开头的复合词例子所示。此外，词级模型无法翻译或生成未见过的词。将未知词复制到目标文本中（如 Jean et al., 2015; Luong et al., 2015b 所做）对于人名是一种合理策略，但通常需要形态变化和音译，尤其是当字母表不同时。</p>
+<p>我们研究在子词单元层面运行的 NMT 模型。我们的主要目标是在 NMT 网络本身中建模开放词表翻译，而不需要针对稀有词的回退模型。除了使翻译过程更简单之外，我们还发现子词模型在稀有词翻译上比大词表模型和回退词典取得更好的准确率，并且能够能产地生成训练时未见过的词。我们的分析表明，神经网络能够从子词表示中学习复合构词和音译。</p>
+<p>本文有两个主要贡献：</p>
+<p>（1）我们表明，通过将（稀有）词编码为子词单元，可以实现开放词表神经机器翻译。我们发现我们的架构比使用大词表和回退词典更简单、更有效（Jean et al., 2015; Luong et al., 2015b）。</p>
+<p>（2）我们将字节对编码（BPE）（Gage, 1994）——一种压缩算法——适配到词分词任务。BPE 允许通过固定大小的可变长度字符序列词表来表示开放词表，这使其成为非常适合神经网络模型的分词策略。</p>
+
+<h2>2 神经机器翻译</h2>
+<p>我们遵循 Bahdanau 等（2015）的神经机器翻译架构，这里简要总结。不过我们注意到，我们的方法并不特定于该架构。</p>
+<p>该神经机器翻译系统实现为带循环神经网络的编码器—解码器网络。</p>
+<p>编码器是一个带门控循环单元（Cho et al., 2014）的双向神经网络，它读取输入序列 \(x=(x_1,\ldots,x_m)\)，计算前向隐藏状态序列 \((\overrightarrow{h}_1,\ldots,\overrightarrow{h}_m)\) 和后向序列 \((\overleftarrow{h}_1,\ldots,\overleftarrow{h}_m)\)。隐藏状态 \(\overrightarrow{h}_j\) 和 \(\overleftarrow{h}_j\) 被拼接，得到注释向量 \(h_j\)。</p>
+<p>解码器是一个循环神经网络，预测目标序列 \(y=(y_1,\ldots,y_n)\)。每个词 \(y_i\) 基于循环隐藏状态 \(s_i\)、先前预测的词 \(y_{i-1}\) 和上下文向量 \(c_i\) 进行预测。\(c_i\) 计算为注释 \(h_j\) 的加权和。每个注释 \(h_j\) 的权重通过对齐模型 \(\alpha_{ij}\) 计算，该模型建模 \(y_i\) 与 \(x_j\) 对齐的概率。对齐模型是一个单层前馈神经网络，通过反向传播与网络其余部分联合学习。</p>
+<p>详细描述可见 Bahdanau 等（2015）。训练在平行语料上使用随机梯度下降进行。翻译时采用小束大小的束搜索。</p>
+
+<h2>3 子词翻译</h2>
+<p>本文的主要动机是：某些词的翻译是透明的，即使对译者而言是新的，也可以根据已知子词单元（如语素或音素）的翻译进行翻译。翻译可能透明的词类包括：</p>
+<ul>
+<li><b>命名实体。</b>在共享字母表的语言之间，人名通常可以从源文本复制到目标文本。可能需要转写或音译，尤其是字母表或音节文字不同时。例如：Barack Obama（英语；德语）、Барак Обама（俄语）、バラク・オバマ（日语）。</li>
+<li><b>同源词和借词。</b>具有共同来源的同源词和借词在不同语言之间可能有规律差异，因此字符级翻译规则就足够了（Tiedemann, 2012）。例如：claustrophobia（英语）、Klaustrophobie（德语）、Клаустрофобия（俄语）。</li>
+<li><b>形态复杂的词。</b>包含多个语素的词，例如通过复合、词缀或屈折形成的词，可以通过分别翻译语素来翻译。例如：solar system（英语）、Sonnensystem（Sonne + System，德语）、Naprendszer（Nap + Rendszer，匈牙利语）。</li>
+</ul>
+<p>在我们德语训练数据中对 100 个稀有标记（不在 50 000 个最频繁类型中）的分析显示，大多数标记有可能通过更小单元从英语翻译。我们发现 56 个复合词、21 个人名、6 个具有共同来源的借词（emancipate → emanzipieren）、5 个透明词缀化案例（sweetish ‘sweet’ + ‘ish’ → süßlich ‘süß’ + ‘lich’）、1 个数字和 1 个计算机语言标识符。</p>
+<p>我们的假设是：将稀有词分词为合适的子词单元，足以让神经翻译网络学习透明翻译，并将这种知识泛化到翻译和生成未见的词。我们在第 4 节和第 5 节提供该假设的实证支持。首先，我们讨论不同的子词表示。</p>
+
+<h3>3.1 相关工作</h3>
+<p>对于统计机器翻译（SMT），未知词的翻译一直是密集研究的主题。</p>
+<p>很大比例的未知词是人名；如果两种语言共享字母表，这些名字可以直接复制到目标文本。如果字母表不同，则需要音译（Durrani et al., 2014）。基于字符的翻译也已在基于短语的模型中研究，并被证明对密切相关的语言尤其成功（Vilar et al., 2007; Tiedemann, 2009; Neubig et al., 2012）。</p>
+<p>形态复杂词（如复合词）的分词在 SMT 中被广泛使用，各种语素分词算法已被研究（Nießen and Ney, 2000; Koehn and Knight, 2003; Virpioja et al., 2007; Stallard et al., 2012）。基于短语的 SMT 常用的分词算法在切分决策上往往偏保守；而我们追求一种激进的分词，以便用紧凑的网络词表实现开放词表翻译，而不必求助于回退词典。</p>
+<p>子词单元的最佳选择可能因任务而异。对于语音识别，已使用音素级语言模型（Bazzi and Glass, 2000）。Mikolov 等（2012）研究子词语言模型，并提出使用音节。对于多语言分词任务，已提出多语言算法（Snyder and Barzilay, 2008）。我们认为这些方法有趣，但在测试时无法应用。</p>
+<p>已有各种技术被提出，用于基于字符或语素产生固定长度的连续词向量（Luong et al., 2013; Botha and Blunsom, 2014; Ling et al., 2015a; Kim et al., 2015）。与我们并行的一项将此类技术应用于 NMT 的努力，未发现相比词级方法的显著改进（Ling et al., 2015b）。与我们工作的一个技术差异是，在 Ling 等（2015b）的模型中，注意力机制仍在词级运行，且每个词的表示是固定长度的。我们预期注意力机制会受益于我们的可变长度表示：网络可以在每一步学习将注意力放在不同子词单元上。回想我们开头的例子 Abwasserbehandlungsanlange，子词分词避免了固定长度表示的信息瓶颈。</p>
+<p>神经机器翻译与基于短语的方法不同之处在于：有强烈动机最小化神经模型的词表大小，以提高时间和空间效率，并允许无需回退模型的翻译。同时，我们也希望文本本身有紧凑表示，因为文本长度增加会降低效率，并增加神经模型需要传递信息的距离。</p>
+<p>操纵词表大小与文本大小之间权衡的一种简单方法是：使用未分词词的短名单，仅对稀有词使用子词单元。作为替代，我们提出一种基于字节对编码（BPE）的分词算法，它让我们学习一个能提供良好文本压缩率的词表。</p>
+
+<h3>3.2 字节对编码（BPE）</h3>
+<p>字节对编码（BPE）（Gage, 1994）是一种简单的数据压缩技术，它迭代地将序列中最频繁的字节对替换为一个单个的未使用字节。我们将该算法适配到词分词。我们不是合并频繁字节对，而是合并字符或字符序列。</p>
+<p>首先，我们用字符词表初始化符号词表，并将每个词表示为字符序列，外加一个特殊词尾符号（原文记作 '\\*'），以便在翻译后恢复原始分词。我们迭代统计所有符号对，并将最频繁对（'A', 'B'）的每次出现替换为新符号 'AB'。每次合并操作产生一个新符号，表示一个字符 \(n\)-gram。频繁的字符 \(n\)-gram（或整词）最终被合并为单个符号，因此 BPE 不需要短名单。最终符号词表大小等于初始词表大小加上合并操作数——后者是该算法唯一的超参数。</p>
+<p>为了提高效率，我们不考虑跨词边界的符号对。因此，算法可以在从文本中提取的词典上运行，每个词按其频率加权。算法 1 展示了一个最小的 Python 实现。实践中，我们通过索引所有符号对并增量更新数据结构来提高效率。</p>
+<p>与其他压缩算法（例如 Huffman 编码，已被提出用于为 NMT 产生可变长度词编码（Chitnis and DeNero, 2015））的主要区别是：我们的符号序列仍可解释为子词单元，并且网络可以基于这些子词单元泛化到翻译和生成训练时未见过的新词。</p>
+
+<figure>
+<figcaption>算法 1：学习 BPE 操作（代码保留原文形式）</figcaption>
+</figure>
+<pre class="algorithm">
+import re, collections
+
+def get_stats(vocab):
+    pairs = collections.defaultdict(int)
+    for word, freq in vocab.items():
+        symbols = word.split()
+        for i in range(len(symbols)-1):
+            pairs[symbols[i], symbols[i+1]] += freq
+    return pairs
+
+def merge_vocab(pair, v_in):
+    v_out = {}
+    bigram = re.escape(''.join(pair))
+    p = re.compile(r'(?&lt;!\S)' + bigram + r'(?!\S)')
+    for word in v_in:
+        w_out = p.sub(''.join(pair), word)
+        v_out[w_out] = v_in[word]
+    return v_out
+</pre>
+<p class="note">原文图 1 给出了学习到的 BPE 操作的玩具示例：r. → r.，lo → lo，low → low，er → er。</p>
+
+<p>测试时，我们首先将词拆分为字符序列，然后应用学习到的操作将字符合并为更大的已知符号。这适用于任何词，并允许具有固定符号词表的开放词表网络。<sup>3</sup> 在我们的例子中，未登录词 'lower' 会被分词为 'low er'。</p>
+<p>我们评估两种应用 BPE 的方法：学习两个独立编码，一个用于源词表、一个用于目标词表；或者在两个词表的并集上学习编码（我们称之为联合 BPE）。<sup>4</sup> 前者在文本和词表大小上更紧凑，并更强地保证每个子词单元已在相应语言的训练文本中出现；后者改善源分词和目标分词之间的一致性。如果我们独立应用 BPE，同一个名字在两种语言中可能分词不同，这使神经模型更难学习子词单元之间的映射。为了在字母表不同的情况下增加英语和俄语分词之间的一致性，我们用 ISO-9 将俄语词表音译为拉丁字符来学习联合 BPE 编码，然后将 BPE 合并操作转回西里尔字母，以应用于俄语训练文本。<sup>5</sup></p>
+
+<h2>4 评估</h2>
+<p>我们旨在回答以下实证问题：</p>
+<ul>
+<li>通过将稀有词和未见词表示为子词单元，能否改善神经机器翻译中这些词的翻译？</li>
+<li>哪种子词分词在词表大小、文本大小和翻译质量方面表现最好？</li>
+</ul>
+<p>我们在 WMT 2015 共享翻译任务的数据上进行实验。对于英→德，训练集包含 420 万句对，约 1 亿标记。对于英→俄，训练集包含 260 万句对，约 5000 万标记。我们使用 Moses（Koehn et al., 2007）提供的脚本对数据分词和截断。我们使用 newstest2013 作为开发集，并在 newstest2014 和 newstest2015 上报告结果。</p>
+<p>我们报告 BLEU（mteval-v13a.pl）和 CHRF3（Popović, 2015）结果；后者是一种字符 \(n\)-gram \(F_3\) 分数，已被发现与人类判断相关性良好，尤其是对从英语译出的翻译（Stanojević et al., 2015）。由于我们的主要主张涉及稀有词和未见词的翻译，我们分别报告这些词的统计量。我们通过 unigram \(F_1\) 衡量，计算为截断 unigram 精确率和召回率的调和平均。<sup>6</sup></p>
+<p>我们使用 Groundhog<sup>7</sup>（Bahdanau et al., 2015）进行所有实验。我们总体上遵循先前工作的设置（Bahdanau et al., 2015; Jean et al., 2015）。所有网络隐藏层大小为 1000，嵌入层大小为 620。遵循 Jean 等（2015），我们只在内存中保留 \(\tau=30000\) 个词的短名单。</p>
+<p>训练期间，我们使用 Adadelta（Zeiler, 2012），小批量大小为 80，并在 epoch 之间重新打乱训练集。我们训练一个网络约 7 天，然后取最后 4 个保存的模型（每 12 小时保存一次），并分别以固定嵌入层继续训练 12 小时（如 Jean et al., 2015 所建议）。每个模型进行两次独立训练：一次梯度裁剪（Pascanu et al., 2013）阈值为 5.0，一次阈值为 1.0——后者在大多数设置下产生更好的单模型。我们报告在开发集（newstest2013）上表现最好的系统，以及全部 8 个模型的集成结果。</p>
+<p>束搜索束大小为 12，概率按句子长度归一化。我们使用基于 fast-align（Dyer et al., 2013）的双语词典。对于基线，它作为稀有词的回退词典。在所有实验中，我们还使用该词典加速翻译，只对过滤后的候选翻译列表执行 softmax（与 Jean et al. (2015) 一样，我们使用 \(K=30000\)；\(K'=10\)）。</p>
+
+<h3>4.1 子词统计</h3>
+<p>除了翻译质量（我们将通过实证验证）之外，我们的主要目标是通过紧凑的固定大小子词词表表示开放词表，并允许高效训练和解码。<sup>8</sup></p>
+<p>表 1 显示了平行数据德语侧不同分词的统计。一个简单基线是将词分词为字符 \(n\)-gram。字符 \(n\)-gram 允许在序列长度（# tokens）和词表大小（# types）之间进行不同权衡，具体取决于 \(n\) 的选择。序列长度增加显著；减少序列长度的一种方法是保留 \(k\) 个最频繁词类型的短名单不分词。只有 unigram 表示是真正开放词表的。然而，unigram 表示在初步实验中表现不佳；我们报告 bigram 表示的翻译结果，它在实证上更好，但无法用训练集词表产生测试集中的某些标记。</p>
+<p>我们报告几种在先前 SMT 研究中被证明有用的词分词技术的统计，包括基于频率的复合词切分（Koehn and Knight, 2003）、基于规则的连字符化（Liang, 1983）和 Morfessor（Creutz and Lagus, 2002）。我们发现它们只能适度减少词表大小，并不能解决未知词问题，因此不适合我们无需回退词典的开放词表翻译目标。</p>
+<p>BPE 满足我们开放词表的目标，学习到的合并操作可应用于测试集，得到没有未知符号的分词。<sup>10</sup> 它与字符级模型的主要区别是：BPE 的更紧凑表示允许更短序列，并且注意力模型在可变长度单元上运行。<sup>11</sup> 表 1 显示了 59 500 次合并操作的 BPE，以及 89 500 次操作的联合 BPE。</p>
+<p>实践中，我们没有将不频繁的子词单元纳入 NMT 网络词表，因为子词符号集中存在噪声，例如来自外语字母表的字符。因此，表 2 中的网络词表通常略小于表 1 中的类型数。</p>
+
+<table>
+<caption>表 1：德语训练语料在不同词分词技术下的语料统计。#UNK：newstest2013 中的未知标记数。△ Koehn and Knight (2003)；* Creutz and Lagus (2002)；◇ Liang (1983)。</caption>
+<thead>
+<tr><th>分词</th><th># tokens</th><th># types</th><th># UNK</th></tr>
+</thead>
+<tbody>
+<tr><td>none</td><td>100 m</td><td>1 750 000</td><td>1079</td></tr>
+<tr><td>characters</td><td>550 m</td><td>30000</td><td>—</td></tr>
+<tr><td>character bigrams</td><td>306 m</td><td>20 000</td><td>34</td></tr>
+<tr><td>character trigrams</td><td>214 m</td><td>120 000</td><td>59</td></tr>
+<tr><td>compound splitting△</td><td>102 m</td><td>1 100 000</td><td>643</td></tr>
+<tr><td>morfessor*</td><td>109 m</td><td>544 000</td><td>237</td></tr>
+<tr><td>hyphenation◇</td><td>186 m</td><td>404 000</td><td>230</td></tr>
+<tr><td>BPE</td><td>112 m</td><td>63 000</td><td>0</td></tr>
+<tr><td>BPE (joint)</td><td>111 m</td><td>82 000</td><td>32</td></tr>
+<tr><td>character bigrams (shortlist: 50 000)</td><td>129 m</td><td>69 000</td><td>34</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 翻译实验</h3>
+<p>英→德翻译结果见表 2；英→俄结果见表 3。</p>
+<p>我们的基线 WDict 是一个带回退词典的词级模型。它与 WUnk 的区别在于后者不使用回退词典，只将未登录词表示为 UNK。<sup>12</sup> 回退词典改善了稀有词和未见词的 unigram \(F_1\)，尽管英→俄的改善较小，因为回退词典无法音译人名。</p>
+<p>所有子词系统都不使用回退词典。我们首先关注 unigram \(F_1\)，所有系统都优于基线，尤其是稀有词（英→德从 36.8% 提升到 41.8%；英→俄从 26.5% 提升到 29.7%）。对于 OOV，基线的复制未知词策略在英→德上表现良好。然而，当字母表不同时，如英→俄，子词模型表现好得多。</p>
+<p>Unigram \(F_1\) 分数表明，在词表并集上学习 BPE 符号（BPE-J90k）比分别学习（BPE-60k）更有效，也比使用 50 000 个未分词词短名单的字符 bigram（C2-50k）更有效；但所有报告的子词分词都是可行选择，并且都优于回退词典基线。</p>
+<p>我们的子词表示在稀有词和未见词翻译上带来很大改善，但这些词只占测试集的 9—11%。由于稀有词往往承载句子中的核心信息，我们怀疑 BLEU 和 CHRF3 低估了它们对翻译质量的影响。尽管如此，我们仍在总 unigram \(F_1\)、BLEU 和 CHRF3 上看到相对基线的改善；子词集成比 WDict 基线提升 0.3—1.3 BLEU 和 0.6—2 CHRF3。BLEU 与 CHRF3 之间存在一些不一致，我们将其归因于 BLEU 有精确率偏差，而 CHRF3 有召回率偏差。</p>
+<p>对于英→德，我们观察到 C2-50k 的最佳 BLEU 为 25.3，但 BPE-J90k 的最佳 CHRF3 为 54.1。为了与该数据集上（据我们所知）最佳非神经 MT 系统比较，我们报告基于句法的 SMT 结果（Sennrich and Haddow, 2015）。我们观察到最佳系统在 BLEU 上优于基于句法的系统，但在 CHRF3 上不然。关于其他神经系统的结果，Luong 等（2015a）报告 newstest2015 上 BLEU 为 25.9，但我们注意到他们使用了 8 个独立训练模型的集成，并报告了应用 dropout 带来的显著提升，而我们未使用 dropout。我们相信，我们对稀有词翻译的改进与网络架构其他改进所能带来的提升是正交的。</p>
+<p>作为对翻译结果的进一步评论，我们想强调：性能波动仍是 NMT 的一个开放问题。在开发集上，我们观察到不同模型之间最多 1 BLEU 的差异。对于单系统，我们报告在开发集上表现最好的模型（8 个中），这有稳定作用；但如何控制随机性值得未来研究进一步关注。</p>
+
+<table>
+<caption>表 2：newstest2015 上英→德翻译性能（BLEU、CHRF3 和 unigram \(F_1\)）。Ens-8：8 个模型的集成。最佳 NMT 系统加粗。Unigram \(F_1\)（集成）对所有词（n=44085）、稀有词（不在训练集前 50000；n=2900）和 OOV（不在训练集；n=1168）计算。注：原文表格 OCR 存在列缺失，下表按可读内容整理，缺失项以“—”表示。</caption>
+<thead>
+<tr><th>系统</th><th>分词</th><th>短名单</th><th>源词表</th><th>目标词表</th><th>BLEU single</th><th>BLEU ens-8</th><th>CHRF3 single</th><th>CHRF3 ens-8</th><th>unigram F1 all</th><th>unigram F1 rare</th><th>unigram F1 OOV</th></tr>
+</thead>
+<tbody>
+<tr><td>syntax-based (Sennrich and Haddow, 2015)</td><td>—</td><td>—</td><td>—</td><td>—</td><td>24.4</td><td>—</td><td>55.3</td><td>—</td><td>59.1</td><td>46.0</td><td>—</td></tr>
+<tr><td>WUnk</td><td>—</td><td>—</td><td>300000</td><td>500000</td><td>20.6</td><td>22.8</td><td>47.2</td><td>48.9</td><td>56.7</td><td>20.4</td><td>—</td></tr>
+<tr><td>WDict</td><td>—</td><td>—</td><td>300000</td><td>500000</td><td>22.0</td><td>24.2</td><td>50.5</td><td>52.4</td><td>58.1</td><td>36.8</td><td>—</td></tr>
+<tr><td>C2-50k</td><td>char-bigram</td><td>50000</td><td>60000</td><td>60000</td><td>22.8</td><td>25.3</td><td>51.9</td><td>53.5</td><td>58.4</td><td>40.5</td><td>—</td></tr>
+<tr><td>BPE-60k</td><td>BPE</td><td>—</td><td>60000</td><td>60000</td><td>21.5</td><td>24.5</td><td>52.0</td><td>53.9</td><td>58.4</td><td>40.9</td><td>—</td></tr>
+<tr><td>BPE-J90k</td><td>BPE (joint)</td><td>—</td><td>90000</td><td>90000</td><td>22.8</td><td>24.7</td><td>51.7</td><td>54.1</td><td>58.5</td><td>41.8</td><td>—</td></tr>
+</tbody>
+</table>
+
+<table>
+<caption>表 3：newstest2015 上英→俄翻译性能（BLEU、CHRF3 和 unigram \(F_1\)）。Ens-8：8 个模型的集成。最佳 NMT 系统加粗。Unigram \(F_1\)（集成）对所有词（n=55654）、稀有词（不在训练集前 50000；n=5442）和 OOV（不在训练集；n=851）计算。注：原文表格 OCR 存在列缺失，下表按可读内容整理。</caption>
+<thead>
+<tr><th>系统</th><th>分词</th><th>短名单</th><th>源词表</th><th>目标词表</th><th>BLEU single</th><th>BLEU ens-8</th><th>CHRF3 single</th><th>CHRF3 ens-8</th><th>unigram F1 all</th><th>unigram F1 rare</th><th>unigram F1 OOV</th></tr>
+</thead>
+<tbody>
+<tr><td>WUnk</td><td>—</td><td>—</td><td>300000</td><td>500000</td><td>18.8</td><td>22.4</td><td>46.5</td><td>49.9</td><td>54.2</td><td>25.2</td><td>0.0</td></tr>
+<tr><td>WDict</td><td>—</td><td>—</td><td>300000</td><td>500000</td><td>19.1</td><td>22.8</td><td>47.5</td><td>51.0</td><td>54.8</td><td>26.5</td><td>6.6</td></tr>
+<tr><td>C2-50k</td><td>char-bigram</td><td>50000</td><td>60000</td><td>60000</td><td>20.9</td><td>24.1</td><td>49.0</td><td>51.6</td><td>55.2</td><td>27.8</td><td>17.4</td></tr>
+<tr><td>BPE-60k</td><td>BPE</td><td>—</td><td>60000</td><td>60000</td><td>20.5</td><td>23.6</td><td>49.8</td><td>52.7</td><td>55.3</td><td>29.7</td><td>15.6</td></tr>
+<tr><td>BPE-J90k</td><td>BPE (joint)</td><td>—</td><td>90000</td><td>100000</td><td>20.4</td><td>24.1</td><td>49.7</td><td>53.0</td><td>55.8</td><td>29.7</td><td>18.3</td></tr>
+</tbody>
+</table>
+
+<h2>5 分析</h2>
+
+<h3>5.1 Unigram 准确率</h3>
+<p>我们的主要主张是：词级 NMT 模型对稀有词和未知词的翻译较差，而子词模型改善了这些词类的翻译。为了进一步说明不同子词分词对稀有词和未见词翻译的影响，我们按训练集中的频率对目标侧词排序并绘图。<sup>13</sup> 为了分析词表大小的影响，我们还加入了系统 C2-3/500k，它与 WDICT 基线具有相同词表大小，并使用字符 bigram 表示未见词。</p>
+<p>图 2 显示了英—德集成系统在 newstest2015 上的结果。所有系统的 unigram \(F_1\) 倾向于在低频词上下降。基线系统在 OOV（即训练文本中未出现的词）上有一个 \(F_1\) 尖峰。这是因为很大比例的 OOV 是人名，对英→德而言，将源文本复制到目标文本是一种好策略。</p>
+<p>目标词表为 500 000 词的系统主要在翻译排名 &gt;500000 的词时不同。回退词典相对于产生 UNK 是明显改进，但子词系统 C2-3/500k 取得更好性能。注意，回退词典产生的所有 OOV 都是从源复制的词，通常是人名；而子词系统可以能产地形成新词，如复合词。</p>
+<p>对于 50 000 个最频繁词，所有神经网络的表示相同，所有神经网络在该类别上取得可比的 unigram \(F_1\)。在频率排名 50 000 到 500 000 的区间，C2-3/500k 与 C2-50k 的比较揭示了一个有趣差异。两个系统只在短名单大小上不同：C2-3/500k 将该区间内的词表示为单个单元，C2-50k 通过子词单元表示。我们发现 C2-3/500k 的性能在频率排名 500 000 之前严重下降，到该点模型切换到子词表示，性能恢复。C2-50k 的性能更稳定。我们将此归因于子词单元比词更不稀疏。在我们的训练集中，频率排名 50 000 对应训练数据中的频率 60；频率排名 500 000 对应频率 2。由于子词表示更不稀疏，减少网络词表大小并通过子词单元表示更多词，可以带来更好性能。</p>
+<p>\(F_1\) 数值掩盖了系统之间的一些定性差异。对于英→德，WDICT 产生的 OOV 很少（召回率 26.5%），但精确率高（60.6%）；而子词系统取得更高召回率，但精确率较低。我们注意到，字符 bigram 模型 C2-50k 产生的 OOV 词最多，该类别精确率相对较低，为 29.1%。然而，它在召回率（33.0%）上优于回退词典。BPE-60k 由于分词不一致而遭受音译（或复制）错误，取得略好的精确率（32.4%），但召回率更差（26.6%）。与 BPE-60k 相比，BPE-J90k 的联合 BPE 编码同时改善了精确率（38.6%）和召回率（29.8%）。</p>
+<p>对于英→俄，未知人名很少能被复制，通常需要音译。因此，WDICT 基线在 OOV 上表现更差（精确率 9.2%；召回率 5.2%），而子词模型同时改善了精确率和召回率（BPE-J90k 为精确率 21.9%、召回率 15.6%）。完整的 unigram \(F_1\) 图见图 3。</p>
+
+<figure>
+<figcaption>图 2：newstest2015 上英→德 unigram \(F_1\)，按训练集频率排名对不同 NMT 系统绘制。</figcaption>
+</figure>
+<figure>
+<figcaption>图 3：newstest2015 上英→俄 unigram \(F_1\)，按训练集频率排名对不同 NMT 系统绘制。</figcaption>
+</figure>
+
+<h3>5.2 人工分析</h3>
+<p>表 4 显示了英→德方向的两个翻译示例，表 5 显示了英→俄的示例。基线系统在所有示例中都失败：要么删除内容（health），要么复制本应翻译或音译的源词。health research institutes 的子词翻译表明，子词系统能够在过度切分（research → Fo/rs/ch/un/g）或分词不匹配语素边界时学习翻译：分词 Forschungs/instituten 在语言学上比 BPE-60k 系统中的 Forsch/ungsinstitut/en 更合理，也更容易与英语 research institutes 对齐，但仍产生了正确翻译。如果系统由于数据稀疏未能学习翻译，例如 asinine 应译为 dumm，我们会看到错误翻译，但对（部分）借词而言可能看似合理（asinine Situation → Asinin-Situation）。</p>
+<p>英→俄示例表明子词系统能够进行音译。然而，音译错误确实会发生，原因可能是音译有歧义，或者源文本和目标文本之间的分词不一致，使系统难以学习音译映射。注意，BPE-60k 系统对 Mirzayeva 在两种语言对中编码不一致（Mirz/ayeva → Mimp|sa|eva Mir/za/eva）。该示例仍被正确翻译，但我们在 BPE-60k 系统中观察到字符的虚假插入和删除。一个例子是 rakfisk 的音译，其中插入了一个 П 并删除了一个 к。我们将该错误追溯到训练数据中分词不一致的翻译对，例如 (p/rak/ri/ti → ipa/krit/in (pa|kriti))，系统从中错误地学到了翻译（rak → pra）。联合 BPE 系统（BPE-J90k）的分词更一致（pra/kriti → pra|krit|i (pra|kriti)）。</p>
+
+<table>
+<caption>表 4：英→德翻译示例。“|”标记子词边界。</caption>
+<thead>
+<tr><th>系统</th><th>句子</th></tr>
+</thead>
+<tbody>
+<tr><td colspan="2"><b>源句：</b>health research institutes</td></tr>
+<tr><td colspan="2"><b>参考：</b>Gesundheitsforschungsinstitute</td></tr>
+<tr><td>WDict</td><td>Forschungsinstitute</td></tr>
+<tr><td>C2-50k</td><td>Forschungsinstitute</td></tr>
+<tr><td>BPE-60k</td><td>Gesundheitsforschungsinstitute</td></tr>
+<tr><td>BPE-J90k</td><td>Gesundheitsforschungsinstitute</td></tr>
+<tr><td colspan="2"><b>源句：</b>asinine situation</td></tr>
+<tr><td colspan="2"><b>参考：</b>dumme Situation</td></tr>
+<tr><td>WDict</td><td>asinine situation → UNK → asinine</td></tr>
+<tr><td>C2-50k</td><td>asinine situation → Asinine situation</td></tr>
+<tr><td>BPE-60k</td><td>asinine situation → Ainine Situation</td></tr>
+<tr><td>BPE-J90k</td><td>asinine situation → Asinine Situation</td></tr>
+</tbody>
+</table>
+
+<table>
+<caption>表 5：英→俄翻译示例。“|”标记子词边界。</caption>
+<thead>
+<tr><th>系统</th><th>句子</th></tr>
+</thead>
+<tbody>
+<tr><td colspan="2"><b>源句：</b>Mirzayeva</td></tr>
+<tr><td colspan="2"><b>参考：</b>Мирзаева (Mirzayeva)</td></tr>
+<tr><td>WDict</td><td>Mirzayeva → UNK → Mirzayeva</td></tr>
+<tr><td>C2-50k</td><td>Mirzayeva → Мирзаева (Mirzaeva)</td></tr>
+<tr><td>BPE-60k</td><td>Mirzayeva → Мирзаева (Mirzaeva)</td></tr>
+<tr><td>BPE-J90k</td><td>Mirzayeva → Мирзаева (Mirzaeva)</td></tr>
+<tr><td colspan="2"><b>源句：</b>rakfisk</td></tr>
+<tr><td colspan="2"><b>参考：</b>ракфиска (rakfiska)</td></tr>
+<tr><td>WDict</td><td>rakfisk → UNK → rakfisk</td></tr>
+<tr><td>C2-50k</td><td>rakfisk → ракфиск (rakfisk)</td></tr>
+<tr><td>BPE-60k</td><td>rakfisk → прафиск (prafisk)</td></tr>
+<tr><td>BPE-J90k</td><td>rakfisk → ракфиска (rakfiska)</td></tr>
+</tbody>
+</table>
+
+<h2>6 结论</h2>
+<p>本文的主要贡献是：我们表明神经机器翻译系统能够通过将稀有词和未见词表示为子词单元序列来进行开放词表翻译。<sup>14</sup> 这比使用回退翻译模型既更简单也更有效。我们引入一种用于词分词的字节对编码变体，它能够用紧凑的可变长度子词单元符号词表编码开放词表。我们展示了 BPE 分词和简单字符 bigram 分词相对基线的性能提升。</p>
+<p>我们的分析表明，不仅未登录词，而且稀有的词表内词也被基线 NMT 系统翻译得很差；减小子词模型的词表大小实际上可以改善性能。在本工作中，我们对词表大小的选择有些任意，主要动机是与先前工作比较。未来研究方向之一是自动学习翻译任务的最佳词表大小，我们预期这取决于语言对和训练数据量。我们还相信，双语信息驱动的分词算法有进一步潜力，可创建更可对齐的子词单元，尽管分词算法在运行时不能依赖目标文本。</p>
+<p>虽然相对有效性将取决于语言特定因素（如词表大小），但我们相信子词分词适合大多数语言对，从而消除对大 NMT 词表或回退模型的需求。</p>
+
+<h2>致谢</h2>
+<p>我们感谢 Maja Popović 提供 CHRF 的实现，我们用它验证了我们的重新实现。本出版物中呈现的研究是与 Samsung Electronics Polska sp. z o.o. — Samsung R&D Institute Poland 合作进行的。本项目获得了欧盟 Horizon 2020 研究与创新计划资助，资助协议编号 645452（QT21）。</p>
+
+<h2>参考文献</h2>
+<div class="refs">
+<p>Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. 2015. Neural Machine Translation by Jointly Learning to Align and Translate. In Proceedings of the International Conference on Learning Representations (ICLR).</p>
+<p>Issam Bazzi and James R. Glass. 2000. Modeling out-of-vocabulary words for robust speech recognition. In Sixth International Conference on Spoken Language Processing, ICSLP 2000 / INTERSPEECH 2000, pages 401–404, Beijing, China.</p>
+<p>Jan A. Botha and Phil Blunsom. 2014. Compositional Morphology for Word Representations and Language Modelling. In Proceedings of the 31st International Conference on Machine Learning (ICML), Beijing, China.</p>
+<p>Rohan Chitnis and John DeNero. 2015. VariableLength Word Encodings for Neural Translation Models. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing (EMNLP).</p>
+<p>Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Dzmitry Bahdanau, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. 2014. Learning Phrase Representations using RNN Encoder-Decoder for Statistical Machine Translation. In Proceedings of the 2014 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1724–1734, Doha, Qatar. Association for Computational Linguistics.</p>
+<p>Mathias Creutz and Krista Lagus. 2002. Unsupervised Discovery of Morphemes. In Proceedings of the ACL-02 Workshop on Morphological and Phonological Learning, pages 21–30. Association for Computational Linguistics.</p>
+<p>Nadir Durrani, Hassan Sajjad, Hieu Hoang, and Philipp Koehn. 2014. Integrating an Unsupervised Transliteration Model into Statistical Machine Translation. In Proceedings of the 14th Conference of the European Chapter of the Association for Computational Linguistics, EACL 2014, pages 148–153, Gothenburg, Sweden.</p>
+<p>Chris Dyer, Victor Chahuneau, and Noah A. Smith. 2013. A Simple, Fast, and Effective Reparameterization of IBM Model 2. In Proceedings of the 2013 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 644–648, Atlanta, Georgia. Association for Computational Linguistics.</p>
+<p>Philip Gage. 1994. A New Algorithm for Data Compression. C Users J., 12(2):23–38, February.</p>
+<p>Barry Haddow, Matthias Huck, Alexandra Birch, Nikolay Bogoychev, and Philipp Koehn. 2015. The Edinburgh/JHU Phrase-based Machine Translation Systems for WMT 2015. In Proceedings of the Tenth Workshop on Statistical Machine Translation, pages 126–133, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Sebastien Jean, Kyunghyun Cho, Roland Memisevic, and Yoshua Bengio. 2015. On Using Very Large Target Vocabulary for Neural Machine Translation. In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pages 1–10, Beijing, China. Association for Computational Linguistics.</p>
+<p>Nal Kalchbrenner and Phil Blunsom. 2013. Recurrent Continuous Translation Models. In Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing, Seattle. Association for Computational Linguistics.</p>
+<p>Yoon Kim, Yacine Jernite, David Sontag, and Alexander M. Rush. 2015. Character-Aware Neural Language Models. CoRR, abs/1508.06615.</p>
+<p>Philipp Koehn and Kevin Knight. 2003. Empirical Methods for Compound Splitting. In EACL ’03: Proceedings of the Tenth Conference on European Chapter of the Association for Computational Linguistics, pages 187–193, Budapest, Hungary. Association for Computational Linguistics.</p>
+<p>Philipp Koehn, Hieu Hoang, Alexandra Birch, Chris Callison-Burch, Marcello Federico, Nicola Bertoldi, Brooke Cowan, Wade Shen, Christine Moran, Richard Zens, Chris Dyer, Ondřej Bojar, Alexandra Constantin, and Evan Herbst. 2007. Moses: Open Source Toolkit for Statistical Machine Translation. In Proceedings of the ACL-2007 Demo and Poster Sessions, pages 177–180, Prague, Czech Republic. Association for Computational Linguistics.</p>
+<p>Franklin M. Liang. 1983. Word hy-phen-a-tion by com-put-er. Ph.D. thesis, Stanford University, Department of Linguistics, Stanford, CA.</p>
+<p>Wang Ling, Chris Dyer, Alan W. Black, Isabel Trancoso, Ramon Fermandez, Silvio Amir, Luis Marujo, and Tiago Luis. 2015a. Finding Function in Form: Compositional Character Models for Open Vocabulary Word Representation. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1520–1530, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Wang Ling, Isabel Trancoso, Chris Dyer, and Alan W. Black. 2015b. Character-based Neural Machine Translation. ArXiv e-prints, November.</p>
+<p>Thang Luong, Richard Socher, and Christopher D. Manning. 2013. Better Word Representations with Recursive Neural Networks for Morphology. In Proceedings of the Seventeenth Conference on Computational Natural Language Learning, CoNLL 2013, Sofia, Bulgaria, August 8–9, 2013, pages 104–113.</p>
+<p>Thang Luong, Hieu Pham, and Christopher D. Manning. 2015a. Effective Approaches to Attention-based Neural Machine Translation. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing, pages 1412–1421, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Thang Luong, Ilya Sutskever, Quoc Le, Oriol Vinyals, and Wojciech Zaremba. 2015b. Addressing the Rare Word Problem in Neural Machine Translation. In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pages 11–19, Beijing, China. Association for Computational Linguistics.</p>
+<p>Tomas Mikolov, Ilya Sutskever, Anoop Deoras, Hai-Son Le, Stefan Kombrink, and Jan Cernocky. 2012. Subword Language Modeling with Neural Networks. Unpublished.</p>
+<p>2012. Machine Translation without Words through Substring Alignment. In The 50th Annual Meeting of the Association for Computational Linguistics, Proceedings of the Conference, July 8–14, 2012, Jeju Island, Korea - Volume 1: Long Papers, pages 165–174.</p>
+<p>Sonja Nießen and Hermann Ney. 2000. Improving SMT quality with morpho-syntactic analysis. In 18th Int. Conf. on Computational Linguistics, pages 1081–1085.</p>
+<p>Razvan Pascanu, Tomas Mikolov, and Yoshua Bengio. 2013. On the difficulty of training recurrent neural networks. In Proceedings of the 30th International Conference on Machine Learning, ICML 2013, pages 1310–1318, Atlanta, USA.</p>
+<p>Maja Popović. 2015. chrF: character n-gram F-score for automatic MT evaluation. In Proceedings of the Tenth Workshop on Statistical Machine Translation, pages 392–395, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Rico Sennrich and Barry Haddow. 2015. A Joint Dependency Model of Morphological and Syntactic Structure for Statistical Machine Translation. In Proceedings of the 2015 Conference on Empirical Methods in Natural Language Processing, pages 2081–2087, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Benjamin Snyder and Regina Barzilay. 2008. Unsupervised Multilingual Learning for Morphological Segmentation. In Proceedings of ACL-08: HLT, pages 737–745, Columbus, Ohio. Association for Computational Linguistics.</p>
+<p>David Stallard, Jacob Devlin, Michael Kayser, Yoong Keok Lee, and Regina Barzilay. 2012. Unsupervised Morphology Rivals Supervised Morphology for Arabic MT. In The 50th Annual Meeting of the Association for Computational Linguistics, Proceedings of the Conference, July 8–14, 2012, Jeju Island, Korea - Volume 2: Short Papers, pages 322–327.</p>
+<p>Miloš Stanojević, Amir Kamran, Philipp Koehn, and Ondřej Bojar. 2015. Results of the WMT15 Metrics Shared Task. In Proceedings of the Tenth Workshop on Statistical Machine Translation, pages 256–273, Lisbon, Portugal. Association for Computational Linguistics.</p>
+<p>Ilya Sutskever, Oriol Vinyals, and Quoc V. Le. 2014. Sequence to Sequence Learning with Neural Networks. In Advances in Neural Information Processing Systems 27: Annual Conference on Neural Information Processing Systems 2014, pages 3104–3112, Montreal, Quebec, Canada.</p>
+<p>Jörg Tiedemann. 2009. Character-based PSMT for Closely Related Languages. In Proceedings of 13th Annual Conference of the European Association for Machine Translation (EAMT’09), pages 12–19.</p>
+<p>Jörg Tiedemann. 2012. Character-Based Pivot Translation for Under-Resourced Languages and Domains. In Proceedings of the 13th Conference of the European Chapter of the Association for Computational Linguistics, pages 141–151, Avignon, France. Association for Computational Linguistics.</p>
+<p>David Vilar, Jan-Thorsten Peter, and Hermann Ney. 2007. Can We Translate Letters? In Second Workshop on Statistical Machine Translation, pages 33–39, Prague, Czech Republic. Association for Computational Linguistics.</p>
+<p>Sami Virpioja, Jaakko J. Väyrynen, Mathias Creutz, and Markus Sadeniemi. 2007. Morphology-Aware Statistical Machine Translation Based on Morphs Induced in an Unsupervised Manner. In Proceedings of the Machine Translation Summit XI, pages 491–498, Copenhagen, Denmark.</p>
+<p>Matthew D. Zeiler. 2012. ADADELTA: An Adaptive Learning Rate Method. CoRR, abs/1212.5701.</p>
+</div>
+
+<hr>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 3 未嵌入图片，仅保留图注/示例说明；表 2、表 3 因原文 OCR 存在列缺失，已按可读内容整理并以“—”表示缺失项。算法 1 代码保留原文形式。</p>
+
+</body>
+</html>

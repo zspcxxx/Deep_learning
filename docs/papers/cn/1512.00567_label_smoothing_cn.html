@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>重新思考计算机视觉中的 Inception 架构</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 1050px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; }
+  table { border-collapse: collapse; margin: 1em auto; width: 100%; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.5em; text-align: center; vertical-align: top; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figure { margin: 1.2em 0; }
+  figcaption { font-size: 0.95em; color: #444; }
+  blockquote { margin: 0.8em 0; padding: 0.3em 1em; border-left: 3px solid #ccc; color: #333; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  code { font-family: Consolas, monospace; }
+  sup { font-size: 0.75em; }
+</style>
+</head>
+<body>
+
+<h1>重新思考计算机视觉中的 Inception 架构</h1>
+
+<div class="authors">
+Christian Szegedy，Google Inc.，szegedy@google.com<br>
+Vincent Vanhoucke，vanhoucke@google.com<br>
+Sergey Ioffe，sioffe@google.com<br>
+Jonathon Shlens，shlens@google.com<br>
+Zbigniew Wojna，University College London，zbigniewwojna@gmail.com
+</div>
+
+<div class="abstract">
+<h2>摘要</h2>
+<p>卷积网络是大多数最先进计算机视觉解决方案的核心，广泛用于各种任务。自 2014 年以来，非常深的卷积网络开始成为主流，并在各种基准上带来显著提升。尽管增加模型大小和计算成本往往能立即带来大多数任务的质量提升（只要有足够的标注数据用于训练），但计算效率和低参数数量仍然是移动视觉和大数据场景等各种用例的使能因素。本文探索以尽可能高效利用新增计算的方式扩展网络，通过适当分解卷积和激进的正则化来实现。我们在 ILSVRC 2012 分类挑战验证集上对方法进行基准测试，相比最先进结果取得显著提升：单帧评估、每次推理 50 亿次乘加计算成本且使用少于 2500 万参数时，top-1 错误率 21.2%、top-5 错误率 5.6%。使用 4 个模型的集成和多裁剪评估，我们报告 top-5 错误率 3.5%、top-1 错误率 17.3%。</p>
+</div>
+
+<h2>1. 引言</h2>
+<p>自 2012 年 ImageNet 竞赛 [16] 中 Krizhevsky 等 [9] 的获胜作品以来，他们的网络“AlexNet”已成功应用于大量计算机视觉任务，例如目标检测 [5]、分割 [12]、人体姿态估计 [22]、视频分类 [8]、目标跟踪 [23] 和超分辨率 [3]。</p>
+<p>这些成功推动了一条新的研究方向，即寻找性能更高的卷积神经网络。从 2014 年开始，通过使用更深、更宽的网络，网络架构质量显著提高。VGGNet [18] 和 GoogLeNet [20] 在 2014 年 ILSVRC [16] 分类挑战中取得了相似的高性能。一个有趣的观察是：分类性能的提升往往会转化为广泛应用领域中显著的质量提升。这意味着深度卷积架构的架构改进可用于改善大多数其他计算机视觉任务的性能，这些任务越来越依赖高质量的学习视觉特征。此外，网络质量的提升还使卷积网络进入了新的应用领域，在这些领域中 AlexNet 特征无法与手工设计的解决方案竞争，例如检测中的候选区域生成 [4]。</p>
+<p>尽管 VGGNet [18] 具有架构简单这一引人注目的特点，但其代价很高：评估网络需要大量计算。另一方面，GoogLeNet [20] 的 Inception 架构也被设计为在内存和计算预算严格受限的情况下表现良好。例如，GoogLeNet 仅使用 500 万参数，相比其前身 AlexNet 的 6000 万参数减少了 12 倍。此外，VGGNet 使用的参数约为 AlexNet 的 3 倍。</p>
+<p>Inception 的计算成本也远低于 VGGNet 或其性能更高的后继者 [6]。这使得 Inception 网络可用于大数据场景 [17],[13]，其中需要以合理成本处理海量数据，或者用于内存或计算能力本质上有限的场景，例如移动视觉设置。当然，可以通过针对目标内存使用应用专门解决方案 [2],[15]，或通过计算技巧优化某些操作的执行 [10] 来缓解部分问题。然而，这些方法增加了额外复杂性。此外，这些方法也可以应用于优化 Inception 架构，从而再次扩大效率差距。</p>
+<p>尽管如此，Inception 架构的复杂性使其更难对网络进行更改。如果朴素地放大架构，很大一部分计算收益可能立即丧失。此外，[20] 没有清晰描述导致 GoogLeNet 架构各种设计决策的贡献因素。这使其更难在保持效率的同时适应新用例。例如，如果认为有必要增加某个 Inception 风格模型的容量，简单地将所有滤波器组大小翻倍会导致计算成本和参数数量都增加 4 倍。在许多实际场景中，这可能不可行或不合理，尤其是当相关收益有限时。本文首先描述一些通用原则和优化思想，这些原则和思想已被证明对高效扩展卷积网络有用。尽管我们的原则不限于 Inception 类型网络，但在该背景下更容易观察，因为 Inception 风格构建块的通用结构足够灵活，可以自然地纳入这些约束。这得益于 Inception 模块大量使用降维和并行结构，从而减轻结构变化对邻近组件的影响。不过仍需谨慎，应遵循一些指导原则以保持模型高质量。</p>
+
+<h2>2. 通用设计原则</h2>
+<p>这里我们基于对卷积网络各种架构选择的大规模实验，描述一些设计原则。目前，以下原则的实用性仍是推测性的，未来还需要额外实验证据来评估其准确性和有效范围。尽管如此，严重偏离这些原则往往会导致网络质量下降，而修复检测到的偏离通常会得到改进的架构。</p>
+<ol>
+<li><b>避免表示瓶颈，尤其是在网络早期。</b>前馈网络可以表示为从输入层到分类器或回归器的无环图。这定义了信息流的明确方向。对于任何将输入与输出分开的切割，都可以访问通过该切割的信息量。应避免极端压缩的瓶颈。一般来说，表示大小应从输入到输出逐渐减小，然后再到达用于当前任务的最终表示。理论上，信息内容不能仅由表示的维度来评估，因为维度会丢弃相关结构等重要因素；维度仅提供信息内容的粗略估计。</li>
+<li><b>更高维的表示更容易在网络内部进行局部处理。</b>增加卷积网络中每个图块的激活数量，可以获得更解耦的特征。所得网络将训练得更快。</li>
+<li><b>空间聚合可以在较低维嵌入上进行，而不会造成多少表示能力损失，甚至没有损失。</b>例如，在执行更分散的（例如 \(3\times3\)）卷积之前，可以在空间聚合之前降低输入表示的维度，而不预期会有严重不利影响。我们假设原因是：如果输出用于空间聚合上下文，相邻单元结果之间的强相关性会在降维期间导致信息损失小得多。鉴于这些信号应易于压缩，降维甚至促进更快学习。</li>
+<li><b>平衡网络的宽度和深度。</b>通过平衡每个阶段的滤波器数量和网络深度，可以达到网络的最佳性能。同时增加网络宽度和深度有助于获得更高质量的网络。然而，在计算量恒定的情况下，如果二者并行增加，可以达到最佳改进。因此，计算预算应在网络深度和宽度之间以平衡方式分配。</li>
+</ol>
+<p>尽管这些原则可能合理，但直接使用它们来开箱即用地改进网络质量并不简单。其思想是仅在模糊情况下审慎使用。</p>
+
+<h2>3. 使用大滤波器的卷积分解</h2>
+<p>GoogLeNet 网络 [20] 的许多原始收益来自大量使用降维。这可以看作是以计算高效方式分解卷积的特例。例如考虑一个 \(1\times1\) 卷积层后接一个 \(3\times3\) 卷积层的情况。在视觉网络中，预期邻近激活的输出高度相关。因此，我们可以预期它们的激活可以在聚合之前被降低，并且这应产生同样有表现力的局部表示。</p>
+<p>这里我们探索在各种设置下分解卷积的其他方式，特别是为了提高解决方案的计算效率。由于 Inception 网络是全卷积的，每个权重对应每次激活的一次乘法。因此，计算成本的任何降低都会导致参数数量减少。这意味着通过适当分解，我们可以得到更解耦的参数，从而训练更快。此外，我们可以利用计算和内存节省来增加网络的滤波器组大小，同时保持每个模型副本可在单台计算机上训练的能力。</p>
+
+<h3>3.1 分解为更小的卷积</h3>
+<p>具有较大空间滤波器的卷积（例如 \(5\times5\) 或 \(7\times7\)）在计算上往往不成比例地昂贵。例如，在具有 \(m\) 个滤波器的网格上使用 \(n\) 个滤波器的 \(5\times5\) 卷积，其计算成本是具有相同滤波器数量的 \(3\times3\) 卷积的 \(25/9=2.78\) 倍。当然，\(5\times5\) 滤波器可以捕获早期层中更远单元激活之间的信号依赖关系，因此减少滤波器几何尺寸会以表达力为代价。然而，我们可以问：是否可以用一个参数更少、输入尺寸和输出深度相同的多层网络替换 \(5\times5\) 卷积？如果放大 \(5\times5\) 卷积的计算图，我们会看到每个输出看起来像一个小型全连接网络在其输入上滑动 \(5\times5\) 图块（见图 1）。由于我们构建的是视觉网络，再次利用平移不变性并用两层卷积架构替换全连接组件似乎很自然：第一层是 \(3\times3\) 卷积，第二层是在第一层 \(3\times3\) 输出网格上的全连接层（见图 1）。在输入激活网格上滑动这个小网络，归结为用两层 \(3\times3\) 卷积替换 \(5\times5\) 卷积（比较图 4 与图 5）。</p>
+<figure>
+<figcaption>图 1：替换 \(5\times5\) 卷积的迷你网络。</figcaption>
+</figure>
+<p>这种设置通过在相邻图块之间共享权重，明显减少了参数数量。为了分析预期计算成本节省，我们做几个适用于典型情况的简化假设：可以假设 \(n=\alpha m\)，即我们希望将激活/单元数量改变一个常数 alpha 因子。由于 \(5\times5\) 卷积是聚合的，\(\alpha\) 通常略大于 1（GoogLeNet 中约为 1.5）。用两层替换 \(5\times5\) 层时，分两步达到这种扩展似乎是合理的：两步中都将滤波器数量增加 \(\sqrt{\alpha}\)。为简化估计，选择 \(\alpha=1\)（不扩展）。如果朴素地滑动网络而不复用相邻网格图块之间的计算，我们会增加计算成本。滑动该网络可以表示为两个 \(3\times3\) 卷积层，它们在相邻图块之间复用激活。这样，我们最终获得净 \(\frac{9+9}{25}\times\) 的计算减少，这种分解带来 28% 的相对收益。参数数量也有完全相同的节省，因为每个参数在计算每个单元的激活时恰好使用一次。尽管如此，这种设置提出两个一般性问题：这种替换是否会导致任何表达力损失？如果我们的主要目标是分解计算的线性部分，是否建议在第一层保持线性激活？我们进行了几个控制实验（例如见图 2），使用线性激活在分解的所有阶段总是劣于使用修正线性单元。我们将这一收益归因于网络可以学习的变化空间增强，尤其是当我们对输出激活进行批归一化 [7] 时。对降维组件使用线性激活时也可以看到类似效果。</p>
+<figure>
+<figcaption>图 2：两个 Inception 模型之间的若干控制实验之一：一个使用分解为线性 + ReLU 层，另一个使用两个 ReLU 层。经过 386 万次操作后，前者在验证集上稳定在 76.2% top-1 准确率，而后者达到 77.2%。</figcaption>
+</figure>
+
+<h3>3.2 空间分解为非对称卷积</h3>
+<p>上述结果表明，大于 \(3\times3\) 的滤波器卷积可能并不普遍有用，因为它们总是可以约简为一系列 \(3\times3\) 卷积层。但我们仍可以问：是否应将它们分解为更小的，例如 \(2\times2\) 卷积？然而，事实证明，使用非对称卷积（例如 \(n\times1\)）可以比 \(2\times2\) 做得更好。例如，使用 \(3\times1\) 卷积后接 \(1\times3\) 卷积，等价于滑动一个具有与 \(3\times3\) 卷积相同感受野的两层网络（见图 3）。在输入和输出滤波器数量相等时，对于相同数量的输出滤波器，两层解决方案仍便宜 33%。相比之下，将 \(3\times3\) 卷积分解为两个 \(2\times2\) 卷积只节省 11% 计算。</p>
+<figure>
+<figcaption>图 3：替换 \(3\times3\) 卷积的迷你网络。该网络的下层由具有 3 个输出单元的 \(3\times1\) 卷积组成。</figcaption>
+</figure>
+<figure>
+<figcaption>图 4：[20] 中描述的原始 Inception 模块。</figcaption>
+</figure>
+<figure>
+<figcaption>图 5：每个 \(5\times5\) 卷积被两个 \(3\times3\) 卷积替换的 Inception 模块，如第 2 节原则 3 所建议。</figcaption>
+</figure>
+<p>理论上，我们甚至可以进一步认为，任何 \(n\times n\) 卷积都可以替换为 \(1\times n\) 卷积后接 \(n\times1\) 卷积，并且计算成本节省随 \(n\) 增长而急剧增加（见图 6）。实践中，我们发现这种分解在早期层效果不佳，但在中等网格尺寸上效果很好（在 \(m\times m\) 特征图上，\(m\) 在 12 到 20 之间）。在该层级上，使用 \(1\times7\) 卷积后接 \(7\times1\) 卷积可以取得很好的结果。</p>
+<figure>
+<figcaption>图 6：\(n\times n\) 卷积分解后的 Inception 模块。在我们提出的架构中，对于 \(17\times17\) 网格选择 \(n=7\)。（滤波器大小使用原则 3 选择。）</figcaption>
+</figure>
+
+<h2>4. 辅助分类器的效用</h2>
+<p>[20] 引入了辅助分类器的概念，以改善非常深网络的收敛。最初的动机是将有用的梯度推向较低层，使其立即有用，并通过对抗非常深网络中的梯度消失问题来改善训练期间的收敛。Lee 等 [11] 也认为辅助分类器促进更稳定的学习和更好的收敛。有趣的是，我们发现辅助分类器在训练早期并未带来更好的收敛：在两种模型都达到高准确率之前，带侧头和不带侧头网络的训练进展看起来几乎相同。在训练接近尾声时，带辅助分支的网络开始超过没有任何辅助分支的网络准确率，并达到略高的平台。</p>
+<p>此外，[20] 在网络不同阶段使用了两个侧头。移除较低辅助分支对网络最终质量没有任何不利影响。结合上一段的早期观察，这意味着 [20] 关于这些分支有助于演化低层特征的原始假设很可能是不正确的。相反，我们认为辅助分类器起到正则化器的作用。这得到以下事实的支持：如果侧分支经过批归一化 [7] 或具有 dropout 层，网络的主分类器表现更好。这也为批归一化充当正则化器的猜想提供了弱支持证据。</p>
+
+<h2>5. 高效网格尺寸缩减</h2>
+<p>传统上，卷积网络使用某种池化操作来减小特征图的网格尺寸。为了避免表示瓶颈，在应用最大或平均池化之前，会扩展网络滤波器的激活维度。例如，从具有 \(k\) 个滤波器的 \(d\times d\) 网格开始，如果我们希望得到具有 \(2k\) 个滤波器的 \(\frac{d}{2}\times\frac{d}{2}\) 网格，首先需要计算具有 \(2k\) 个滤波器的 stride-1 卷积，然后应用额外池化步骤。这意味着总体计算成本由较大网格上使用 \(2d^2k^2\) 操作的昂贵卷积主导。一种可能性是改用带卷积的池化，从而得到 \(2(\frac{d}{2})^2k^2\)，将计算成本减少四分之一。然而，这会产生表示瓶颈，因为表示的总维度降至 \((\frac{d}{2})^2k\)，导致网络表达力下降（见图 9）。我们建议另一种变体，在消除表示瓶颈的同时进一步降低计算成本（见图 10）。我们可以使用两个并行的 stride 2 块：\(P\) 和 \(C\)。\(P\) 是池化层（平均或最大池化），二者的激活都是 stride 2，其滤波器组如图 10 所示拼接。</p>
+<figure>
+<figcaption>图 7：扩展滤波器组输出的 Inception 模块。该架构用于最粗的 \((8\times8)\) 网格，以促进高维表示，如第 2 节原则 2 所建议。我们仅在最粗网格上使用该方案，因为在那里生成高维稀疏表示最为关键，因为相比空间聚合，局部处理（通过 \(1\times1\) 卷积）的比例增加了。</figcaption>
+</figure>
+<figure>
+<figcaption>图 8：最后一个 \(17\times17\) 层之上的辅助分类器。侧头中各层的批归一化 [7] 带来 0.4% 的 top-1 准确率绝对增益。下方轴显示执行的迭代次数，每批大小为 32。</figcaption>
+</figure>
+<figure>
+<figcaption>图 9：减小网格尺寸的两种替代方式。左侧方案违反第 2 节原则 1，即不引入表示瓶颈。右侧版本计算成本高 3 倍。</figcaption>
+</figure>
+<figure>
+<figcaption>图 10：在扩展滤波器组的同时减小网格尺寸的 Inception 模块。它既便宜又避免表示瓶颈，如原则 1 所建议。右图从网格尺寸而非操作角度表示同一方案。</figcaption>
+</figure>
+
+<h2>6. Inception-v2</h2>
+<p>这里我们将上述要点连接起来，提出一种在 ILSVRC 2012 分类基准上性能改进的新架构。网络布局见表 1。注意，我们基于第 3.1 节描述的相同思想，将传统 \(7\times7\) 卷积分解为三个 \(3\times3\) 卷积。对于网络的 Inception 部分，我们在 \(35\times35\) 上使用 3 个传统 Inception 模块，每个 288 个滤波器。使用第 5 节描述的网格缩减技术将其缩减为具有 768 个滤波器的 \(17\times17\) 网格。随后是 5 个如图 5 所示的分解 Inception 模块实例。使用图 10 所示的网格缩减技术将其缩减为 \(8\times8\times1280\) 网格。在最粗的 \(8\times8\) 层级，我们有两个如图 6 所示的 Inception 模块，每个图块的拼接输出滤波器组大小为 2048。包括 Inception 模块内部滤波器组大小在内的网络详细结构见补充材料，即本次提交 tar 文件中的 model.txt。</p>
+
+<table>
+<caption>表 1：所提出网络架构概要。每个模块的输出尺寸是下一个模块的输入尺寸。我们使用图 10 所示缩减技术的变体，在适用时减小 Inception 块之间的网格尺寸。我们标记了带 0 填充的卷积，用于保持网格尺寸。那些不减小网格尺寸的 Inception 模块内部也使用 0 填充。所有其他层不使用填充。各种滤波器组大小选择遵循第 2 节原则 4。</caption>
+<thead>
+<tr><th>类型</th><th>patch size/stride 或备注</th><th>输入尺寸</th></tr>
+</thead>
+<tbody>
+<tr><td>conv</td><td>3×3/2</td><td>299×299×3</td></tr>
+<tr><td>conv</td><td>3×3/1</td><td>149×149×32</td></tr>
+<tr><td>conv padded</td><td>3×3/1</td><td>147×147×32</td></tr>
+<tr><td>pool</td><td>3×3/2</td><td>147×147×64</td></tr>
+<tr><td>conv</td><td>3×3/1</td><td>73×73×64</td></tr>
+<tr><td>conv</td><td>3×3/2</td><td>71×71×80</td></tr>
+<tr><td>conv</td><td>3×3/1</td><td>35×35×192</td></tr>
+<tr><td>3×Inception</td><td>如图 5</td><td>35×35×288</td></tr>
+<tr><td>5×Inception</td><td>如图 6</td><td>17×17×768</td></tr>
+<tr><td>2×Inception</td><td>如图 7</td><td>8×8×1280</td></tr>
+<tr><td>pool</td><td>8×8</td><td>8×8×2048</td></tr>
+<tr><td>linear</td><td>logits</td><td>1×1×2048</td></tr>
+<tr><td>softmax</td><td>classifier</td><td>1×1×1000</td></tr>
+</tbody>
+</table>
+
+<p>然而，我们观察到只要遵守第 2 节原则，网络质量对变化相对稳定。尽管我们的网络有 42 层深，计算成本仅比 GoogLeNet 高约 2.5 倍，并且仍比 VGGNet 高效得多。</p>
+
+<h2>7. 通过标签平滑进行模型正则化</h2>
+<p>这里我们提出一种机制，通过估计训练期间标签 dropout 的边缘化效应来正则化分类器层。</p>
+<p>对于每个训练样本 \(x\)，我们的模型计算每个标签 \(k\in\{1\ldots K\}\) 的概率：\(p(k|x)=\frac{\exp(z_k)}{\sum_{i=1}^{K}\exp(z_i)}\)。这里 \(z_i\) 是 logits 或未归一化对数概率。考虑该训练样本在标签上的真实分布 \(q(k|x)\)，归一化使得 \(\sum_k q(k|x)=1\)。为简洁起见，省略 \(p\) 和 \(q\) 对样本 \(x\) 的依赖。我们将样本损失定义为交叉熵：\(\ell=-\sum_{k=1}^{K}\log(p(k))q(k)\)。最小化它等价于最大化标签的期望对数似然，其中标签根据其真实分布 \(q(k)\) 选择。交叉熵损失相对于 logits \(z_k\) 可微，因此可用于深度模型的梯度训练。梯度形式相当简单：\(\frac{\partial\ell}{\partial z_k}=p(k)-q(k)\)，其值在 -1 和 1 之间有界。</p>
+<p>考虑单个真实标签 \(y\) 的情况，即 \(q(y)=1\)，且对所有 \(k\neq y\) 有 \(q(k)=0\)。在这种情况下，最小化交叉熵等价于最大化正确标签的对数似然。对于具有标签 \(y\) 的特定样本 \(x\)，当 \(q(k)=\delta_{k,y}\) 时对数似然最大化，其中 \(\delta_{k,y}\) 是 Dirac delta，当 \(k=y\) 时等于 1，否则为 0。对于有限 \(z_k\)，该最大值不可达到，但如果对所有 \(k\neq y\) 有 \(z_y\gg z_k\)，则会接近该最大值——即对应真实标签的 logit 远大于所有其他 logits。然而，这可能导致两个问题。第一，可能导致过拟合：如果模型学会对每个训练样本将全部概率分配给真实标签，则不能保证泛化。第二，它促使最大 logit 与其他 logit 之间的差异变大，再加上有界梯度 \(\frac{\partial\ell}{\partial z_k}\)，会降低模型的适应能力。直观地说，这是因为模型对其预测变得过于自信。</p>
+<p>我们提出一种机制，鼓励模型不那么自信。虽然如果目标是最大化训练标签的对数似然，这可能不是 desired，但它确实正则化了模型并使其更具适应性。方法非常简单。考虑标签上的分布 \(u(k)\)，独立于训练样本 \(x\)，以及平滑参数 \(\epsilon\)。对于真实标签为 \(y\) 的训练样本，我们将标签分布 \(q(k|x)=\delta_{k,y}\) 替换为</p>
+<div class="formula">\(q'(k|x)=(1-\epsilon)\delta_{k,y}+\epsilon u(k)\)</div>
+<p>它是原始真实分布 \(q(k|x)\) 和固定分布 \(u(k)\) 的混合，权重分别为 \(1-\epsilon\) 和 \(\epsilon\)。这可以看作按如下方式获得标签 \(k\) 的分布：首先将其设为真实标签 \(k=y\)；然后以概率 \(\epsilon\) 将 \(k\) 替换为从分布 \(u(k)\) 中抽取的样本。我们提出使用标签上的先验分布作为 \(u(k)\)。在实验中，我们使用均匀分布 \(u(k)=1/K\)，因此</p>
+<div class="formula">\(q'(k)=(1-\epsilon)\delta_{k,y}+\frac{\epsilon}{K}\)</div>
+<p>我们将这种真实标签分布的变化称为标签平滑正则化（LSR）。</p>
+<p>注意，LSR 实现了防止最大 logit 变得远大于所有其他 logit 的预期目标。确实，如果发生这种情况，单个 \(q(k)\) 会接近 1，而所有其他 \(q(k)\) 会接近 0。由于与 \(q(k)=\delta_{k,y}\) 不同，所有 \(q'(k)\) 都有正下界，因此这会导致 \(q'(k)\) 的交叉熵很大。</p>
+<p>LSR 的另一种解释可以通过考虑交叉熵得到：</p>
+<div class="formula">\(H(q',p)=-\sum_{k=1}^{K}\log p(k)q'(k)=(1-\epsilon)H(q,p)+\epsilon H(u,p)\)</div>
+<p>因此，LSR 等价于将单个交叉熵损失 \(H(q,p)\) 替换为一对这样的损失 \(H(q,p)\) 和 \(H(u,p)\)。</p>
+<p>第二个损失以相对权重 \(\frac{\epsilon}{1-\epsilon}\) 惩罚预测标签分布 \(p\) 偏离先验 \(u\)。注意，这种偏离可以等价地由 KL 散度捕获，因为 \(H(u,p)=D_{KL}(u\|p)+H(u)\)，且 \(H(u)\) 固定。当 \(u\) 是均匀分布时，\(H(u,p)\) 衡量预测分布 \(p\) 与均匀分布的不相似程度，也可以用负熵 \(-H(p)\) 衡量（但不等价）；我们未实验该方法。</p>
+<p>在 \(K=1000\) 类的 ImageNet 实验中，我们使用 \(u(k)=1/1000\) 和 \(\epsilon=0.1\)。对于 ILSVRC 2012，我们发现 top-1 错误率和 top-5 错误率都一致改善约 0.2% 绝对值（参见表 3）。</p>
+
+<h2>8. 训练方法</h2>
+<p>我们使用 TensorFlow [1] 分布式机器学习系统，以 50 个副本在 NVidia Kepler GPU 上运行，批大小 32，训练 100 个 epoch，采用随机梯度训练网络。早期实验使用衰减 0.9 的动量 [19]，而最佳模型使用衰减 0.9、\(\epsilon=1.0\) 的 RMSProp [21]。学习率为 0.045，每两个 epoch 按指数速率 0.94 衰减。此外，发现阈值 2.0 的梯度裁剪 [14] 有助于稳定训练。模型评估使用随时间计算的参数运行平均。</p>
+
+<h2>9. 低分辨率输入上的性能</h2>
+<p>视觉网络的一个典型用例是检测的后分类，例如在 Multibox [4] 背景下。这包括分析包含单个对象及一些上下文的相对较小图像块。任务是判断图像块中心部分是否对应某个对象，如果对应则确定对象类别。挑战在于对象往往相对较小且分辨率低。这提出了如何正确处理低分辨率输入的问题。</p>
+<p>普遍观点是，采用更高分辨率感受野的模型往往显著改善识别性能。然而，重要的是区分第一层感受野分辨率增加的效果与更大模型容量和计算的效果。如果我们只改变输入分辨率而不进一步调整模型，那么最终会用计算上便宜得多的模型解决更困难的任务。当然，这些解决方案已经因计算量减少而处于劣势，这是自然的。为了准确评估，模型需要分析模糊线索以便“幻觉”出细节。这是计算昂贵的。因此问题仍然是：在计算量恒定的情况下，更高输入分辨率有多大帮助。确保恒定计算量的一种简单方法是，在低分辨率输入情况下减小前两层的 stride，或者直接移除网络的第一池化层。</p>
+<p>为此，我们进行了以下三个实验：</p>
+<ol>
+<li>\(299\times299\) 感受野，stride 2，第一层后最大池化。</li>
+<li>\(151\times151\) 感受野，stride 1，第一层后最大池化。</li>
+<li>\(79\times79\) 感受野，stride 1，第一层后不池化。</li>
+</ol>
+<p>三个网络的计算成本几乎相同。尽管第三个网络略便宜，但池化层成本很小（在网络总成本的 1% 以内）。每种情况下，网络训练至收敛，并在 ImageNet ILSVRC 2012 分类基准验证集上测量质量。结果见表 2。尽管低分辨率网络训练时间更长，但最终结果质量与高分辨率对应网络相当接近。</p>
+<p>然而，如果只是根据输入分辨率朴素地减小网络大小，网络表现会差得多。但这是不公平的比较，因为我们会在更困难任务上比较便宜 16 倍的模型。</p>
+<p>表 2 的结果还表明，可以考虑在 R-CNN [5] 背景下为较小对象使用专门的高成本低分辨率网络。</p>
+
+<table>
+<caption>表 2：感受野大小变化但计算成本恒定时识别性能比较。注：所提供原文中该表仅见标题，未包含具体数据行。</caption>
+<thead>
+<tr><th>实验</th><th>感受野</th><th>stride</th><th>第一层后池化</th><th>计算成本</th><th>识别性能</th></tr>
+</thead>
+<tbody>
+<tr><td>1</td><td>299×299</td><td>2</td><td>最大池化</td><td>约恒定</td><td>见表 2 原文（数据未提供）</td></tr>
+<tr><td>2</td><td>151×151</td><td>1</td><td>最大池化</td><td>约恒定</td><td>见表 2 原文（数据未提供）</td></tr>
+<tr><td>3</td><td>79×79</td><td>1</td><td>无</td><td>约恒定</td><td>见表 2 原文（数据未提供）</td></tr>
+</tbody>
+</table>
+
+<h2>10. 实验结果与比较</h2>
+<p>表 3 显示了所提出架构（Inception-v2，如第 6 节所述）的识别性能实验结果。每个 Inception-v2 行显示累积变化的结果，包括高亮的新修改加上所有先前修改。Label Smoothing 指第 7 节描述的方法。Factorized \(7\times7\) 包括将第一个 \(7\times7\) 卷积层分解为一系列 \(3\times3\) 卷积层的改变。BN-auxiliary 指辅助分类器的全连接层也进行批归一化，而不仅仅是卷积的版本。我们将表 3 最后一行的模型称为 Inception-v3，并在多裁剪和集成设置中评估其性能。</p>
+
+<table>
+<caption>表 3：单裁剪实验结果，比较各种贡献因素的累积效应。我们将数值与 Ioffe 等 [7] 的最佳已发表单裁剪推理比较。对于“Inception-v2”行，变化是累积的，每个后续行都包含新变化以及先前变化。最后一行指所有变化，即下文中我们所说的“Inception-v3”。不幸的是，He 等 [6] 只报告了 10 裁剪评估结果，而未报告单裁剪结果，后者见下表 4。</caption>
+<thead>
+<tr><th>网络</th><th>Top-1 错误率</th><th>Top-5 错误率</th><th>Cost BN Ops</th></tr>
+</thead>
+<tbody>
+<tr><td>GoogLeNet [20]</td><td>29%</td><td>9.2%</td><td>1.5</td></tr>
+<tr><td>BN-GoogLeNet</td><td>26.8%</td><td>—</td><td>1.5</td></tr>
+<tr><td>BN-Inception [7]</td><td>25.2%</td><td>7.8</td><td>2.0</td></tr>
+<tr><td>Inception-v2</td><td>23.4%</td><td>—</td><td>3.8</td></tr>
+<tr><td>Inception-v2 RMSProp</td><td>23.1%</td><td>6.3</td><td>3.8</td></tr>
+<tr><td>Inception-v2 Label Smoothing</td><td>22.8%</td><td>6.1</td><td>3.8</td></tr>
+<tr><td>Inception-v2 Factorized 7 × 7</td><td>21.6%</td><td>5.8</td><td>4.8</td></tr>
+<tr><td>Inception-v2 BN-auxiliary</td><td>21.2%</td><td>5.6%</td><td>4.8</td></tr>
+</tbody>
+</table>
+
+<table>
+<caption>表 4：单模型、多裁剪实验结果，比较各种贡献因素的累积效应。我们将数值与 ILSVRC 2012 分类基准上最佳已发表单模型推理结果比较。</caption>
+<thead>
+<tr><th>网络</th><th>评估裁剪数</th><th>Top-5 错误率</th><th>Top-1 错误率</th></tr>
+</thead>
+<tbody>
+<tr><td>GoogLeNet [20]</td><td>10</td><td>—</td><td>9.15%</td></tr>
+<tr><td>GoogLeNet [20]</td><td>144</td><td>—</td><td>7.89%</td></tr>
+<tr><td>VGG [18]</td><td>—</td><td>24.4%</td><td>6.8%</td></tr>
+<tr><td>BN-Inception [7]</td><td>144</td><td>22%</td><td>5.82%</td></tr>
+<tr><td>PReLU [6]</td><td>10</td><td>24.27%</td><td>7.38%</td></tr>
+<tr><td>PReLU [6]</td><td>—</td><td>21.59%</td><td>5.71%</td></tr>
+<tr><td>Inception-v3</td><td>12</td><td>19.47%</td><td>4.48%</td></tr>
+<tr><td>Inception-v3</td><td>144</td><td>18.77%</td><td>4.2%</td></tr>
+</tbody>
+</table>
+
+<table>
+<caption>表 5：集成评估结果，比较多模型、多裁剪的已报告结果。我们的数值与 ILSVRC 2012 分类基准上最佳已发表集成推理结果比较。*除报告的 top-5 集成结果外，所有结果均在验证集上。该集成在验证集上取得 3.46% top-5 错误率。</caption>
+<thead>
+<tr><th>网络</th><th>评估模型数</th><th>评估裁剪数</th><th>Top-1 错误率</th><th>Top-5 错误率</th></tr>
+</thead>
+<tbody>
+<tr><td>VGGNet [18]</td><td>2</td><td>—</td><td>23.7%</td><td>6.8%</td></tr>
+<tr><td>GoogLeNet [20]</td><td>7</td><td>144</td><td>—</td><td>6.67%</td></tr>
+<tr><td>PReLU [6]</td><td>—</td><td>—</td><td>—</td><td>4.94%</td></tr>
+<tr><td>BN-Inception [7]</td><td>6</td><td>144</td><td>20.1%</td><td>4.9%</td></tr>
+<tr><td>Inception-v3</td><td>4</td><td>144</td><td>17.2%</td><td>3.58%*</td></tr>
+</tbody>
+</table>
+
+<h2>11. 结论</h2>
+<p>我们提供了若干设计原则，用于扩展卷积网络，并在 Inception 架构背景下进行了研究。这些指导可以产生高性能视觉网络，与更简单、更单一的架构相比，计算成本相对适中。我们最高质量的 Inception-v3 版本在 ILSVRC 2012 分类单裁剪评估上达到 21.2% top-1 和 5.6% top-5 错误率，创造了新的最先进结果。与 Ioffe 等 [7] 描述的网络相比，计算成本仅增加约 2.5 倍。尽管如此，我们的解决方案使用的计算量远少于基于更密集网络的最佳已发表结果：我们的模型优于 He 等 [6] 的结果——分别将 top-5（top-1）错误率相对降低 25%（14%）——同时计算成本便宜六倍，参数至少少五倍（估计）。我们的四个 Inception-v3 模型集成在多裁剪评估下达到 3.5% top-5 错误率，相比最佳已发表结果降低超过 25%，几乎是 ILSVRC 2014 获胜 GoogLeNet 集成错误率的一半。</p>
+<p>我们还证明，即使感受野分辨率低至 \(79\times79\)，也能达到高质量结果。这可能有助于检测相对较小对象的系统。我们研究了神经网络内部卷积分解和激进降维如何产生计算成本相对较低但保持高质量的网络。较低参数数量与批归一化辅助分类器和标签平滑的额外正则化相结合，使得在相对适中大小的训练集上训练高质量网络成为可能。</p>
+
+<h2>参考文献</h2>
+<div class="refs">
+<p>[1] M. Abadi, A. Agarwal, P. Barham, E. Brevdo, Z. Chen, C. Citro, G. S. Corrado, A. Davis, J. Dean, M. Devin, S. Ghemawat, I. Goodfellow, A. Harp, G. Irving, M. Isard, Y. Jia, R. Jozefowicz, L. Kaiser, M. Kudlur, J. Levenberg, D. Mane, R. Monga, S. Moore, D. Murray, C. Olah, M. Schuster, J. Shlens, B. Steiner, I. Sutskever, K. Talwar, P. Tucker, V. Vanhoucke, V. Vasudevan, F. Viegas, O. Vinyals, P. Warden, M. Wattenberg, M. Wicke, Y. Yu, and X. Zheng. TensorFlow: Large-scale machine learning on heterogeneous systems, 2015. Software available from tensorflow.org.</p>
+<p>[2] W. Chen, J. T. Wilson, S. Tyree, K. Q. Weinberger, and Y. Chen. Compressing neural networks with the hashing trick. In Proceedings of The 32nd International Conference on Machine Learning, 2015.</p>
+<p>[3] C. Dong, C. C. Loy, K. He, and X. Tang. Learning a deep convolutional network for image super-resolution. In Computer Vision–ECCV 2014, pages 184–199. Springer, 2014.</p>
+<p>[4] D. Erhan, C. Szegedy, A. Toshev, and D. Anguelov. Scalable object detection using deep neural networks. In Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on, pages 2155–2162. IEEE, 2014.</p>
+<p>[5] R. Girshick, J. Donahue, T. Darrell, and J. Malik. Rich feature hierarchies for accurate object detection and semantic segmentation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2014.</p>
+<p>[6] K. He, X. Zhang, S. Ren, and J. Sun. Delving deep into rectifiers: Surpassing human-level performance on imagenet classification. arXiv preprint arXiv:1502.01852, 2015.</p>
+<p>[7] S. Ioffe and C. Szegedy. Batch normalization: Accelerating deep network training by reducing internal covariate shift. In Proceedings of The 32nd International Conference on Machine Learning, pages 448–456, 2015.</p>
+<p>[8] A. Karpathy, G. Toderici, S. Shetty, T. Leung, R. Sukthankar, and L. Fei-Fei. Large-scale video classification with convolutional neural networks. In Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on, pages 1725–1732. IEEE, 2014.</p>
+<p>[9] A. Krizhevsky, I. Sutskever, and G. E. Hinton. Imagenet classification with deep convolutional neural networks. In Advances in neural information processing systems, pages 1097–1105, 2012.</p>
+<p>[10] A. Lavin. Fast algorithms for convolutional neural networks. arXiv preprint arXiv:1509.09308, 2015.</p>
+<p>[11] C.-Y. Lee, S. Xie, P. Gallagher, Z. Zhang, and Z. Tu. Deeply-supervised nets. arXiv preprint arXiv:1409.5185, 2014.</p>
+<p>[12] J. Long, E. Shelhamer, and T. Darrell. Fully convolutional networks for semantic segmentation. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 3431–3440, 2015.</p>
+<p>[13] Y. Movshovitz-Attias, Q. Yu, M. C. Stumpe, V. Shet, S. Arnoud, and L. Yatziv. Ontological supervision for fine grained classification of street view storefronts. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 1693–1702, 2015.</p>
+<p>[14] R. Pascanu, T. Mikolov, and Y. Bengio. On the difficulty of training recurrent neural networks. arXiv preprint arXiv:1211.5063, 2012.</p>
+<p>[15] D. C. Psichogios and L. H. Ungar. SVD-net: an algorithm that automatically selects network structure. IEEE transactions on neural networks/a publication of the IEEE Neural Networks Council, 5(3):513–515, 1993.</p>
+<p>[16] O. Russakovsky, J. Deng, H. Su, J. Krause, S. Satheesh, S. Ma, Z. Huang, A. Karpathy, A. Khosla, M. Bernstein, et al. Imagenet large scale visual recognition challenge. 2014.</p>
+<p>[17] F. Schroff, D. Kalenichenko, and J. Philbin. Facenet: A unified embedding for face recognition and clustering. arXiv preprint arXiv:1503.03832, 2015.</p>
+<p>[18] K. Simonyan and A. Zisserman. Very deep convolutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556, 2014.</p>
+<p>[19] I. Sutskever, J. Martens, G. Dahl, and G. Hinton. On the importance of initialization and momentum in deep learning. In Proceedings of the 30th International Conference on Machine Learning (ICML-13), volume 28, pages 1139–1147. JMLR Workshop and Conference Proceedings, May 2013.</p>
+<p>[20] C. Szegedy, W. Liu, Y. Jia, P. Sermanet, S. Reed, D. Anguelov, D. Erhan, V. Vanhoucke, and A. Rabinovich. Going deeper with convolutions. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 1–9, 2015.</p>
+<p>[21] T. Tieleman and G. Hinton. Divide the gradient by a running average of its recent magnitude. COURSERA: Neural Networks for Machine Learning, 4, 2012. Accessed: 2015-11-05.</p>
+<p>[22] A. Toshev and C. Szegedy. Deeppose: Human pose estimation via deep neural networks. In Computer Vision and Pattern Recognition (CVPR), 2014 IEEE Conference on, pages 1653–1660. IEEE, 2014.</p>
+<p>[23] N. Wang and D.-Y. Yeung. Learning a deep compact image representation for visual tracking. In Advances in Neural Information Processing Systems, pages 809–817, 2013.</p>
+</div>
+
+<hr>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 10 未嵌入图片，仅保留图注说明；表 2 在所提供的原文中仅见标题，未包含具体数据行，故以说明形式呈现。原文中部分 OCR 重复段落已合并整理。</p>
+
+</body>
+</html>

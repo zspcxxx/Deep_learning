@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Download the Transformer papers referenced by lesson 16 into docs/papers/.
+"""Download the Transformer papers referenced by lesson 16 into docs/papers/en/.
 
 The PDFs are not committed (arXiv licences usually do not allow redistribution); this script
-fetches them from arXiv and writes docs/papers/manifest.json with size and SHA-256. Run again to
+fetches them from arXiv and writes docs/papers/en/manifest.json with size and SHA-256. Run again to
 fetch missing files; existing files are checked against the manifest and kept.
 
     python scripts/fetch_papers.py            # download missing, verify existing
@@ -18,7 +18,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-PAPERS_DIR = Path(__file__).resolve().parents[1] / "docs" / "papers"
+PAPERS_DIR = Path(__file__).resolve().parents[1] / "docs" / "papers" / "en"
 MANIFEST = PAPERS_DIR / "manifest.json"
 
 # (arXiv id, short file name, title, year)

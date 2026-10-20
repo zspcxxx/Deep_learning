@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>语言模型是少样本学习者</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
+  a { color: #1f6feb; }
+</style>
+</head>
+<body>
+<p class="banner">中文导读译自 arXiv:2005.14165（对照 <a href="../en/2005.14165_gpt3.pdf">英文 PDF</a>）。Decoder-only 规模化与 in-context learning；全文极长，本导读抓主线。</p>
+<h1>语言模型是少样本学习者</h1>
+<p class="subtitle">Language Models are Few-Shot Learners</p>
+<div class="authors">Tom B. Brown*，Benjamin Mann*，Nick Ryder*，Melanie Subbiah* 等，OpenAI</div>
+<div class="abstract"><h2>摘要</h2><p>大规模预训练再微调虽强，仍需成千上万条任务标注。人类往往几条示例或一句指令就能上手。本文表明：把语言模型做大可显著提升任务无关的少样本表现，有时甚至媲美以往微调 SOTA。作者训练了约 1750 亿参数的自回归模型 GPT-3（约为此前非稀疏 LM 的 10 倍），在少样本设定下评估：不做梯度更新，仅通过文本交互给出任务与示例。GPT-3 在翻译、问答、完形及现场推理（拆词、用新词造句、三位数算术等）上表现强；也指出若干仍困难的数据与网络语料带来的方法学问题。人类评委难以区分其生成新闻与真人写作。文中讨论了社会影响。</p></div>
+<h2>1 动机</h2>
+<p>「预训练 + 微调」每个任务仍要收集标注。作者追问：能否让同一模型仅通过提示（prompt）适应新任务？关键杠杆是规模——参数与数据一起上。</p>
+<h2>2 评估协议</h2>
+<ul>
+<li><b>Zero-shot</b>：只给自然语言指令。</li>
+<li><b>One-shot / Few-shot</b>：再给 1 或 \(K\) 条示例，仍无梯度更新。</li>
+<li>与任务专用微调系统对比。</li>
+</ul>
+<p>模型在上下文中「读懂」格式并套用到新题，称为 in-context learning。</p>
+<h2>3 模型与结果轮廓</h2>
+<p>最大配置约 175B，解码器 Transformer。许多 NLP 基准上，few-shot 曲线随规模上升；部分任务逼近或超过微调系统。也有明显短板（某些推理、偏见与数据污染风险）。生成新闻的人类区分实验是社会讨论的引爆点之一。</p>
+<h2>4 课程读法</h2>
+<p>不必通读 70+ 页。优先：摘要、引言中的三种协议、规模曲线、局限性。架构与第 15 课同族，差别在尺度与涌现出的提示学习。</p>
+<h2>参考文献（节选）</h2>
+<div class="refs"><p>Tom B. Brown et al. Language Models are Few-Shot Learners. NeurIPS, 2020.</p><p>Jared Kaplan et al. Scaling Laws for Neural Language Models. 2020.</p><p>Alec Radford et al. Language Models are Unsupervised Multitask Learners (GPT-2). 2019.</p></div>
+<hr>
+<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与关键数字，并非逐句全译。图表未嵌入；完整证明、表格与附录见英文原文。</p>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一幅图像值 16×16 个词：规模化的视觉 Transformer</title>
+<style>
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
+  h1 { text-align: center; margin-bottom: 0.4em; }
+  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
+  h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
+  .abstract h2 { border: none; margin-top: 0; }
+  .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
+  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  .note { font-size: 0.95em; color: #555; }
+  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
+  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
+  a { color: #1f6feb; }
+</style>
+</head>
+<body>
+<p class="banner">中文导读译自 arXiv:2010.11929（对照 <a href="../en/2010.11929_vit.pdf">英文 PDF</a>）。对照第 10 课 CNN：patch 序列 + 标准 Transformer。</p>
+<h1>一幅图像值 16×16 个词：规模化的视觉 Transformer</h1>
+<p class="subtitle">An Image is Worth 16×16 Words: Transformers for Image Recognition at Scale</p>
+<div class="authors">Alexey Dosovitskiy*，Lucas Beyer*，Alexander Kolesnikov* 等，Google Research, Brain Team</div>
+<div class="abstract"><h2>摘要</h2><p>Transformer 已是 NLP 默认架构，在视觉中却仍多与卷积混用。本文表明不必依赖 CNN：把图像切成图块，对图块嵌入序列施加标准 Transformer，即可在分类上表现优异。在大规模数据上预训练再迁移到 ImageNet、CIFAR-100、VTAB 等时，Vision Transformer（ViT）相对 SOTA 卷积网络结果出色，训练算力需求也更低。</p></div>
+<h2>1 方法</h2>
+<p>将图像划分为 \(P\times P\) 不重叠 patch（故名「16×16 个词」），展平后线性映射到 \(d\) 维，加上 1D 位置编码与可选 [CLS]，送入 BERT 式编码器。分类头接在 [CLS] 或全局池化上。几乎不加卷积归纳偏置。</p>
+<h2>2 数据规模胜过先验</h2>
+<p>仅在 ImageNet 量级训练时，ViT 常略逊可比 ResNet——缺局部性与平移等变。当预训练达到约 14M–300M 图像（ImageNet-21k 或 JFT-300M）时，大规模训练压过归纳偏置。文中最佳结果约：ImageNet 88.55%、ImageNet-ReaL 90.72%、CIFAR-100 94.55%、VTAB 19 任务 77.63%。</p>
+<h2>3 与本课</h2>
+<p>第 10 课用手写 CNN 检测猫；ViT 把「卷积」换成「序列注意力 + 大数据」。理解 patch embedding 后，第 14–15 课的注意力可直接作用在像素块上。</p>
+<h2>参考文献（节选）</h2>
+<div class="refs"><p>Alexey Dosovitskiy et al. An Image is Worth 16x16 Words. ICLR, 2021.</p><p>Kaiming He et al. Deep Residual Learning for Image Recognition. 2016.</p></div>
+<hr>
+<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与关键数字，并非逐句全译。图表未嵌入；完整证明、表格与附录见英文原文。</p>
+</body>
+</html>
