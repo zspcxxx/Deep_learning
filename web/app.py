@@ -200,7 +200,7 @@ def learn_index():
 def learn_page(key: str):
     # Support both short keys (/learn/01) and relative filenames
     # (/learn/01_perceptron.html) so docs work via Flask and file://.
-    if key.endswith((".html", ".css")):
+    if key.endswith((".html", ".css", ".js")):
         name = key
     else:
         name = DOC_FILES.get(key)
