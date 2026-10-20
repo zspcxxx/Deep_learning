@@ -31,7 +31,7 @@
     <div class="hero">
       <div class="badge-row">
         <span class="chip">入门路径</span>
-        <span class="chip teal">14 个实验</span>
+        <span class="chip teal">15 个实验</span>
         <span class="chip amber">可读 + 可跑</span>
       </div>
       <h1>从一条直线到识别手写数字</h1>
@@ -40,47 +40,71 @@
 
     <h2 id="path">推荐学习路径</h2>
     <div class="diagram">
-      <svg viewBox="0 0 1208 120" width="1208" height="120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
+      <svg viewBox="0 0 1208 210" width="1208" height="210" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="学习路径">
         <defs>
           <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#1f6feb"/></marker>
         </defs>
-        <rect x="8" y="30" width="110" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
-        <text x="63" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">01 感知机</text>
-        <text x="63" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">线性边界</text>
-        <line x1="118" y1="57" x2="140" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="142" y="30" width="110" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
-        <text x="197" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">02 MLP</text>
-        <text x="197" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">隐藏层</text>
-        <line x1="252" y1="57" x2="274" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="276" y="30" width="110" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
-        <text x="331" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">03 反向传播</text>
-        <text x="331" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">梯度</text>
-        <line x1="386" y1="57" x2="408" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="410" y="30" width="110" height="54" rx="10" fill="#ffe8ee" stroke="#be123c"/>
-        <text x="465" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">04 激活函数</text>
-        <text x="465" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">非线性</text>
-        <line x1="520" y1="57" x2="542" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="544" y="30" width="110" height="54" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
-        <text x="599" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">05 学习率</text>
-        <text x="599" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">步长影响</text>
-        <line x1="654" y1="57" x2="676" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="678" y="30" width="120" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
-        <text x="738" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">09 综合</text>
-        <text x="738" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">真实图像</text>
-        <line x1="798" y1="57" x2="820" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="822" y="30" width="110" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
-        <text x="877" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">10 CNN</text>
-        <text x="877" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">检测小猫</text>
-        <line x1="932" y1="57" x2="954" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="956" y="30" width="110" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
-        <text x="1011" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">11 残差连接</text>
-        <text x="1011" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">更深的网络</text>
-        <line x1="1066" y1="57" x2="1088" y2="57" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
-        <rect x="1090" y="30" width="110" height="54" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
-        <text x="1145" y="52" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">12 RNN</text>
-        <text x="1145" y="70" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">序列与记忆</text>
+        <rect x="8" y="20" width="130" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="73" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">01 感知机</text>
+        <text x="73" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">线性边界</text>
+        <line x1="138" y1="47" x2="158" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="160" y="20" width="130" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="225" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">02 MLP</text>
+        <text x="225" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">隐藏层</text>
+        <line x1="290" y1="47" x2="310" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="312" y="20" width="130" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
+        <text x="377" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">03 反向传播</text>
+        <text x="377" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">梯度</text>
+        <line x1="442" y1="47" x2="462" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="464" y="20" width="130" height="54" rx="10" fill="#ffe8ee" stroke="#be123c"/>
+        <text x="529" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">04 激活函数</text>
+        <text x="529" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">非线性</text>
+        <line x1="594" y1="47" x2="614" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="616" y="20" width="130" height="54" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+        <text x="681" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">05 学习率</text>
+        <text x="681" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">步长影响</text>
+        <line x1="746" y1="47" x2="766" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="768" y="20" width="130" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="833" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">06 初始化</text>
+        <text x="833" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">起点尺度</text>
+        <line x1="898" y1="47" x2="918" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="920" y="20" width="130" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="985" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">07 归一化</text>
+        <text x="985" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">稳住尺度</text>
+        <line x1="1050" y1="47" x2="1070" y2="47" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="1072" y="20" width="130" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
+        <text x="1137" y="42" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">08 正则化</text>
+        <text x="1137" y="60" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">防过拟合</text>
+        <rect x="8" y="130" width="130" height="54" rx="10" fill="#ffe8ee" stroke="#be123c"/>
+        <text x="73" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">09 MNIST</text>
+        <text x="73" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">综合实战</text>
+        <line x1="138" y1="157" x2="158" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="160" y="130" width="130" height="54" rx="10" fill="#eef2ff" stroke="#4f46e5"/>
+        <text x="225" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">10 CNN</text>
+        <text x="225" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">检测小猫</text>
+        <line x1="290" y1="157" x2="310" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="312" y="130" width="130" height="54" rx="10" fill="#e8f0fe" stroke="#1f6feb"/>
+        <text x="377" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">11 残差连接</text>
+        <text x="377" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">更深的网络</text>
+        <line x1="442" y1="157" x2="462" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="464" y="130" width="130" height="54" rx="10" fill="#e6f7f4" stroke="#0f766e"/>
+        <text x="529" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">12 RNN</text>
+        <text x="529" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">序列与记忆</text>
+        <line x1="594" y1="157" x2="614" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="616" y="130" width="130" height="54" rx="10" fill="#fff7e8" stroke="#b45309"/>
+        <text x="681" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">13 Seq2Seq</text>
+        <text x="681" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">编码–解码</text>
+        <line x1="746" y1="157" x2="766" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="768" y="130" width="130" height="54" rx="10" fill="#ffe8ee" stroke="#be123c"/>
+        <text x="833" y="152" text-anchor="middle" font-size="12" fill="#1a2332" font-family="Noto Sans SC,sans-serif">14 注意力</text>
+        <text x="833" y="170" text-anchor="middle" font-size="10" fill="#5a6a7d" font-family="Noto Sans SC,sans-serif">Q/K/V 查找</text>
+        <line x1="898" y1="157" x2="918" y2="157" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
+        <rect x="920" y="130" width="130" height="54" rx="10" fill="#1f6feb" stroke="#1f6feb" stroke-width="2"/>
+        <text x="985" y="152" text-anchor="middle" font-size="12" fill="#ffffff" font-family="Noto Sans SC,sans-serif">15 Transformer</text>
+        <text x="985" y="170" text-anchor="middle" font-size="10" fill="#dbeafe" font-family="Noto Sans SC,sans-serif">全部串起来</text>
+        <path d="M1137,74 L1137,102 L73,102 L73,128" fill="none" stroke="#1f6feb" stroke-width="2" marker-end="url(#arrow)"/>
       </svg>
-      <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。</div>
+      <div class="cap">建议顺序学习；每读完一节就单独跑对应实验，对照 artifacts 里的图。第 15 课把前面所有零件拼成一个 Transformer，适合最后用来复习。</div>
     </div>
 
     <div class="lesson-cards">
@@ -154,6 +178,11 @@
         <h3>注意力机制</h3>
         <p>把注意力拆成 Query / Key / Value：缩放点积按键查值；记忆一长，平均池化就糊掉，注意力还能找对。</p>
       </a>
+      <a class="lesson-card" href="15_transformer.html">
+        <div class="num">EXPERIMENT 15</div>
+        <h3>综合串联：从零组装 Transformer</h3>
+        <p>用前 14 课的零件拼出一个小 Transformer 给数字排序；再一次拿掉一个零件，位置编码、残差、LayerNorm、warmup、初始化各自重现它那一课的失败。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -184,7 +213,8 @@ python scripts/run_lesson.py 10
 python scripts/run_lesson.py 11
 python scripts/run_lesson.py 12
 python scripts/run_lesson.py 13
-python scripts/run_lesson.py 14</pre>
+python scripts/run_lesson.py 14
+python scripts/run_lesson.py 15</pre>
       </div>
       <div class="panel">
         <h4>直接跑入口脚本</h4>
@@ -202,14 +232,15 @@ python lessons/10_cnn.py
 python lessons/11_residual.py
 python lessons/12_rnn.py
 python lessons/13_seq2seq.py
-python lessons/14_attention.py</pre>
+python lessons/14_attention.py
+python lessons/15_transformer.py</pre>
       </div>
     </div>
     <p>各实验使用的数据集缓存在 <code>data/&lt;实验&gt;/*.npz</code>（MNIST 原始文件在 <code>data/mnist/</code>），结果（图 + <code>metrics.json</code>）写到 <code>artifacts/</code>。全部跑完后：</p>
     <pre class="cmd">python web/app.py
 # 浏览器打开 http://127.0.0.1:8080  学习页在 /learn/</pre>
 
-    <h2 id="map">十四个实验分别带走什么</h2>
+    <h2 id="map">十五个实验分别带走什么</h2>
     <table>
       <tr><th>编号</th><th>主题</th><th>核心结论</th><th>预计耗时</th></tr>
       <tr><td><a href="01_perceptron.html">01</a></td><td>单层感知机</td><td>线性可分 ⇒ 可收敛；XOR 线性不可分 ⇒ 必失败</td><td>约 1 分钟</td></tr>
@@ -226,6 +257,7 @@ python lessons/14_attention.py</pre>
       <tr><td><a href="12_rnn.html">12</a></td><td>循环神经网络</td><td>BPTT；梯度沿时间消失，LSTM 的遗忘门与 GRU 的更新门让长期记忆成为可能；按字符生成名字</td><td>约 6 分钟</td></tr>
       <tr><td><a href="13_seq2seq.html">13</a></td><td>编码器–解码器</td><td>Teacher forcing；固定向量装不下长序列，注意力按位置对齐源序列</td><td>约 4 分钟</td></tr>
       <tr><td><a href="14_attention.html">14</a></td><td>注意力机制</td><td>Q/K/V 缩放点积按键查值；记忆变长后平均池化失败，注意力仍能找对</td><td>约 1–2 分钟</td></tr>
+      <tr><td><a href="15_transformer.html">15</a></td><td>综合串联：Transformer</td><td>前 14 课的零件各在模型何处；拿掉位置编码 / 残差 / LayerNorm / warmup 或放大初始化，各自重现对应那一课的失败</td><td>约 1.5 分钟</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

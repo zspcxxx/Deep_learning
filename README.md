@@ -21,6 +21,7 @@
 | 12 循环神经网络 RNN / LSTM / GRU | [docs/12_rnn.html](docs/12_rnn.html) | `/learn/12` | `python scripts/run_lesson.py 12` |
 | 13 编码器–解码器 Seq2Seq | [docs/13_seq2seq.html](docs/13_seq2seq.html) | `/learn/13` | `python scripts/run_lesson.py 13` |
 | 14 注意力机制 | [docs/14_attention.html](docs/14_attention.html) | `/learn/14` | `python scripts/run_lesson.py 14` |
+| 15 综合串联：从零组装 Transformer | [docs/15_transformer.html](docs/15_transformer.html) | `/learn/15` | `python scripts/run_lesson.py 15` |
 
 ## 环境（一次）
 
@@ -52,6 +53,7 @@ pip install -e .
 | 12 循环神经网络 | 仅 CPU | 参数少、逐时间步计算，GPU 启动开销大于计算量 |
 | 13 编码器–解码器 | 仅 CPU | 参数少、逐时间步计算 |
 | 14 注意力机制 | 仅 CPU | 只有几千个参数 |
+| 15 综合串联：Transformer | 仅 CPU | Transformer 约 3.5 万、MLP 约 10 万个参数，都低于阈值 |
 
 ## 单独跑某一个实验
 
@@ -73,6 +75,7 @@ python scripts/run_lesson.py 11              # 残差连接：普通深网络 vs
 python scripts/run_lesson.py 12              # 循环神经网络：长期记忆 RNN vs LSTM vs GRU、生成名字
 python scripts/run_lesson.py 13              # 编码器–解码器：倒序，固定向量 vs 注意力
 python scripts/run_lesson.py 14              # 注意力机制：Q/K/V 按键查值 vs 平均池化
+python scripts/run_lesson.py 15              # 综合串联：组装 Transformer 给数字排序，再逐个拿掉零件
 ```
 
 也可以直接调用入口：
@@ -93,6 +96,7 @@ python lessons/11_residual.py
 python lessons/12_rnn.py
 python lessons/13_seq2seq.py
 python lessons/14_attention.py
+python lessons/15_transformer.py
 ```
 
 图片和指标写到 `artifacts/`。全部实验只需 NumPy / Matplotlib。
@@ -145,6 +149,7 @@ python scripts/run_verify.py
   - `rnn.py`：第 12 课的 RNN / LSTM / GRU 单元、随时间反向传播与按字符采样
   - `seq2seq.py`：第 13 课的编码器–解码器，固定向量或注意力，teacher forcing 与贪心解码
   - `attention.py`：第 14 课的缩放点积注意力与按键查值（平均池化对照）
+  - `transformer.py`：第 15 课的小 Transformer（嵌入、位置向量、LayerNorm、多头注意力、GELU 前馈、pre-LN 块，均手写反向传播）、MLP 对照、AdamW + Warmup + 余弦 + 早停训练循环与梯度检查
   - `notes/`：网页上的过程注解、结果解读与看图说明
   - `runner.py`：以子进程运行实验并生成带注解的事件流
 - `lessons/`：每个实验的剧本

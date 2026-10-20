@@ -23,6 +23,7 @@ _MODULES = {
     "12": "l12_rnn",
     "13": "l13_seq2seq",
     "14": "l14_attention",
+    "15": "l15_transformer",
 }
 
 

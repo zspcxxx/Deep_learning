@@ -25,6 +25,7 @@
 | `12_rnn/` | `memory_test_d{5,10,20,40}.npz` | 记忆任务测试集：每个延迟 1000 条 one-hot 序列（4 种符号）+ 第 1 个符号的标签 |
 | `13_seq2seq/` | `reverse_test_l{4,8,12}.npz` | 倒序测试集：每种长度 400 条随机符号序列及其倒序（含 EOS） |
 | `14_attention/` | `lookup_test_s{4,8,16}.npz` | 按键查值测试集：每种槽位数 500 条 (键, 值) 袋 + 查询键 + 目标值 |
+| `15_transformer/` | `sort_train.npz` `sort_val.npz` `sort_test.npz` | 排序任务：1000 / 500 / 2000 条 8 位数字序列（0–9，可重复）及其升序结果 |
 | `names/` | `names.txt` | 32033 个小写英文名，每行一个，第 12 课使用（见下文） |
 | `mnist/` | `mnist.npz` | MNIST 原始数据（60000 训练 + 10000 测试，uint8 28×28），第 09 课使用 |
 | `cat/` | `cat_vs_noncat.npz` | 猫 / 非猫彩色图（32×32×3），第 10 课使用，见下文 |

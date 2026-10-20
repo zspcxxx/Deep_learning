@@ -21,6 +21,9 @@
       ["13_seq2seq.html", "13", "编码器–解码器", "Seq2Seq 倒序任务"],
       ["14_attention.html", "14", "注意力机制", "Q / K / V 按键查值"],
     ]],
+    ["综合", [
+      ["15_transformer.html", "15", "综合串联：从零组装 Transformer", "前 14 课的零件拼起来，再一个个拿掉"],
+    ]],
   ];
 
   const nav = document.querySelector("nav.top");
@@ -51,7 +54,7 @@
   const panel = el("div", "menu-panel");
   panel.hidden = true;
   for (const [group, list] of GROUPS) {
-    const section = el("div", "menu-group");
+    const section = el("div", group === "综合" ? "menu-group wide" : "menu-group");
     section.append(el("div", "menu-group-title", group));
     for (const entry of list) {
       const [file, num, title, sub] = entry;

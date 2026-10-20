@@ -121,6 +121,14 @@ LESSONS = [
         "doc": "14_attention.html",
         "help": "Query / Key / Value 缩放点积注意力按键查值；平均池化在记忆变长后失败",
     },
+    {
+        "id": "15",
+        "keys": ("15", "capstone", "transformer", "review", "15_transformer"),
+        "title": "综合串联：从零组装 Transformer",
+        "module": "lessons.15_transformer",
+        "doc": "15_transformer.html",
+        "help": "用前 14 课的零件拼出一个小 Transformer 给数字排序，再一次去掉一个零件，看哪一课的问题会重新出现",
+    },
 ]
 
 
@@ -147,6 +155,7 @@ _GPU_USE = {
     "12": ("cpu", "循环网络参数少、逐时间步计算，GPU 启动开销大于计算量，全部在 CPU"),
     "13": ("cpu", "编码器–解码器参数少、逐时间步计算，全部在 CPU"),
     "14": ("cpu", "注意力网络只有几千个参数，全部在 CPU"),
+    "15": ("cpu", "Transformer 约 3.5 万个参数、MLP 约 10 万个，都低于 GPU 阈值，全部在 CPU"),
 }
 
 for _item in LESSONS:

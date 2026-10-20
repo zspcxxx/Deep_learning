@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15 综合串联：从零组装 Transformer · Deep Learning Lab</title>
+<link rel="stylesheet" href="learn.css">
+</head>
+<body>
+<nav class="top">
+  <a class="brand" href="index.html">Deep Learning Lab</a>
+  <a href="index.html">导读</a>
+  <div class="lesson-menu" data-lesson-menu></div>
+  <span class="spacer"></span>
+  <a href="/">实验看板</a>
+</nav>
+
+<div class="layout">
+  <aside class="toc">
+    <h3>本页目录</h3>
+    <ol>
+      <li><a href="#goals">要回答什么</a></li>
+      <li><a href="#map">知识地图</a></li>
+      <li><a href="#task">任务：给数字排序</a></li>
+      <li><a href="#block">一个块里发生什么</a></li>
+      <li><a href="#train">训练流程</a></li>
+      <li><a href="#baselines">对照：MLP 与 LSTM</a></li>
+      <li><a href="#ablation">消融：一次去掉一个零件</a></li>
+      <li><a href="#run">如何运行</a></li>
+      <li><a href="#tips">自己改一改</a></li>
+    </ol>
+  </aside>
+
+  <article class="doc">
+    <div class="hero">
+      <div class="badge-row">
+        <span class="chip">实验 15</span>
+        <span class="chip teal">纯 NumPy，约 1.5 分钟</span>
+        <span class="chip amber">串联 01–14</span>
+      </div>
+      <div class="hero-grid">
+        <div>
+          <h1>综合串联：从零组装一个小 Transformer</h1>
+          <p class="lead">前 14 课各讲了一个零件。本课把它们拼成一台完整的机器：嵌入和位置向量、多头注意力、残差、LayerNorm、
+            GELU 的前馈网络，用 AdamW + Warmup + 余弦训练，配 Dropout、权重衰减和早停。
+            然后反过来，一次只拿掉一个零件，看前面那一课讲过的问题会不会重新出现。</p>
+          <p class="meta">入口 <code>lessons/15_transformer.py</code> · 实现 <code>src/dllab/transformer.py</code>（<code>TinyTransformer</code> / <code>MLPBaseline</code> / <code>train</code> / <code>gradient_check</code>）· 复用 <code>src/dllab/nn.py</code> 的 <code>Dense</code> / <code>ReLU</code> / <code>Dropout</code> 与 <code>src/dllab/rnn.py</code> 的 LSTM</p>
+        </div>
+        <div class="diagram" style="margin:0;padding:8px;">
+          <svg viewBox="0 0 320 190" width="320" height="190" xmlns="http://www.w3.org/2000/svg">
+            <g font-family="sans-serif" font-size="10.5" text-anchor="middle">
+              <rect x="70" y="8" width="180" height="22" rx="5" fill="#e2e8f0" stroke="#475569"/>
+              <text x="160" y="23">Linear + softmax（01 / 09）</text>
+              <rect x="40" y="40" width="240" height="98" rx="8" fill="none" stroke="#64748b" stroke-dasharray="4 3"/>
+              <rect x="70" y="48" width="180" height="22" rx="5" fill="#dcfce7" stroke="#16a34a"/>
+              <text x="160" y="63">FFN · GELU（02 / 04）</text>
+              <rect x="70" y="78" width="180" height="22" rx="5" fill="#fef3c7" stroke="#d97706"/>
+              <text x="160" y="93">LayerNorm（07）· 残差（11）</text>
+              <rect x="70" y="108" width="180" height="22" rx="5" fill="#ccfbf1" stroke="#0f766e"/>
+              <text x="160" y="123">多头注意力（13 / 14）</text>
+              <text x="296" y="92" font-size="10" fill="#475569">×4</text>
+              <rect x="70" y="148" width="180" height="22" rx="5" fill="#dbeafe" stroke="#2563eb"/>
+              <text x="160" y="163">嵌入 + 位置向量（14）</text>
+              <text x="160" y="186" font-size="10" fill="#475569">训练：03 06 05 08 09 12</text>
+            </g>
+          </svg>
+          <div class="cap">每个零件都标着它出自哪一课</div>
+        </div>
+      </div>
+    </div>
+
+    <h2 id="goals">这个实验要回答什么</h2>
+    <div class="goals">
+      <ol class="steps">
+        <li>前 14 课的零件，各自在一个 Transformer 里的什么位置？</li>
+        <li>手写的反向传播穿过注意力、LayerNorm、残差之后还对不对？</li>
+        <li>同样的数据，为什么参数更少的 Transformer 比 MLP 泛化得更好？LSTM 又差在哪里？</li>
+        <li>拿掉位置编码、残差、LayerNorm、warmup，或者把初始化放大，会分别重现哪一课的问题？</li>
+        <li>哪些零件在这个任务上其实没那么关键？为什么？</li>
+      </ol>
+    </div>
+
+    <h2 id="map">知识地图</h2>
+    <table>
+      <tr><th>零件</th><th>在模型里做什么</th><th>出自</th><th>本课消融</th></tr>
+      <tr><td>线性层 + softmax 输出</td><td>每个位置输出 10 个数字的概率</td><td>01、09</td><td>—</td></tr>
+      <tr><td>多层感知机（FFN）</td><td>每个位置各自做一次 Linear → GELU → Linear</td><td>02、04</td><td>G：去掉激活</td></tr>
+      <tr><td>反向传播 + 梯度检查</td><td>整个模型的梯度都是手写的，先用中心差分核对</td><td>03</td><td>—</td></tr>
+      <tr><td>学习率与调度</td><td>前 100 步线性升到 0.1，再余弦降到 0.001</td><td>05、09</td><td>D：去掉 warmup</td></tr>
+      <tr><td>参数初始化</td><td>权重 ~ N(0, 1/fan_in)</td><td>06</td><td>E：放大 4 倍</td></tr>
+      <tr><td>归一化</td><td>每个子层前的 LayerNorm（按特征维归一化，不依赖批）</td><td>07</td><td>C：去掉</td></tr>
+      <tr><td>正则化与早停</td><td>Dropout 0.1、权重衰减 0.01，按验证损失回滚到最好的一步</td><td>08、09</td><td>F：去掉 Dropout 和权重衰减</td></tr>
+      <tr><td>权重共享</td><td>同一组 Q/K/V 和 FFN 权重用在全部 8 个位置</td><td>10</td><td>对照 MLP</td></tr>
+      <tr><td>残差连接</td><td>每个子层都是 x + F(x)</td><td>11</td><td>B：去掉</td></tr>
+      <tr><td>序列建模、梯度裁剪</td><td>LSTM 先读后写作为对照；训练时全局梯度范数裁剪到 1</td><td>12、13</td><td>对照 LSTM</td></tr>
+      <tr><td>缩放点积注意力 + 位置向量</td><td>softmax(QKᵀ/√d)V，4 个头；学习到的位置向量加在嵌入上</td><td>13、14</td><td>A：去掉位置编码</td></tr>
+    </table>
+
+    <h2 id="task">任务：给数字排序</h2>
+    <ul>
+      <li>每条样本是 8 个 0–9 的数字（可以重复），目标是同样的 8 个数字从小到大排好。例如 <code>[8, 8, 6, 2, 8, 7, 2, 1] → [1, 2, 2, 6, 7, 8, 8, 8]</code>。</li>
+      <li>输出第 i 位时，模型既要知道整条序列里有哪些数（需要看全局），又要知道自己是第几位（需要位置信息）。</li>
+      <li>训练集故意只给 1000 条，验证 500 条、测试 2000 条，缓存在 <code>data/15_transformer/</code>。指标有两个：逐位准确率，和更严格的“8 位全对”整句准确率。</li>
+    </ul>
+
+    <h2 id="block">一个块里发生什么</h2>
+    <pre class="formula">h  = Embedding(x) + P                      词向量 + 位置向量（第 14 课：注意力本身不看位置）
+对每个块（共 4 个，pre-LN）：
+  h = h + Dropout(MultiHead(LN(h)))        LN = LayerNorm（第 07 课），“h + …” 是残差（第 11 课）
+  h = h + Dropout(FFN(LN(h)))              FFN = Linear → GELU → Linear（第 02 / 04 课）
+logits = Linear(LN(h))                     每个位置 10 个分数，softmax + 交叉熵（第 09 课）
+
+MultiHead(z)：Q = zW_Q, K = zW_K, V = zW_V，按 4 个头切开
+  每个头 softmax(Q Kᵀ / √8) V，拼回来再乘 W_O        （第 14 课的缩放点积注意力）</pre>
+    <p>反向传播在 <code>src/dllab/transformer.py</code> 里逐层手写：LayerNorm 的 <code>backward</code> 用到第 07 课的推导；注意力的 softmax 雅可比和第 14 课 <code>LookupNet</code> 里一样；残差块把上游梯度原样加回去。</p>
+    <p>Q/K/V 投影不带偏置。给所有 Key 加同一个偏置，只会让每个查询的全部分数平移同一个数，softmax 不变，所以它的梯度恒为 0，留着只会让梯度检查看到一组“0 对 0”的噪声。</p>
+
+    <h2 id="train">训练流程</h2>
+    <ul>
+      <li>梯度检查（第 03 课）：用 float64 小模型（2 个块）和一个关掉残差、LayerNorm 的 1 块变体，覆盖全部参数组，最大相对误差约 1e-8。</li>
+      <li>AdamW，学习率 0.1，前 100 步 warmup，再余弦降到 0.001；批大小 128，梯度裁剪到 1，最多 600 步，每 50 步看一次验证损失，连续 6 次没有更低就早停并回滚。</li>
+      <li>学习率 0.1 比常见的 1e-3 大得多，是故意的：完整模型在这个学习率下能稳定训练，正好用来检验 warmup 和 LayerNorm 是否真的在保护训练。</li>
+      <li>训练用 float32，约 3.5 万个参数，低于 GPU 阈值，全部在 CPU 上算。</li>
+    </ul>
+
+    <h2 id="baselines">对照：MLP 与 LSTM</h2>
+    <table>
+      <tr><th>模型</th><th>参数</th><th>测试整句全对</th><th>逐位</th><th>备注</th></tr>
+      <tr><td>MLP（80 → 256 → 256 → 80，第 02 / 09 课）</td><td>107k</td><td>90.7%</td><td>98.3%</td><td>训练集 100%，过拟合</td></tr>
+      <tr><td>LSTM 先读后写（第 12 / 13 课）</td><td>20k</td><td>99.2%</td><td>99.9%</td><td>要串行走 16 个时间步</td></tr>
+      <tr><td>Transformer（本课）</td><td>35k</td><td>99.6%</td><td>99.9%</td><td>8 个位置同时计算</td></tr>
+    </table>
+    <p>MLP 把 80 维 one-hot 一次性喂进去，每个位置都有自己的一套权重，参数最多，却只用 1000 条数据学不成通用的“比较大小”规则。Transformer 在所有位置共用同一组权重，就像第 10 课的卷积核在图像各处共用一样。LSTM 照第 13 课的思路先读完再逐个写出，门控记忆足以数清每个数字出现几次，所以在这么短的序列上不输 Transformer；它的代价是第 t 步必须等第 t−1 步算完。</p>
+
+    <h2 id="ablation">消融：一次去掉一个零件</h2>
+    <table>
+      <tr><th>改动（其余完全不变）</th><th>对应课程</th><th>测试整句全对</th><th>逐位</th><th>发生了什么</th></tr>
+      <tr><td>完整模型</td><td>—</td><td>99.6%</td><td>99.9%</td><td>第 600 步验证损失最低</td></tr>
+      <tr><td>A 去掉位置编码</td><td>14</td><td>0.0%</td><td>27.9%</td><td>输出只取决于内容，不知道自己是第几位</td></tr>
+      <tr><td>B 去掉残差连接</td><td>11</td><td>0.0%</td><td>21.8%</td><td>8 个子层直接串联，损失停在 2.2 附近</td></tr>
+      <tr><td>C 去掉 LayerNorm</td><td>07</td><td>0.2%</td><td>57.9%</td><td>学习率升到 0.1 附近时损失冲到 25.6</td></tr>
+      <tr><td>D 去掉 warmup</td><td>05 / 09</td><td>0.1%</td><td>46.4%</td><td>第一步就用 0.1，之后再也没爬回来</td></tr>
+      <tr><td>E 初始化放大 4 倍</td><td>06</td><td>0.3%</td><td>53.1%</td><td>初始注意力几乎 one-hot（最大权重约 0.9，正常约 0.3）</td></tr>
+      <tr><td>F 去掉 Dropout 和权重衰减</td><td>08</td><td>99.4%</td><td>99.9%</td><td>只差一点：权重共享已经限制了过拟合</td></tr>
+      <tr><td>G FFN 去掉激活函数</td><td>02 / 04</td><td>99.5%</td><td>99.9%</td><td>softmax 注意力本身就是非线性</td></tr>
+    </table>
+    <p class="meta">Jetson Thor 实测，固定随机种子。不同机器上浮点运算的细节不同，数字会有小幅差别。</p>
+    <p>前五项任意拿掉一个，模型就学不会：这正是第 05、06、07、11、14 课各自演示过的失败方式，在一个完整模型里同时成立。后两项影响很小，这本身也是一个结论：零件的重要性取决于任务和规模。本任务里泛化主要靠权重共享，非线性也不只来自 FFN。</p>
+    <div class="callout ok"><strong>通过标准</strong>梯度检查相对误差全部 &lt; 1e-4；完整模型测试整句 ≥ 95%；A–E 五项消融的整句准确率都 ≤ 30%；MLP 的整句准确率低于 Transformer。</div>
+
+    <h2 id="run">如何运行</h2>
+    <pre class="cmd">source .venv/bin/activate
+python scripts/run_lesson.py 15
+# 或在网页看板 /lesson/15 点「运行」</pre>
+    <p>结果在 <code>artifacts/15_transformer/</code>：</p>
+    <ul>
+      <li><code>capstone_map.png</code> — 知识地图：每个零件出自哪一课</li>
+      <li><code>capstone_training.png</code> — 完整模型的训练损失、验证准确率和学习率曲线</li>
+      <li><code>capstone_baselines.png</code> — MLP / LSTM / Transformer 的准确率与参数量</li>
+      <li><code>capstone_ablation.png</code> — 七项消融的测试准确率和训练损失</li>
+      <li><code>capstone_attention.png</code> — 一条测试样本在 4 个块里的注意力</li>
+      <li><code>metrics.json</code></li>
+    </ul>
+
+    <h2 id="tips">自己改一改</h2>
+    <ul>
+      <li>把 <code>FIT["lr"]</code> 降到 <code>3e-3</code>：去掉 warmup 或 LayerNorm 也能学会了。保护机制是在学习率大、网络深的时候才变得必不可少。</li>
+      <li>把 <code>MODEL["n_layers"]</code> 改成 2：去掉残差后也能学会。第 11 课的问题要网络足够深才会出现。</li>
+      <li>把 <code>N_TRAIN</code> 改成 500：Transformer 仍有约 99% 整句全对，MLP 掉到约 55%，权重共享的好处更明显。</li>
+      <li>把 <code>SEQ_LEN</code> 改成 12：看 LSTM 和 Transformer 谁先吃力。</li>
+    </ul>
+
+    <div class="footer-nav">
+      <a href="14_attention.html">← 14 注意力机制</a>
+      <a href="index.html">回到导读 →</a>
+    </div>
+  </article>
+</div>
+<script src="learn-nav.js"></script>
+</body>
+</html>
