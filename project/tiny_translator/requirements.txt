@@ -1,0 +1,5 @@
+# PyTorch: install the build matching your GPU first (scripts/setup.sh picks one).
+torch>=2.4
+flask>=3.0
+numpy  # optional for torch, but silences its startup warning
+zhconv  # traditional -> simplified Chinese for the Tatoeba corpus

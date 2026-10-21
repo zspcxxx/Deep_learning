@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+# Downloaded corpora and training outputs stay on the machine that produced them.
+data/
+runs/
