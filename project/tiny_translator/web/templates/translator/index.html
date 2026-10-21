@@ -3,18 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tiny Translator · 微型 Transformer 英→中</title>
+<title>模型实验 · 微型 Transformer 英→中</title>
 <link rel="stylesheet" href="{{ url_for('translator.static', filename='style.css') }}">
 </head>
 <body data-base="{{ url_for('translator.index') }}">
 <header class="top">
   {% if url_for('translator.index') != '/' %}<a class="home" href="/">← 实验看板</a>{% endif %}
-  <div class="brand">Tiny Translator <span>微型 Transformer · 英→中</span></div>
+  <div class="brand">模型实验 <span>微型 Transformer · 英→中</span></div>
   <nav class="tabs" role="tablist">
     <button class="tab" data-tab="config" role="tab"><b>1</b> 配置</button>
     <button class="tab" data-tab="train" role="tab"><b>2</b> 训练</button>
     <button class="tab" data-tab="eval" role="tab"><b>3</b> 验证</button>
+    <button class="tab" data-tab="guide" role="tab">说明</button>
   </nav>
+  <div class="gpu-meter" id="gpuMeter" title="GPU 使用率">
+    <span class="gpu-label">GPU</span>
+    <div class="gpu-track"><div class="gpu-fill" id="gpuFill"></div></div>
+    <span class="gpu-pct" id="gpuPct">—</span>
+  </div>
   <div class="job-pill" id="jobPill" hidden></div>
 </header>
 
@@ -35,6 +41,7 @@
       <div class="actions">
         <button class="btn" id="btnCheck" type="button">检查配置</button>
         <button class="btn primary" id="btnStart" type="button">开始训练</button>
+        <button class="btn" type="button" data-goto-guide>参数说明</button>
         <span class="hint" id="configMsg"></span>
       </div>
     </div>
@@ -76,8 +83,16 @@
       <div class="two-col">
         <div class="card">
           <h3>每轮结果</h3>
-          <div class="table-wrap"><table class="data" id="epochTable">
-            <thead><tr><th>轮</th><th>训练损失</th><th>验证损失</th><th>困惑度</th><th>BLEU</th><th>用时</th></tr></thead>
+          <div class="table-wrap"><table class="data metrics" id="epochTable">
+            <colgroup>
+              <col class="col-epoch"><col class="col-num"><col class="col-num">
+              <col class="col-num"><col class="col-num"><col class="col-num">
+            </colgroup>
+            <thead><tr>
+              <th>轮</th>
+              <th class="num">训练损失</th><th class="num">验证损失</th>
+              <th class="num">困惑度</th><th class="num">BLEU</th><th class="num">用时</th>
+            </tr></thead>
             <tbody></tbody>
           </table></div>
         </div>
@@ -170,7 +185,7 @@
                 </label>
               </div>
               <div class="table-wrap tall"><table class="data" id="evalTable">
-                <thead><tr><th>#</th><th>英文</th><th>参考译文</th><th>模型译文</th><th>句级 BLEU</th></tr></thead>
+                <thead><tr><th style="width:3rem">#</th><th>英文</th><th>参考译文</th><th>模型译文</th><th class="num" style="width:5.5rem">句级 BLEU</th></tr></thead>
                 <tbody></tbody>
               </table></div>
             </div>
@@ -178,6 +193,11 @@
         </div>
       </div>
     </div>
+  </section>
+
+  <!-- ======================== 说明 ======================== -->
+  <section class="panel" id="tab-guide" hidden>
+    {% include "translator/_guide.html" %}
   </section>
 </main>
 

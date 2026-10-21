@@ -19,7 +19,11 @@ bash scripts/run.sh          # 打开 http://<设备 IP>:8090
 没有 GPU 时装 CPU 版。
 
 同样的页面也挂在上级 Deep_learning 实验看板里：`python web/app.py` 启动看板后打开 `http://<IP>:8080/translator/`
-（看板顶部导航的“翻译实验”）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
+（看板顶部导航的“模型实验”）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
+训练与验证页会轮询 GPU 使用率（Jetson 读 sysfs，其它机器读 nvidia-smi）。
+
+配置页每一项参数的含义、默认值与调法见网页内「说明」标签：`/translator/#guide`
+（模板片段 `web/templates/translator/_guide.html`）。
 
 ## 网页上的三步
 

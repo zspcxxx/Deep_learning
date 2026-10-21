@@ -1,0 +1,293 @@
+{# In-page parameter guide for the model experiment (tab #guide). #}
+<div class="guide-layout">
+
+<aside class="guide-toc">
+  <h3>本页目录</h3>
+  <ol>
+    <li><a href="#guide-overview">实验是什么</a></li>
+    <li><a href="#guide-pipeline">三步流程</a></li>
+    <li><a href="#guide-data">数据参数</a></li>
+    <li><a href="#guide-model">模型结构参数</a></li>
+    <li><a href="#guide-train">训练参数</a></li>
+    <li><a href="#guide-presets">三套预设</a></li>
+    <li><a href="#guide-metrics">看什么指标</a></li>
+    <li><a href="#guide-decode">验证页解码</a></li>
+    <li><a href="#guide-tune">调参建议</a></li>
+    <li><a href="#guide-map">与 14–16 课对照</a></li>
+  </ol>
+</aside>
+
+<article class="guide-doc">
+
+<div class="guide-hero">
+  <h2>参数含义与作用详解</h2>
+  <p class="muted">按配置页上的三组参数，逐项说明<strong>含义、默认值、改了会发生什么</strong>。
+    可与左侧「配置」对照阅读；调完参数后切回配置页点「检查配置」或「开始训练」。</p>
+</div>
+
+<h2 id="guide-overview">这个实验在做什么</h2>
+    <p>任务是<strong>英→中机器翻译</strong>：给定一句英文，生成一句中文。模型是手写的小型 Transformer（正弦位置编码、
+      缩放点积多头注意力、Pre-LN / Post-LN、因果掩码、可选共享输出层），反向传播由 PyTorch autograd 完成，
+      没有调用 <code>nn.Transformer</code>。</p>
+    <div class="card-grid">
+      <div class="card"><h4>输入</h4><p>英文按词和标点切分；中文按字切分（可选统一为简体）。</p></div>
+      <div class="card"><h4>模型</h4><p>编码器读英文，解码器自回归生成中文；交叉注意力对齐源端每个词。</p></div>
+      <div class="card"><h4>目标</h4><p>最小化带标签平滑的交叉熵；用字级 BLEU 衡量译文质量。</p></div>
+      <div class="card"><h4>产出</h4><p><code>runs/&lt;时间&gt;_&lt;名称&gt;/</code> 下保存配置、词表、曲线、best/last 权重。</p></div>
+    </div>
+    <div class="callout ok"><strong>建议用法</strong>先点预设「快速试跑」跑通一遍，再对照本页改一两个参数做对比实验；
+      不要一次改十几个旋钮。</div>
+
+    <h2 id="guide-pipeline">网页上的三步</h2>
+    <ol class="steps">
+      <li><strong>配置</strong>：下载数据集；调数据 / 结构 / 训练参数，或套用预设；「检查配置」会真实读数据、建词表和模型，给出句对数、词表大小、参数量和总步数。</li>
+      <li><strong>训练</strong>：后台线程训练；页面显示进度、损失 / BLEU / 学习率曲线、每轮样例、日志和 GPU 使用率；可随时停止（停止时保存当前权重）。</li>
+      <li><strong>验证</strong>：选已完成的运行；交互翻译（贪心或束搜索）并看交叉注意力热力图；在测试集或验证集上批量算 BLEU。</li>
+    </ol>
+
+    <h2 id="guide-data">一、数据参数</h2>
+    <p>控制「用多少语料、怎么切分、词表多大、留多少给验证和测试」。改这一组通常比改模型结构更划算：数据质量决定上限。</p>
+
+    <h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>demo</code>）</h3>
+    <p>只影响目录名：结果写到 <code>project/tiny_translator/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。起一个能区分实验的名字
+      （如 <code>quick</code>、<code>d256_ep30</code>），方便验证页对照。</p>
+
+    <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>cmn-eng</code>）</h3>
+    <p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置 <code>cmn-eng</code> 来自
+      <a href="https://www.manythings.org/anki/" target="_blank">manythings.org</a> 整理的 Tatoeba 英中句对（约 3.2 万对，CC-BY 2.0），
+      首次训练或点「下载」时自动拉取。也可自备同格式的 TSV，刷新后会出现在下拉框。</p>
+    <div class="callout warn"><strong>注意</strong>Tatoeba 句子偏短、口语化。常见短句容易译对；长句、罕见专名、训练集没见过的说法容易错
+      （英文稀有词常变成 <code>&lt;unk&gt;</code>）。这是小数据上的正常现象，不是实现写错了。</div>
+
+    <h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>0</code> = 全部）</h3>
+    <p>从文件里最多取多少对再划分训练/验证/测试。<strong>先设 3000–5000 做烟雾测试</strong>能很快看到曲线是否正常；正式对比再用全部。</p>
+    <p>作用：缩小语料 → 训练更快、词表更小、上限更低；设为 0 → 用满文件（长度过滤后约 3.2 万对）。</p>
+
+    <h3 id="guide-p-zh-simplified">中文统一为简体 <code>zh_simplified</code>（默认开启）</h3>
+    <p>Tatoeba 中文繁简混杂。开启后用 <code>zhconv</code> 转成简体再按字建词表。</p>
+    <ul>
+      <li><strong>开</strong>：字表更小、同一意思不会拆成繁简两套字，BLEU 更可比（推荐）。</li>
+      <li><strong>关</strong>：保留原文繁简；词表变大，同义字被当成不同符号，一般更难学。</li>
+    </ul>
+
+    <h3 id="guide-p-max-src">英文最大词数 <code>max_src_len</code>（默认 <code>20</code>）</h3>
+    <p>英文分词后超过此长度的句对<strong>直接丢弃</strong>。短上限 → 丢掉长句、训练更快、位置编码覆盖的范围更小；
+      过大 → 保留长句，但批内 padding 变多，显存和每步时间上升。</p>
+    <p>本实验默认语料大多很短（平均约 7 个英文词），20 已经够用。若换成自己的长句语料，再按分布调高。</p>
+
+    <h3 id="guide-p-max-tgt">中文最大字数 <code>max_tgt_len</code>（默认 <code>30</code>）</h3>
+    <p>两层含义：</p>
+    <ol>
+      <li>训练时：超过此长度的句对丢弃；</li>
+      <li>推理时：解码器最多生成这么多字（再加起止符），太短会截断译文。</li>
+    </ol>
+    <p>默认中文平均约 10 字，30 留有余量。生成总爱「说不完」时，可略增；想强制短答可略减。</p>
+
+    <h3 id="guide-p-min-freq">词表最低频次 <code>min_freq</code>（默认 <code>2</code>）</h3>
+    <p>只在<strong>训练集</strong>上统计：出现次数 &lt; 此值的英文词 / 中文字记为 <code>&lt;unk&gt;</code>。</p>
+    <ul>
+      <li><strong>提高</strong>（如 3–5）：词表更小、更稳，但更多词变成未知，专名更容易糊。</li>
+      <li><strong>降到 1</strong>：几乎保留所有符号，参数里嵌入变大，稀有词仍可能学不好。</li>
+    </ul>
+    <p>验证页会标出源端未登录词（红色）。若大量句子带红标，优先考虑加数据或调低 <code>min_freq</code>，而不是盲目加大模型。</p>
+
+    <h3 id="guide-p-val-ratio">验证集比例 <code>val_ratio</code>（默认 <code>0.05</code>）</h3>
+    <p>打乱后切出的验证集占比。每轮结束在其上算验证损失和字级 BLEU，用来选 <code>best.pt</code>、画曲线、触发早停。</p>
+    <p>太小 → BLEU 噪声大，早停不稳；太大 → 训练集变少。默认 5%（约 1600 句）对 3 万对语料较合适。
+      与测试集合计必须 &lt; 50%。</p>
+
+    <h3 id="guide-p-test-ratio">测试集比例 <code>test_ratio</code>（默认 <code>0.05</code>）</h3>
+    <p>测试集<strong>训练全程不参与</strong>：不用于选模型，只在训练结束和验证页评估时使用。用来回答「没见过的句子上大概怎样」。
+      不要根据测试集反复调参，否则它就变成第二个验证集。</p>
+
+    <h2 id="guide-model">二、模型结构参数</h2>
+    <p>决定容量与计算量。参数量大致随 <code>d_model² · (层数)</code> 和词表大小增长；「检查配置」会给出精确参数量。</p>
+
+    <h3 id="guide-p-d-model">模型宽度 <code>d_model</code>（默认 <code>256</code>）</h3>
+    <p>词向量维度，也是每一层隐藏状态的宽度。注意力、残差、前馈的输入输出都围绕它。</p>
+    <ul>
+      <li><strong>必须能被</strong> <code>n_heads</code> <strong>整除</strong>（每个头的维度 = <code>d_model / n_heads</code>）。</li>
+      <li>增大 → 表达力更强、显存与时间上升；过小（如 64）在完整语料上容易欠拟合。</li>
+      <li>快速试跑用 128；标准 256；加大预设 384。</li>
+    </ul>
+
+    <h3 id="guide-p-n-heads">注意力头数 <code>n_heads</code>（默认 <code>4</code>）</h3>
+    <p>多头注意力把表示拆成若干子空间并行做「按键查值」（第 14 课）。头数多 ≠ 一定更好：总宽度固定时，
+      头越多每个头越窄。常见搭配：128/4、256/4、384/6。</p>
+    <p>交叉注意力热力图是<strong>各头平均</strong>后的结果，用来观察「生成某个中文字时在看哪些英文词」。</p>
+
+    <h3 id="guide-p-n-enc">编码器层数 <code>n_enc_layers</code>（默认 <code>3</code>）</h3>
+    <p>英文自注意力 + 前馈堆叠的层数。更深 → 更能刻画源句结构，也更贵、更容易过拟合小数据。
+      本实验 2–4 层通常够用；小数据优先加宽或加数据，而不是无脑加到 8+ 层。</p>
+
+    <h3 id="guide-p-n-dec">解码器层数 <code>n_dec_layers</code>（默认 <code>3</code>）</h3>
+    <p>每层含：因果自注意力（只看已生成的中文）→ 交叉注意力（看英文）→ 前馈。
+      一般与编码器同深；解码更深会略增生成质量，但推理也更慢。</p>
+
+    <h3 id="guide-p-d-ff">前馈层宽度 <code>d_ff</code>（默认 <code>1024</code>）</h3>
+    <p>每层里两层线性中间的隐藏宽度，惯例约 <code>4 × d_model</code>（256→1024，128→512，384→1536）。
+      这是参数大户之一：加宽能提升容量，对显存和时间也很敏感。</p>
+
+    <h3 id="guide-p-dropout">Dropout <code>dropout</code>（默认 <code>0.1</code>）</h3>
+    <p>训练时随机丢掉一部分激活 / 注意力权重（第 08 课正则化）。减轻过拟合。</p>
+    <ul>
+      <li>数据少、模型大 → 可提到 0.2–0.3（加大预设用 0.2）。</li>
+      <li>欠拟合（训练损失也降不下去）→ 先降到 0.05 或 0。</li>
+      <li>推理时自动关闭。</li>
+    </ul>
+
+    <h3 id="guide-p-norm-first">Pre-LN <code>norm_first</code>（默认开启）</h3>
+    <p>层归一化放在子层<strong>之前</strong>（Pre-LN）还是<strong>之后</strong>（Post-LN，原论文）。</p>
+    <ul>
+      <li><strong>Pre-LN（推荐）</strong>：更深时更好训，对 warmup 没那么依赖（见第 16 课 / Pre-LN 论文）。</li>
+      <li><strong>Post-LN</strong>：更接近 2017 原版；小模型也能用，但学习率计划要更小心。</li>
+    </ul>
+
+    <h3 id="guide-p-activation">前馈激活函数 <code>activation</code>（默认 <code>gelu</code>）</h3>
+    <p>FFN 中间层的非线性：<code>gelu</code>（BERT/GPT 常用）或 <code>relu</code>。对本规模任务差别通常不大；
+      想和现代配方对齐就保持 GELU（第 04、09、15 课）。</p>
+
+    <h3 id="guide-p-tie">共享输出层权重 <code>tie_embeddings</code>（默认开启）</h3>
+    <p>解码器的词嵌入矩阵与最后投影到词表的矩阵<strong>共用同一份权重</strong>（转置使用）。</p>
+    <ul>
+      <li><strong>开</strong>：参数更少，尤其中文字表不小时省得明显；小翻译模型几乎总是值得开。</li>
+      <li><strong>关</strong>：嵌入与输出各学各的，参数更多，小数据上未必更好。</li>
+    </ul>
+
+    <h2 id="guide-train">三、训练参数</h2>
+
+    <h3 id="guide-p-epochs">训练轮数 <code>epochs</code>（默认 <code>30</code>）</h3>
+    <p>完整扫过训练集的次数。一轮 = 若干 step（由句对数 ÷ 批大小决定）。快速试跑 12 轮；标准 30；加大 50。
+      可配合早停：设较大 <code>epochs</code> + 非零 <code>patience</code>，让验证 BLEU 不再升时自动停。</p>
+
+    <h3 id="guide-p-batch">批大小 <code>batch_size</code>（默认 <code>128</code>）</h3>
+    <p>每步的句对数。实现里按长度分桶组批，减少 padding 浪费。</p>
+    <ul>
+      <li>增大 → 梯度更稳、每轮步数变少、单步更吃显存；有效学习率有时需略调。</li>
+      <li>减小 → 噪声更大、更新更勤、显存更省。OOM 时优先减批大小或 <code>d_model</code> / <code>d_ff</code>。</li>
+    </ul>
+
+    <h3 id="guide-p-lr">峰值学习率 <code>lr</code>（默认 <code>7e-4</code>）</h3>
+    <p>预热结束时达到的最大学习率（第 05 课）。之后按 <code>schedule</code> 衰减。</p>
+    <ul>
+      <li>损失爆炸、NaN → 降到 <code>3e-4</code>–<code>5e-4</code>，或加长 warmup、打开梯度裁剪。</li>
+      <li>损失降得极慢 → 可略升到 <code>1e-3</code>（快速预设），但要盯验证 BLEU 是否变差。</li>
+    </ul>
+
+    <h3 id="guide-p-schedule">学习率计划 <code>schedule</code>（默认 <code>cosine</code>）</h3>
+    <table>
+      <tr><th>选项</th><th>行为</th><th>何时用</th></tr>
+      <tr><td><code>cosine</code></td><td>预热后余弦降到峰值的约 10%</td><td>默认推荐，和第 09、15 课一致</td></tr>
+      <tr><td><code>inverse_sqrt</code></td><td>预热后按 <code>1/√step</code> 衰减（原论文）</td><td>想复现 Attention is All You Need 配方时</td></tr>
+      <tr><td><code>constant</code></td><td>预热后保持峰值不变</td><td>短训调试；长训容易后期震荡</td></tr>
+    </table>
+
+    <h3 id="guide-p-warmup">预热步数 <code>warmup_steps</code>（默认 <code>400</code>）</h3>
+    <p>学习率从接近 0 线性升到峰值的步数。Transformer 早期梯度尺度不稳，warmup 能避免开头炸掉（第 15、16 课）。</p>
+    <p>经验：约占总步数的 5%–15%。快速试跑总步数少，用 200；更大模型 / 更多轮用 800。
+      Pre-LN 对 warmup 没 Post-LN 那么苛刻，但保留一段预热仍然更稳。</p>
+
+    <h3 id="guide-p-wd">权重衰减 <code>weight_decay</code>（默认 <code>0.01</code>）</h3>
+    <p>AdamW 的<strong>解耦</strong>权重衰减（第 08、09 课）：直接缩小权重，而不是折进梯度里。偏置和归一化参数不衰减。</p>
+    <ul>
+      <li>过拟合（训练损失很低、验证 BLEU 不升或下降）→ 提到 0.05–0.1，或加大 dropout。</li>
+      <li>欠拟合 → 降到 0 或 0.001。</li>
+    </ul>
+
+    <h3 id="guide-p-ls">标签平滑 <code>label_smoothing</code>（默认 <code>0.1</code>）</h3>
+    <p>不把正确答案的目标概率设为 1，而是留一点质量给其它词（原论文沿用 Inception 的做法）。
+      减轻过度自信、常能略提 BLEU。设为 0 即普通交叉熵；过大（&gt;0.2）会让模型变「含糊」，短句任务上可能伤 exact match。</p>
+
+    <h3 id="guide-p-clip">梯度裁剪 <code>grad_clip</code>（默认 <code>1.0</code>）</h3>
+    <p>若全局梯度范数超过该值，就整体缩放回来。抑制偶发大梯度导致的发散。设为 <code>0</code> 表示不裁剪。
+      训练仍偶发爆炸时，可降到 0.5；一直很稳也可以维持 1.0。</p>
+
+    <h3 id="guide-p-patience">早停耐心 <code>patience</code>（默认 <code>0</code> = 不早停）</h3>
+    <p>验证 BLEU 连续多少轮没有刷新最佳就停止。加大预设用 8：允许模型多练一会儿，但避免无效空转。
+      为 0 时跑满 <code>epochs</code>。停止时仍会保存当前权重，并在测试集上评估。</p>
+
+    <h3 id="guide-p-device">设备 <code>device</code>（默认 <code>auto</code>）</h3>
+    <ul>
+      <li><code>auto</code>：有 CUDA 就用 GPU，否则 CPU。</li>
+      <li><code>cuda</code>：强制 GPU（没有会报错）。</li>
+      <li><code>cpu</code>：强制 CPU（对比速度或排查 GPU 问题时用）。</li>
+    </ul>
+    <p>顶栏 GPU 条在 Jetson 上读 sysfs 负载；训练 / 翻译 / 评估进行时会较快刷新。</p>
+
+    <h3 id="guide-p-seed">随机种子 <code>seed</code>（默认 <code>42</code>）</h3>
+    <p>控制数据划分打乱与参数初始化。同一配置同一种子，结果应大体可复现（GPU 上仍可能有轻微非确定性）。
+      想估计「运气」带来的波动时，换几个种子各跑一遍看 BLEU 分布。</p>
+
+    <h2 id="guide-presets">三套预设分别改了什么</h2>
+    <table>
+      <tr><th>预设</th><th>结构要点</th><th>训练要点</th><th>适合</th></tr>
+      <tr>
+        <td>快速试跑</td>
+        <td>2+2 层，d=128，d_ff=512，约 180 万参数</td>
+        <td>12 轮，lr=1e-3，warmup=200</td>
+        <td>确认流程、看曲线、试 GPU；Jetson 上大约一两分钟量级</td>
+      </tr>
+      <tr>
+        <td>标准</td>
+        <td>默认：3+3 层，d=256，约 730 万参数</td>
+        <td>30 轮，lr=7e-4，warmup=400</td>
+        <td>日常对比实验的基线；短句英中已经能译得像样</td>
+      </tr>
+      <tr>
+        <td>加大模型</td>
+        <td>4+4 层，d=384，6 头，d_ff=1536，dropout=0.2</td>
+        <td>50 轮，lr=5e-4，warmup=800，patience=8</td>
+        <td>愿意多花时间换更高 BLEU；小数据上要注意过拟合</td>
+      </tr>
+    </table>
+    <div class="callout ok"><strong>实测量级（Jetson，完整 cmn-eng）</strong>快速试跑验证 BLEU 约 28、测试约 29；
+      标准预设验证约 39、测试约 40。具体数字随驱动与随机性会有小幅波动。</div>
+
+    <h2 id="guide-metrics">训练和验证时看什么</h2>
+    <table>
+      <tr><th>指标</th><th>含义</th><th>怎么读</th></tr>
+      <tr><td>训练损失</td><td>带标签平滑的交叉熵（每 10 步记一点）</td><td>应总体下降；一直不降 → 学习率 / 数据 / 实现问题</td></tr>
+      <tr><td>验证损失</td><td>验证集上的损失（每轮）</td><td>若训练降、验证升 → 过拟合，加 dropout / 权重衰减 / 早停</td></tr>
+      <tr><td>验证 BLEU</td><td>字级 BLEU（中文常用按字算）</td><td>选 <code>best.pt</code> 的依据；本任务比「只看损失」更贴近观感</td></tr>
+      <tr><td>测试 BLEU</td><td>训练结束用最佳检查点在测试集上贪心解码</td><td>最终报告数字；不要用它做早停</td></tr>
+      <tr><td>困惑度 ppl</td><td>由验证损失换算</td><td>越低越好；和损失同向</td></tr>
+      <tr><td>吞吐 tok/s</td><td>目标端 token 每秒</td><td>看设备是否在干活；可与顶栏 GPU 对照</td></tr>
+      <tr><td>GPU 使用率</td><td>当前 / 峰值利用率</td><td>训练或评估时应明显抬升；长期为 0 可能落在 CPU</td></tr>
+    </table>
+    <p>验证页批量评估还会给出 n-gram 精确率、长度惩罚 BP、完全一致率、源端未登录词率，以及逐句对照表
+      （可按句级 BLEU 排序，专门找译砸的例子）。</p>
+
+    <h2 id="guide-decode">验证页：贪心与束搜索</h2>
+    <ul>
+      <li><strong>贪心（beam=1）</strong>：每步取概率最大的下一个字。快，适合扫测试集。</li>
+      <li><strong>束搜索（beam=4/8）</strong>：每步保留若干候选前缀再展开。通常略好、更慢；束过大收益递减。</li>
+    </ul>
+    <p>热力图一行对应一个已生成的中文字，一列对应一个英文词（含结束符）；颜色越深，生成该字时越关注那一列。
+      若整行几乎均匀，说明还没学会对齐——常见于训练太短或模型过小。</p>
+
+    <h2 id="guide-tune">调参时建议的顺序</h2>
+    <ol class="steps">
+      <li>用「快速试跑」确认能下载数据、曲线下降、GPU 有负载、短句能译。</li>
+      <li>切到「标准」跑满，记下测试 BLEU，作为基线。</li>
+      <li>一次只改一类：要么数据（<code>max_pairs</code> / <code>min_freq</code> / 长度），要么宽度层数，要么学习率计划。</li>
+      <li>过拟合 → dropout↑、weight_decay↑、patience 早停、或减小模型；欠拟合 → 加宽加深、dropout↓、多训几轮。</li>
+      <li>爆梯度 / NaN → lr↓、warmup↑、grad_clip 保持开启。</li>
+      <li>译文大量 <code>&lt;unk&gt;</code> 或红标词 → 先数据与词表，再模型。</li>
+    </ol>
+
+    <h2 id="guide-map">和课程 14–16 的对应关系</h2>
+    <table>
+      <tr><th>本实验里的零件</th><th>对应课程</th><th>配置里相关项</th></tr>
+      <tr><td>Q / K / V 缩放点积、多头</td><td>14 注意力</td><td><code>n_heads</code>、<code>d_model</code></td></tr>
+      <tr><td>编码器–解码器 + 交叉注意力</td><td>13 Seq2Seq、16 架构</td><td><code>n_enc_layers</code> / <code>n_dec_layers</code></td></tr>
+      <tr><td>残差 + LayerNorm（Pre/Post）</td><td>07、11、15、16</td><td><code>norm_first</code></td></tr>
+      <tr><td>FFN + GELU</td><td>02、04、15</td><td><code>d_ff</code>、<code>activation</code></td></tr>
+      <tr><td>Dropout / 权重衰减 / 早停</td><td>08</td><td><code>dropout</code>、<code>weight_decay</code>、<code>patience</code></td></tr>
+      <tr><td>AdamW + warmup + 余弦</td><td>05、09、15</td><td><code>lr</code>、<code>schedule</code>、<code>warmup_steps</code></td></tr>
+      <tr><td>标签平滑</td><td>16 阅读 / 相关论文</td><td><code>label_smoothing</code></td></tr>
+    </table>
+
+    
+<p class="muted small">代码位置：<code>project/tiny_translator/</code> · 配置 <code>translator/config.py</code> · 模型 <code>translator/model.py</code> · 训练 <code>translator/trainer.py</code></p>
+</article>
+</div>

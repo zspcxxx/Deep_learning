@@ -46,22 +46,51 @@ function setMsg(el, text, kind = "") {
 
 // ================================================================ tabs
 
-const TABS = ["config", "train", "eval"];
+const TABS = ["config", "train", "eval", "guide"];
 let currentTab = "config";
 
-function showTab(name) {
+function showTab(name, { scrollId = null, replaceHash = true } = {}) {
+  if (name && name.startsWith("guide-")) {
+    scrollId = name;
+    name = "guide";
+  }
   if (!TABS.includes(name)) name = "config";
   currentTab = name;
   for (const t of TABS) $(`#tab-${t}`).hidden = t !== name;
   document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-  if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
+  if (replaceHash) {
+    const hash = scrollId || name;
+    if (location.hash !== `#${hash}`) history.replaceState(null, "", `#${hash}`);
+  }
   if (name === "train") renderTrain();
   if (name === "eval") { loadRuns(); renderEvalCharts(); }
+  if (name === "guide" && scrollId) {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(scrollId);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+}
+
+function applyHash() {
+  const h = location.hash.slice(1);
+  if (!h) { showTab("config", { replaceHash: false }); return; }
+  if (h === "guide" || h.startsWith("guide-")) showTab(h, { replaceHash: false });
+  else showTab(h, { replaceHash: false });
 }
 
 document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+document.querySelectorAll("[data-goto-guide]").forEach((b) => b.addEventListener("click", () => showTab("guide")));
+window.addEventListener("hashchange", applyHash);
 window.addEventListener("resize", () => { if (currentTab === "train") drawTrainCharts(); if (currentTab === "eval") renderEvalCharts(); });
+
+// In-page guide TOC: keep the guide tab and update the hash.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest('#tab-guide a[href^="#guide"]');
+  if (!a) return;
+  e.preventDefault();
+  showTab(a.getAttribute("href").slice(1));
+});
 
 // ================================================================ config
 
@@ -235,10 +264,85 @@ $("#btnStart").addEventListener("click", startTraining);
 
 // ================================================================ training
 
-const train = { runId: null, next: 0, state: null, config: null, steps: [], epochs: [], logs: [], timer: null };
+const train = { runId: null, next: 0, state: null, config: null, steps: [], epochs: [], logs: [], timer: null,
+  gpuPeak: null };
+const gpuLive = { last: null, busy: 0, timer: null, peak: null };
 
 function resetTrain() {
-  Object.assign(train, { runId: null, next: 0, state: null, config: null, steps: [], epochs: [], logs: [] });
+  Object.assign(train, { runId: null, next: 0, state: null, config: null, steps: [], epochs: [], logs: [], gpuPeak: null });
+}
+
+function applyGpu(gpu) {
+  if (!gpu) return;
+  gpuLive.last = gpu;
+  if (typeof gpu.util === "number") {
+    gpuLive.peak = gpuLive.peak === null ? gpu.util : Math.max(gpuLive.peak, gpu.util);
+    if (train.state && isActive(train.state.status)) {
+      train.gpuPeak = train.gpuPeak === null ? gpu.util : Math.max(train.gpuPeak, gpu.util);
+    }
+  }
+  renderGpuMeter();
+  if (train.state && isActive(train.state.status)) {
+    renderJobPill();
+    if (currentTab === "train") renderTrain(false);
+  }
+}
+
+function renderGpuMeter() {
+  const meter = $("#gpuMeter");
+  const fill = $("#gpuFill");
+  const pctEl = $("#gpuPct");
+  if (!meter || !fill || !pctEl) return;
+  const g = gpuLive.last;
+  const util = g && typeof g.util === "number" ? g.util : null;
+  const active = gpuLive.busy > 0 || (train.state && isActive(train.state.status));
+  meter.classList.toggle("active", active && util !== null && util > 0);
+  if (util === null) {
+    fill.style.width = "0%";
+    fill.className = "gpu-fill";
+    pctEl.textContent = "—";
+    meter.title = g?.name ? `${g.name}（暂无利用率读数）` : "GPU 使用率";
+    return;
+  }
+  fill.style.width = `${util}%`;
+  fill.className = "gpu-fill" + (util >= 70 ? " high" : util >= 35 ? " mid" : "");
+  pctEl.textContent = `${util}%`;
+  const mem = (g.mem_used_mb != null && g.mem_total_mb != null)
+    ? ` · 显存 ${fmtInt(g.mem_used_mb)}/${fmtInt(g.mem_total_mb)} MB` : "";
+  const peak = gpuLive.peak !== null ? ` · 峰值 ${gpuLive.peak}%` : "";
+  meter.title = `${g.name || "GPU"}：${util}%${peak}${mem}`;
+}
+
+function beginGpuWatch() {
+  gpuLive.busy += 1;
+  scheduleGpuPoll(true);
+}
+
+function endGpuWatch() {
+  gpuLive.busy = Math.max(0, gpuLive.busy - 1);
+  scheduleGpuPoll(false);
+}
+
+async function pollGpuOnce() {
+  try {
+    const res = await api("/api/system/gpu");
+    applyGpu(res.gpu);
+  } catch (e) {
+    console.warn("gpu poll failed", e);
+  }
+}
+
+function scheduleGpuPoll(forceFast = false) {
+  clearTimeout(gpuLive.timer);
+  const active = forceFast || gpuLive.busy > 0 || (train.state && isActive(train.state.status));
+  gpuLive.timer = setTimeout(async () => {
+    // While training, /api/train/status already carries gpu; only hit /api/system/gpu for eval/translate
+    // or when idle (slow keepalive so the meter stays fresh).
+    if (gpuLive.busy > 0 || !(train.state && isActive(train.state.status))) {
+      await pollGpuOnce();
+    }
+    scheduleGpuPoll(false);
+  }, active ? 500 : 4000);
 }
 
 async function pollTrain() {
@@ -249,6 +353,7 @@ async function pollTrain() {
       resetTrain();
       snap = await api("/api/train/status?since=0");
     }
+    if (snap.gpu) applyGpu(snap.gpu);
     if (snap.state) {
       if (!train.runId) { train.runId = snap.state.run_id; train.config = snap.config; }
       const wasDone = train.state && !isActive(train.state.status);
@@ -279,7 +384,10 @@ function renderJobPill() {
   pill.hidden = false;
   pill.classList.toggle("running", isActive(s.status));
   const pct = s.total_steps ? Math.round((100 * s.step) / s.total_steps) : 0;
-  pill.textContent = isActive(s.status) ? `${s.name}：${STATUS[s.status]} ${pct}%` : `${s.name}：${STATUS[s.status] || s.status}`;
+  const gpu = gpuLive.last && typeof gpuLive.last.util === "number" ? ` · GPU ${gpuLive.last.util}%` : "";
+  pill.textContent = isActive(s.status)
+    ? `${s.name}：${STATUS[s.status]} ${pct}%${gpu}`
+    : `${s.name}：${STATUS[s.status] || s.status}`;
   pill.onclick = () => showTab("train");
 }
 
@@ -304,6 +412,8 @@ function renderTrain(changed = true) {
   $("#trainBar").style.width = `${pct.toFixed(1)}%`;
   const last = train.steps[train.steps.length - 1];
   const eta = s.step && s.total_steps && isActive(s.status) ? (s.elapsed / s.step) * (s.total_steps - s.step) : null;
+  const gpuNow = gpuLive.last && typeof gpuLive.last.util === "number" ? `${gpuLive.last.util}%` : "—";
+  const gpuPeak = train.gpuPeak !== null ? `${train.gpuPeak}%` : "—";
   $("#trainStats").innerHTML = [
     stat("轮次", `${s.epoch} / ${s.epochs}`),
     stat("步数", `${fmtInt(s.step)} / ${fmtInt(s.total_steps)}`),
@@ -311,6 +421,7 @@ function renderTrain(changed = true) {
     stat("预计剩余", fmtDuration(eta)),
     stat("当前训练损失", last ? fmtNum(last.loss, 3) : "—"),
     stat("吞吐（目标 token/s）", last ? fmtInt(last.tok_s) : "—"),
+    stat("GPU 使用率", `${gpuNow}（峰值 ${gpuPeak}）`),
     stat("最佳验证 BLEU", s.best_val_bleu !== null ? `${fmtNum(s.best_val_bleu)}（第 ${s.best_epoch} 轮）` : "—"),
     stat("测试集 BLEU", s.test_bleu !== null ? fmtNum(s.test_bleu) : "—"),
   ].join("");
@@ -439,6 +550,7 @@ async function translate() {
   if (!evalState.selected) return;
   setMsg(msg, "翻译中…");
   $("#btnTranslate").disabled = true;
+  beginGpuWatch();
   try {
     const res = await api(`/api/runs/${encodeURIComponent(evalState.selected)}/translate`, {
       method: "POST", body: { text, beam: Number($("#beamSize").value), checkpoint: $("#evalCkpt").value },
@@ -448,10 +560,12 @@ async function translate() {
     $("#srcTokens").innerHTML = res.src_tokens.map((t, i) => `<span class="tok ${res.src_unk[i] ? "unk" : ""}">${esc(t)}</span>`).join("");
     renderHeatmap(res);
     const unk = res.src_unk.filter(Boolean).length;
-    setMsg(msg, `用时 ${res.elapsed_ms} ms${unk ? `；${unk} 个词不在词表中` : ""}`, unk ? "" : "ok");
+    const gpuNote = gpuLive.last && typeof gpuLive.last.util === "number" ? `；GPU ${gpuLive.last.util}%` : "";
+    setMsg(msg, `用时 ${res.elapsed_ms} ms${unk ? `；${unk} 个词不在词表中` : ""}${gpuNote}`, unk ? "" : "ok");
   } catch (e) {
     setMsg(msg, e.message, "err");
   } finally {
+    endGpuWatch();
     $("#btnTranslate").disabled = false;
   }
 }
@@ -473,6 +587,9 @@ async function evaluate() {
   const msg = $("#evalMsg");
   setMsg(msg, "评估中，长句较多时束搜索会慢一些…");
   $("#btnEvaluate").disabled = true;
+  const peakBefore = gpuLive.peak;
+  gpuLive.peak = null;
+  beginGpuWatch();
   try {
     const res = await api(`/api/runs/${encodeURIComponent(evalState.selected)}/evaluate`, {
       method: "POST",
@@ -480,6 +597,7 @@ async function evaluate() {
     });
     evalState.lastEval = res;
     $("#evalResult").hidden = false;
+    const evalPeak = gpuLive.peak;
     $("#evalScore").innerHTML = [
       stat("BLEU（字级）", fmtNum(res.bleu)),
       stat("1/2/3/4-gram 精确率", res.precisions.map((p) => p.toFixed(1)).join(" / ")),
@@ -487,12 +605,16 @@ async function evaluate() {
       stat("完全一致", `${fmtNum(res.exact_match, 1)}%`),
       stat("英文未登录词率", `${fmtNum(res.src_unk_rate, 1)}%`),
       stat("句数 / 用时", `${fmtInt(res.count)} / ${res.seconds}s`),
+      stat("评估期 GPU 峰值", evalPeak !== null ? `${evalPeak}%` : "—"),
     ].join("");
     renderEvalTable();
-    setMsg(msg, "评估完成", "ok");
+    setMsg(msg, evalPeak !== null ? `评估完成 · GPU 峰值 ${evalPeak}%` : "评估完成", "ok");
+    if (peakBefore !== null) gpuLive.peak = Math.max(peakBefore, evalPeak ?? 0);
   } catch (e) {
     setMsg(msg, e.message, "err");
+    if (peakBefore !== null) gpuLive.peak = peakBefore;
   } finally {
+    endGpuWatch();
     $("#btnEvaluate").disabled = false;
   }
 }
@@ -530,5 +652,6 @@ $("#btnDeleteRun").addEventListener("click", async () => {
 // ================================================================ boot
 
 loadConfig().catch((e) => setMsg($("#configMsg"), `加载配置失败：${e.message}`, "err"));
-showTab(location.hash.slice(1) || "config");
+applyHash();
 pollTrain();
+scheduleGpuPoll(true);

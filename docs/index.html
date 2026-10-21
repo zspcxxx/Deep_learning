@@ -192,6 +192,11 @@
         <h3>Transformer 技术全景与架构图</h3>
         <p>汇总完整 Transformer 用到的全部技术：编码器–解码器、注意力内部、Post-LN / Pre-LN、训练配方、KV cache 等，附详细技术架构图，并标出每个零件出自本项目哪一课。</p>
       </a>
+      <a class="lesson-card" href="/translator/#guide">
+        <div class="num">项目导读 · 模型实验内</div>
+        <h3>模型实验参数详解</h3>
+        <p>英→中微型 Transformer：数据、模型结构、训练三组参数逐项说明。文档在模型实验页的「说明」标签里。</p>
+      </a>
     </div>
 
     <h2 id="setup">环境准备（只需一次）</h2>
@@ -268,6 +273,7 @@ python lessons/15_transformer.py</pre>
       <tr><td><a href="14_attention.html">14</a></td><td>注意力机制</td><td>Q/K/V 缩放点积按键查值；记忆变长后平均池化失败，注意力仍能找对</td><td>约 1–2 分钟</td></tr>
       <tr><td><a href="15_transformer.html">15</a></td><td>综合串联：Transformer</td><td>前 14 课的零件各在模型何处；拿掉位置编码 / 残差 / LayerNorm / warmup 或放大初始化，各自重现对应那一课的失败</td><td>约 1.5 分钟</td></tr>
       <tr><td><a href="16_transformer_architecture.html">16</a></td><td>Transformer 技术全景（阅读课）</td><td>完整 Transformer 的全部技术汇总与详细架构图；原论文、现代变体与本项目实现逐项对照</td><td>无需运行</td></tr>
+      <tr><td><a href="/translator/#guide">项目</a></td><td>模型实验参数详解</td><td>配置页每个数据 / 结构 / 训练参数的含义、默认值、改动影响与调参建议（模型实验页「说明」）</td><td>页内阅读</td></tr>
     </table>
 
     <h2 id="code">阅读时怎么对照代码</h2>

@@ -8,6 +8,7 @@ from flask import Blueprint, jsonify, render_template, request
 from . import runs
 from .config import schema, validate
 from .data import ROOT, download_dataset, list_datasets, make_batches, prepare
+from .gpu import read_gpu
 from .model import TinyTransformer
 from .trainer import JobManager
 
@@ -106,12 +107,20 @@ def train_stop():
 @bp.get("/api/train/status")
 def train_status():
     job = manager.job
+    gpu = read_gpu()
     if job is None:
-        return jsonify({"state": None, "events": [], "next": 0})
+        return jsonify({"state": None, "events": [], "next": 0, "gpu": gpu})
     since = request.args.get("since", default=0, type=int)
     snap = job.snapshot(max(0, since))
     snap["config"] = job.cfg.to_dict() if since == 0 else None
+    snap["gpu"] = gpu
     return jsonify(snap)
+
+
+@bp.get("/api/system/gpu")
+def system_gpu():
+    """Current GPU utilization for the live meter (training and evaluation)."""
+    return jsonify({"ok": True, "gpu": read_gpu()})
 
 
 # ---------------------------------------------------------------- runs & evaluation
