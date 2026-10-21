@@ -10,3 +10,5 @@ artifacts/
 # arXiv PDFs are fetched by scripts/fetch_papers.py; only the manifest is committed.
 docs/papers/**/*.pdf
 docs/papers/**/*.part
+# Chinese reading guides stay local / on device; not published to GitHub.
+docs/papers/cn/
