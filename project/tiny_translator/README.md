@@ -18,6 +18,9 @@ bash scripts/run.sh          # 打开 http://<设备 IP>:8090
 `setup.sh` 在 Jetson Thor（aarch64、CUDA 13）上安装 `cu130` 版 PyTorch，其他 NVIDIA 机器装默认 CUDA 版，
 没有 GPU 时装 CPU 版。
 
+同样的页面也挂在上级 Deep_learning 实验看板里：`python web/app.py` 启动看板后打开 `http://<IP>:8080/translator/`
+（看板顶部导航的“翻译实验”）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
+
 ## 网页上的三步
 
 | 页面 | 做什么 |
@@ -48,9 +51,10 @@ translator/
   metrics.py   字级 BLEU
   trainer.py   后台训练任务（AdamW、预热 + 余弦学习率、标签平滑、梯度裁剪、早停、检查点）
   runs.py      运行目录管理，加载模型做翻译与评估
+  webui.py     页面与 JSON API（Flask Blueprint，可挂到任意前缀）
 web/
-  app.py       Flask 页面与 JSON API
-  templates/index.html, static/{app.js, charts.js, style.css}
+  app.py       单独启动（端口 8090）
+  templates/translator/index.html, static/{app.js, charts.js, style.css}
 scripts/setup.sh, scripts/run.sh
 data/          下载的语料（不提交）
 runs/<时间>_<名称>/   config.json、vocab_*.json、val/test.tsv、history.json、summary.json、train.log、best.pt、last.pt（不提交）

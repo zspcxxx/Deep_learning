@@ -8,7 +8,11 @@ const COLORS = { train: "#2563eb", val: "#f97316", bleu: "#16a34a", lr: "#7c3aed
 const EXAMPLES = ["I love you.", "How old are you?", "Where is the train station?", "It is raining today.",
   "I don't know what to do.", "She is reading a book in the library.", "Can you help me?", "Tom likes playing tennis."];
 
+// The page may be mounted under a prefix (e.g. /translator/ inside the lesson dashboard).
+const BASE = (document.body.dataset.base || "/").replace(/\/$/, "");
+
 async function api(path, options = {}) {
+  path = BASE + path;
   const init = { ...options };
   if (init.body && typeof init.body !== "string") {
     init.body = JSON.stringify(init.body);
@@ -107,10 +111,10 @@ async function downloadDataset(name, button) {
 
 function renderPresets() {
   const box = $("#presets");
-  box.innerHTML = '<span class="muted small">预设：</span>' + Object.entries(cfgState.schema.presets)
-    .map(([k, p]) => `<button class="btn small" type="button" data-preset="${k}">${esc(p.label)}</button>`).join("");
+  box.innerHTML = '<span class="muted small">预设：</span>' + cfgState.schema.presets
+    .map((p) => `<button class="btn small" type="button" data-preset="${esc(p.key)}">${esc(p.label)}</button>`).join("");
   box.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
-    const preset = cfgState.schema.presets[b.dataset.preset];
+    const preset = cfgState.schema.presets.find((p) => p.key === b.dataset.preset);
     fillForm({ ...cfgState.schema.defaults, dataset: readForm().dataset, ...preset.values });
     $("#checkCard").hidden = true;
     setMsg($("#configMsg"), `已套用预设：${preset.label}`);

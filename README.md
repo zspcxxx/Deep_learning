@@ -128,6 +128,8 @@ python web/app.py
   - 「本次运行会做什么」：实验步骤，运行时逐步点亮；
   - 「运行过程」：左边是实时日志（Server-Sent Events 推送），右边是过程注解——关键日志行一出现就解释它在做什么、数字该怎么读，点击注解跳到对应日志行；
   - 「运行结果」：是否通过、根据本次实际指标生成的结果解读、每张结果图及看图说明、原始 metrics.json。
+- **翻译实验** `/translator/`：`project/tiny_translator` 的网页，在约 3 万句英中语料上配置、训练、验证一个微型 Transformer 翻译模型（详见该目录 README）。
+  需要 PyTorch；看板所用的 Python 环境没装时，这一页只显示安装提示，其余页面不受影响。
 - 同一时间只运行一个实验（都是 CPU 密集型），运行中可点「■ 停止」。每个实验最近一次完整运行的日志与结果保存在 `artifacts/runs/<实验>.json`，刷新页面或重启服务后仍可查看。
 
 注解内容在 `src/dllab/notes/`，每个实验一个文件：`LogNote`（日志正则 → 过程注解）、`explain(metrics)`（结果解读）、`image_notes`（看图说明）。
@@ -154,7 +156,8 @@ python scripts/run_verify.py
   - `notes/`：网页上的过程注解、结果解读与看图说明
   - `runner.py`：以子进程运行实验并生成带注解的事件流
 - `lessons/`：每个实验的剧本
-- `web/`：`app.py`（看板 / 实验页 / API）、`templates/`、`static/`
+- `web/`：`app.py`（看板 / 实验页 / API，并挂载翻译实验）、`templates/`、`static/`
+- `project/tiny_translator/`：微型 Transformer 英→中翻译项目（PyTorch），网页在看板的 `/translator/`
 - `scripts/run_lesson.py`：单实验启动器（`--result-json` 供网页读取指标）
 - `scripts/run_verify.py`：顺序跑完全部（第 16 课是阅读课，不在其中）
 - `scripts/build_transformer_diagram.py`：重新生成第 16 课的架构图 `docs/16_transformer_architecture.svg`

@@ -113,7 +113,8 @@ def schema(datasets: list[dict]) -> dict:
             kind = "choice"
         out.append({"key": f.name, "group": group, "label": label, "help": help_text, "kind": kind,
                     "default": defaults[f.name], **extra})
-    return {"groups": GROUPS, "fields": out, "presets": PRESETS, "defaults": defaults}
+    presets = [{"key": k, **p} for k, p in PRESETS.items()]  # a list keeps the order under sorted JSON
+    return {"groups": GROUPS, "fields": out, "presets": presets, "defaults": defaults}
 
 
 def _coerce(kind: str, value):

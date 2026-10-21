@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 from flask import Flask, Response, abort, jsonify, redirect, render_template, request, send_from_directory
 
@@ -14,7 +15,26 @@ from dllab.runner import RUNS_DIR, SUMMARY_PATH, BusyError, RunManager
 app = Flask(__name__)
 app.json.ensure_ascii = False
 DOCS = PROJECT_ROOT / "docs"
+TRANSLATOR_DIR = PROJECT_ROOT / "project" / "tiny_translator"
 manager = RunManager()
+
+
+def mount_translator() -> str | None:
+    """Serve project/tiny_translator at /translator/; returns why it is unavailable, if it is."""
+    sys.path.insert(0, str(TRANSLATOR_DIR))
+    try:
+        from translator.webui import bp
+    except ImportError as exc:
+        return f"{exc}（在本环境安装：pip install torch flask numpy zhconv，或运行 {TRANSLATOR_DIR.name}/scripts/setup.sh）"
+    app.register_blueprint(bp, url_prefix="/translator")
+    return None
+
+
+TRANSLATOR_ERROR = mount_translator()
+if TRANSLATOR_ERROR:
+    @app.get("/translator/")
+    def translator_unavailable():
+        return render_template("translator_unavailable.html", reason=TRANSLATOR_ERROR), 503
 
 DOC_FILES = {
     "01": "01_perceptron.html",

@@ -24,6 +24,8 @@ h3 { font-size: 14px; margin: 14px 0 8px; color: #374151; }
 /* ---------- header ---------- */
 .top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 24px;
   padding: 10px 24px; background: #111827; color: #fff; }
+.home { color: #cbd5e1; text-decoration: none; font-size: 13px; white-space: nowrap; }
+.home:hover { color: #fff; }
 .brand { font-weight: 700; font-size: 16px; white-space: nowrap; }
 .brand span { font-weight: 400; color: #9ca3af; margin-left: 6px; font-size: 13px; }
 .tabs { display: flex; gap: 4px; }

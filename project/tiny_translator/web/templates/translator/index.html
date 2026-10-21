@@ -4,10 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tiny Translator · 微型 Transformer 英→中</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<link rel="stylesheet" href="{{ url_for('translator.static', filename='style.css') }}">
 </head>
-<body>
+<body data-base="{{ url_for('translator.index') }}">
 <header class="top">
+  {% if url_for('translator.index') != '/' %}<a class="home" href="/">← 实验看板</a>{% endif %}
   <div class="brand">Tiny Translator <span>微型 Transformer · 英→中</span></div>
   <nav class="tabs" role="tablist">
     <button class="tab" data-tab="config" role="tab"><b>1</b> 配置</button>
@@ -180,7 +181,7 @@
   </section>
 </main>
 
-<script src="{{ url_for('static', filename='charts.js') }}"></script>
-<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script src="{{ url_for('translator.static', filename='charts.js') }}"></script>
+<script src="{{ url_for('translator.static', filename='app.js') }}"></script>
 </body>
 </html>

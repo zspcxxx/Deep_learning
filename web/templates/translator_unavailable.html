@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}翻译实验 · Deep Learning Lab{% endblock %}
+{% block content %}
+<header class="hero">
+  <h1>翻译实验暂不可用</h1>
+  <p class="lead">“微型 Transformer 英→中翻译”需要 PyTorch，当前运行看板的 Python 环境里没有装好：</p>
+  <pre class="log">{{ reason }}</pre>
+  <p class="lead">安装后重启看板即可。项目代码在 <code>project/tiny_translator/</code>。</p>
+</header>
+{% endblock %}
