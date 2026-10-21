@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Extract figures from English PDFs and patch Chinese HTML guides.
+"""Extract figures from the English PDFs and patch the Chinese HTML guides.
 
-- Render each English PDF page and crop regions above "Figure N" captions.
-- Inject MathJax so existing LaTeX formulas render.
+- Locate every "Figure N:" / "SuppFigure N:" caption, gather the vector drawings and
+  images above it (plus their axis labels and sub-captions), and render that region.
+- Inject MathJax so the LaTeX formulas in the guides render.
 - Insert <img> tags into empty <figure> / .figure-placeholder blocks.
+
+Extraction needs PyMuPDF (``pip install pymupdf``); patching needs only the standard library.
 
     python scripts/enrich_cn_papers.py            # extract + patch
     python scripts/enrich_cn_papers.py --patch    # only rewrite HTML
@@ -13,21 +16,15 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess
-import tempfile
+import shutil
 from pathlib import Path
-
-import numpy as np
-from PIL import Image, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1]
 EN_DIR = ROOT / "docs" / "papers" / "en"
 CN_DIR = ROOT / "docs" / "papers" / "cn"
 FIG_DIR = CN_DIR / "figures"
 
-DPI = 160
-SCALE = DPI / 72.0
-PAD_PT = 6
+DPI = 170
 
 MATHJAX = """
 <script>
@@ -49,22 +46,21 @@ FIG_CSS = """
   .figure-placeholder { border: none; padding: 0; background: transparent; }
 """
 
-CAPTION_RE = re.compile(
-    r"^(?:Figure|Fig\.?|FIGURE)\s+(\d+(?:\.\d+)?)(?:\s*[:.\u2013\u2014-]|$)",
-    re.I,
-)
+# A caption must start its own text block and be followed by punctuation or a capitalised
+# sentence, so in-text references such as "Figure 3 shows" are never taken as captions.
+CAPTION_RE = re.compile(r"^(Supp)?(?:Figure|Fig\.)\s*(\d+(?:\.\d+)?)(?:\s*[:.]|\s+(?=[A-Z]))")
+ANY_CAPTION_RE = re.compile(r"^(?:Supp)?(?:Figure|Fig\.|Table)\s*\d+(?:\.\d+)?\s*[:.]", re.I)
+CN_SUPP_RE = re.compile(r"SuppFigure\s*(\d+)", re.I)
 CN_FIG_RE = re.compile(r"图\s*(\d+(?:\.\d+)?)")
+IMG_RE = re.compile(r'<img class="paper-fig" src="(figures/[^"]+)"[^>]*>\n?')
 
-
-def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kwargs)
+GROW_GAP = 22.0      # max vertical gap (pt) between pieces of one figure
+SEED_GAP = 90.0      # max gap between the caption and the lowest piece of its figure
+LABEL_PAD = 12.0     # text this close to the graphics is treated as a label
 
 
 def pdf_ids() -> list[str]:
-    ids = []
-    for pdf in sorted(EN_DIR.glob("*.pdf")):
-        ids.append(pdf.stem.split("_", 1)[0])
-    return ids
+    return [pdf.stem.split("_", 1)[0] for pdf in sorted(EN_DIR.glob("*.pdf"))]
 
 
 def pdf_for(arxiv: str) -> Path | None:
@@ -77,285 +73,297 @@ def html_for(arxiv: str) -> Path | None:
     return matches[0] if matches else None
 
 
-WORD_RE = re.compile(
-    r'<word xMin="([^"]+)" yMin="([^"]+)" xMax="([^"]+)" yMax="([^"]+)">([^<]*)</word>'
-)
-PAGE_RE = re.compile(r'<page width="([^"]+)" height="([^"]+)">(.*?)</page>', re.S)
-BLOCK_RE = re.compile(
-    r'<block xMin="([^"]+)" yMin="([^"]+)" xMax="([^"]+)" yMax="([^"]+)">(.*?)</block>',
-    re.S,
-)
-FIG_WORD_RE = re.compile(r"^(?:Figure|Fig\.?|FIGURE)$", re.I)
-FIG_NUM_RE = re.compile(r"^(\d+(?:\.\d+)?)[:.\u2013\u2014-]?$")
-CAPTION_NEXT_RE = re.compile(
-    r"^(?:[A-Z(]|Left|Right|Top|Bottom|We|The|A |An |Inception|Residual|Training|Example|Language|As |When)"
-)
+def fig_stem(supp: bool, num: str) -> str:
+    return ("supp" if supp else "fig") + num.replace(".", "_")
 
 
-def parse_bbox(pdf: Path) -> list[dict]:
-    raw = subprocess.check_output(
-        ["pdftotext", "-bbox-layout", str(pdf), "-"],
-        text=True,
-        errors="replace",
-    )
-    pages = []
-    for i, page_m in enumerate(PAGE_RE.finditer(raw), start=1):
-        width = float(page_m.group(1))
-        height = float(page_m.group(2))
-        body = page_m.group(3)
-        blocks = []
-        words = []
-        for block_m in BLOCK_RE.finditer(body):
-            parts = []
-            bx0, by0, bx1, by1 = map(float, block_m.group(1, 2, 3, 4))
-            for wm in WORD_RE.finditer(block_m.group(5)):
-                wx0, wy0, wx1, wy1 = map(float, wm.group(1, 2, 3, 4))
-                token = wm.group(5)
-                word = {
-                    "text": token,
-                    "xmin": wx0, "ymin": wy0, "xmax": wx1, "ymax": wy1,
-                }
-                words.append(word)
-                parts.append(token)
-            text = " ".join(p for p in parts if p).strip()
-            if text:
-                blocks.append({
-                    "text": text,
-                    "xmin": bx0, "ymin": by0, "xmax": bx1, "ymax": by1,
-                })
-        pages.append({
-            "num": i, "width": width, "height": height,
-            "blocks": blocks, "words": words,
-        })
-    return pages
+# ---------------------------------------------------------------- extraction
 
-
-def find_captions(pages: list[dict]) -> list[dict]:
-    caps = []
-    seen = set()
-    for page in pages:
-        words = page["words"]
-        for i, word in enumerate(words[:-1]):
-            if not FIG_WORD_RE.match(word["text"]):
-                continue
-            nxt = words[i + 1]
-            raw_num = nxt["text"].strip("()[],;")
-            num_m = FIG_NUM_RE.match(raw_num)
-            if not num_m:
-                continue
-            # Skip in-text references ("see Figure 2") unless the number token
-            # itself carries caption punctuation, or the following word looks
-            # like the start of a caption sentence.
-            has_punct = bool(re.search(r"[:.\u2013\u2014-]", nxt["text"]))
-            nxt2 = words[i + 2]["text"] if i + 2 < len(words) else ""
-            if not has_punct and not CAPTION_NEXT_RE.match(nxt2):
-                continue
-            key = (page["num"], num_m.group(1))
-            if key in seen:
-                continue
-            seen.add(key)
-            # Caption line: from "Figure" through nearby words on the same baseline.
-            line = [word, nxt]
-            for extra in words[i + 2 : i + 18]:
-                if abs(extra["ymin"] - word["ymin"]) > 8:
-                    break
-                line.append(extra)
-            caps.append({
-                "page": page["num"],
-                "num": num_m.group(1),
-                "page_w": page["width"],
-                "page_h": page["height"],
-                "xmin": min(w["xmin"] for w in line),
-                "ymin": min(w["ymin"] for w in line),
-                "xmax": max(w["xmax"] for w in line),
-                "ymax": max(w["ymax"] for w in line),
-                "blocks": page["blocks"],
-                "words": words,
-            })
-    return caps
-
-
-def _is_header_or_footer(block: dict, page_h: float) -> bool:
-    text = block["text"].strip()
-    if block["ymax"] < 36 or block["ymin"] > page_h - 36:
-        if len(text) < 40:
-            return True
-    if re.fullmatch(r"\d+", text):
-        return True
-    return False
-
-
-def _pt_box(box: tuple[float, float, float, float], w: int, h: int) -> tuple[int, int, int, int]:
-    l, t, r, b = box
-    return (
-        max(0, int(l * SCALE)),
-        max(0, int(t * SCALE)),
-        min(w, int(r * SCALE)),
-        min(h, int(b * SCALE)),
-    )
-
-
-def _ink_bbox(ink: np.ndarray, pad: int = 6) -> tuple[int, int, int, int] | None:
-    rows = np.any(ink, axis=1)
-    cols = np.any(ink, axis=0)
-    if not rows.any() or not cols.any():
-        return None
-    ys = np.where(rows)[0]
-    xs = np.where(cols)[0]
-    t, b = int(ys[0]), int(ys[-1]) + 1
-    l, r = int(xs[0]), int(xs[-1]) + 1
-    return (
-        max(0, l - pad),
-        max(0, t - pad),
-        min(ink.shape[1], r + pad),
-        min(ink.shape[0], b + pad),
-    )
-
-
-def mask_text(ink: np.ndarray, cap: dict, extra_skip: list[dict] | None = None) -> np.ndarray:
-    out = ink.copy()
-    skip = extra_skip or []
-    h, w = out.shape
-    for block in cap["blocks"]:
-        if _is_header_or_footer(block, cap["page_h"]):
-            continue
-        if len(block["text"]) < 48:
-            continue
-        # Keep caption pixels unmasked so we can still find nearby ink; they
-        # sit below the figure and are trimmed later.
-        if abs(block["ymin"] - cap["ymin"]) < 10 and abs(block["xmin"] - cap["xmin"]) < 40:
-            continue
-        x0, y0, x1, y1 = _pt_box((block["xmin"] - 1, block["ymin"] - 1, block["xmax"] + 1, block["ymax"] + 1), w, h)
-        out[y0:y1, x0:x1] = False
-    for block in skip:
-        x0, y0, x1, y1 = _pt_box((block["xmin"], block["ymin"], block["xmax"], block["ymax"]), w, h)
-        out[y0:y1, x0:x1] = False
-    return out
-
-
-def search_regions(cap: dict) -> list[tuple[float, float, float, float]]:
-    page_w, page_h = cap["page_w"], cap["page_h"]
+def _column(page_w: float, cap) -> tuple[float, float]:
     mid = page_w / 2
-    others = [
-        b for b in cap["blocks"]
-        if not _is_header_or_footer(b, page_h)
-        and abs(b["ymin"] - cap["ymin"]) > 6
+    center = (cap.x0 + cap.x1) / 2
+    if cap.width > page_w * 0.5 or abs(center - mid) < page_w * 0.12:
+        return 0.0, page_w
+    return (0.0, mid + 4) if center < mid else (mid - 4, page_w)
+
+
+def _h_overlap(r, lo: float, hi: float) -> float:
+    return max(0.0, min(r.x1, hi) - max(r.x0, lo))
+
+
+def _in_column(r, lo: float, hi: float) -> bool:
+    return r.width > 0 and _h_overlap(r, lo, hi) >= 0.5 * r.width
+
+
+HEADING_RE = re.compile(r"^(?:[A-Z]\.)?\d+(?:\.\d+)*\.?\s+[A-Z]")
+
+
+def _is_paragraph(block, col_w: float) -> bool:
+    rect, text = block
+    return len(text) > 100 and rect.width > 0.55 * col_w
+
+
+def _boxed(rect, graphics) -> bool:
+    return any(g.width > 20 and g.height > 10 and (g + (-3, -3, 3, 3)).contains(rect) for g in graphics)
+
+
+def _graphics(page):
+    import pymupdf
+
+    W, H = page.rect.width, page.rect.height
+    area = W * H
+    drawings = []
+    for d in page.get_drawings():
+        r = d["rect"]
+        # Page backgrounds and full-page frames would swallow every cluster.
+        if r.width * r.height > 0.5 * area:
+            continue
+        thin = min(r.width, r.height) < 2.5
+        # Header/footer rules and footnote separators.
+        if thin and (r.y1 < 60 or r.y0 > H - 60):
+            continue
+        drawings.append(d)
+    rects = list(page.cluster_drawings(drawings=drawings)) if drawings else []
+    for info in page.get_image_info():
+        r = pymupdf.Rect(info["bbox"])
+        if r.width * r.height <= 0.8 * area:
+            rects.append(r)
+    return [pymupdf.Rect(r) for r in rects if max(r.width, r.height) >= 6]
+
+
+def figure_rect(page, cap, blocks, graphics, header: float = 0.0, merged=None):
+    import pymupdf
+
+    W = page.rect.width
+    lo, hi = _column(W, cap)
+    col_w = hi - lo
+
+    def blocks_off(rect, text) -> bool:
+        """Text that bounds a figure: body paragraphs, headings and other captions."""
+        if rect == cap or not _in_column(rect, lo, hi) or _boxed(rect, graphics):
+            return False
+        return (_is_paragraph((rect, text), col_w) or bool(ANY_CAPTION_RE.match(text))
+                or (len(text) < 80 and bool(HEADING_RE.match(text))))
+
+    # Caption set beside the figure rather than below it.
+    side = [
+        g for g in graphics
+        if g.height > cap.height and min(g.y1, cap.y1) - max(g.y0, cap.y0) > 0.5 * cap.height
+        and (-10 <= cap.x0 - g.x1 < 30 or -10 <= g.x0 - cap.x1 < 30)
     ]
-    above = [b for b in others if b["ymax"] < cap["ymin"] - 3]
-    top = max((b["ymax"] for b in above), default=42) + 2
-    if cap["ymin"] - top < 36:
-        top = max(36.0, cap["ymin"] - min(320.0, page_h * 0.45))
-    bottom = cap["ymin"] - 1
-    center = (cap["xmin"] + cap["xmax"]) / 2
-    full = (cap["xmax"] - cap["xmin"]) > page_w * 0.45 or abs(center - mid) < page_w * 0.16
-    regions = []
-    if full:
-        regions.append((28.0, top, page_w - 28.0, bottom))
-    else:
-        if center < mid:
-            regions.append((28.0, top, mid - 4, bottom))
-            regions.append((mid + 4, max(36.0, cap["ymin"] - 260), page_w - 28.0, cap["ymax"] + 8))
+    if side:
+        union = pymupdf.Rect(max(side, key=lambda g: g.width * g.height))
+        for _ in range(3):
+            probe = union + (-GROW_GAP / 2, -GROW_GAP / 2, GROW_GAP / 2, GROW_GAP / 2)
+            for g in graphics:
+                if g.intersects(probe) and not g.intersects(cap):
+                    union |= g
+            for rect, text in blocks:
+                if rect != cap and len(text) < 100 and rect.intersects(probe) and not rect.intersects(cap):
+                    union |= rect
+        if cap.x0 >= union.x1 - 10:
+            union.x1 = min(union.x1, cap.x0 - 1)
         else:
-            regions.append((mid + 4, top, page_w - 28.0, bottom))
-            regions.append((28.0, max(36.0, cap["ymin"] - 260), mid - 4, cap["ymax"] + 8))
-    # Last resort: a wide band above the caption.
-    regions.append((28.0, max(36.0, cap["ymin"] - 300), page_w - 28.0, bottom))
-    return regions
+            union.x0 = max(union.x0, cap.x1 + 1)
+        return (union + (-3, -3, 3, 3)) & page.rect
+
+    # Drawings or image frames that run under the caption are cut off at the caption.
+    graphics = [
+        g if g.y1 <= cap.y0 + 3 else pymupdf.Rect(g.x0, g.y0, g.x1, cap.y0 - 1)
+        for g in graphics
+        if (g.y1 <= cap.y0 + 3 and _in_column(g, lo, hi)) or (g.y0 < cap.y0 - 15 and g.intersects(cap))
+    ]
+    # A frame or image reaching well into the other column is cut at the page centre.
+    mid = W / 2
+    if hi - lo < W:
+        left = lo == 0
+        graphics = [
+            pymupdf.Rect(g.x0, g.y0, min(g.x1, mid), g.y1) if left and g.x1 > mid + 40
+            else pymupdf.Rect(max(g.x0, mid), g.y0, g.x1, g.y1) if not left and g.x0 < mid - 40
+            else g
+            for g in graphics
+        ]
+        graphics = [g for g in graphics if not g.is_empty]
+
+    above = [g for g in graphics if g.y1 <= cap.y0 + 3 and _in_column(g, lo, hi)]
+    if above:
+        seed = max(above, key=lambda g: g.y1)
+        between = any(
+            blocks_off(r, t) and r.y0 >= seed.y1 - 2 and r.y1 <= cap.y0 + 1 for r, t in blocks
+        )
+        if between or cap.y0 - seed.y1 > SEED_GAP:
+            seed = None
+    else:
+        seed = None
+    if seed is None:
+        return _text_figure(page, cap, blocks, blocks_off, lo, hi, header)
+
+    # Text ending beside the seed wraps around the figure; only text fully above it bounds it.
+    barrier = max((r.y1 for r, t in blocks if r.y1 <= seed.y0 + 4 and blocks_off(r, t)), default=0.0)
+    cands = [g for g in above if g.y0 >= barrier - 2]
+
+    union = pymupdf.Rect(seed)
+    used = {id(seed)}
+    grown = True
+    while grown:
+        grown = False
+        for g in cands:
+            if id(g) in used:
+                continue
+            vgap = max(union.y0 - g.y1, g.y0 - union.y1, 0)
+            if vgap <= GROW_GAP:
+                union |= g
+                used.add(id(g))
+                grown = True
+
+    # Axis labels, legends and sub-captions are text; pull in the ones touching the graphics.
+    for _ in range(3):
+        probe = pymupdf.Rect(union.x0 - LABEL_PAD, union.y0 - LABEL_PAD,
+                             union.x1 + LABEL_PAD, cap.y0 - 0.5)
+        changed = False
+        for rect, text in blocks:
+            if rect.y0 < barrier - 1 or rect.y1 > cap.y0 + 1 or rect == cap:
+                continue
+            if blocks_off(rect, text):
+                continue
+            # Axis labels hug the plot; text further out belongs to the other column.
+            if not _in_column(rect, lo, hi) and not (
+                rect.x0 >= union.x0 - LABEL_PAD - 30 and rect.x1 <= union.x1 + LABEL_PAD
+            ):
+                continue
+            if not rect.intersects(probe) or rect in union:
+                continue
+            if rect.width > union.width + 2 * LABEL_PAD + 40:
+                continue
+            union |= rect
+            changed = True
+        if not changed:
+            break
+
+    # One image can hold several figures; stop at another caption or paragraph inside it.
+    for rect, text in blocks:
+        if rect.y1 < cap.y0 - 1 and rect.y0 > union.y0 and rect.intersects(union) and blocks_off(rect, text):
+            union.y0 = max(union.y0, rect.y1 + 1)
+    # Keep sub-figure labels that share the caption's text block.
+    if merged is not None and merged.y0 < cap.y0 - 1:
+        union |= pymupdf.Rect(merged.x0, merged.y0, merged.x1, cap.y0 - 1)
+    return _finish(page, union, cap, header)
 
 
-def crop_figure_image(im: Image.Image, cap: dict) -> Image.Image | None:
-    gray = np.array(im.convert("L"))
-    ink = gray < 232
-    masked = mask_text(ink, cap)
-    best = None
-    best_area = 0
-    for region in search_regions(cap):
-        x0, y0, x1, y1 = _pt_box(region, im.width, im.height)
-        if x1 - x0 < 30 or y1 - y0 < 30:
-            continue
-        sub = masked[y0:y1, x0:x1]
-        box = _ink_bbox(sub)
-        if box is None:
-            continue
-        l, t, r, b = box
-        area = (r - l) * (b - t)
-        density = sub[t:b, l:r].mean() if area else 0
-        if area < 50 * 50 or density < 0.0015:
-            continue
-        if area > best_area:
-            best_area = area
-            best = (x0 + l, y0 + t, x0 + r, y0 + b)
-    if best is None:
+def _finish(page, union, cap, header: float = 0.0):
+    import pymupdf
+
+    top = header + 2 if union.y0 - 3 < header + 2 else union.y0 - 3
+    union = pymupdf.Rect(union.x0 - 3, top, union.x1 + 3, min(union.y1 + 3, cap.y0 - 0.5))
+    union &= page.rect
+    if union.width < 30 or union.height < 20:
         return None
-    return trim_whitespace(im.crop(best))
+    return union
 
 
-def trim_whitespace(im: Image.Image, pad: int = 8) -> Image.Image:
-    if im.mode != "RGB":
-        im = im.convert("RGB")
-    bg = Image.new("RGB", im.size, (255, 255, 255))
-    diff = ImageChops.difference(im, bg)
-    # Treat near-white as background.
-    diff = diff.point(lambda p: 0 if p < 18 else p)
-    bbox = diff.getbbox()
+def _text_figure(page, cap, blocks, blocks_off, lo, hi, header: float = 0.0):
+    """Figures drawn purely as text (e.g. attention visualizations): stack the label blocks."""
+    import pymupdf
+
+    labels = sorted(
+        (r for r, t in blocks if r.y1 <= cap.y0 + 1 and _in_column(r, lo, hi) and r != cap),
+        key=lambda r: -r.y1,
+    )
+    union = None
+    for r in labels:
+        if blocks_off(r, next(t for rr, t in blocks if rr == r)):
+            break
+        edge = cap.y0 if union is None else union.y0
+        if edge - r.y1 > GROW_GAP:
+            break
+        union = pymupdf.Rect(r) if union is None else union | r
+    if union is None or union.height < 60:
+        return None
+    return _finish(page, union, cap, header)
+
+
+def trim_whitespace(path: Path, pad: int = 6) -> None:
+    from PIL import Image, ImageChops
+
+    im = Image.open(path).convert("RGB")
+    diff = ImageChops.difference(im, Image.new("RGB", im.size, (255, 255, 255)))
+    bbox = diff.point(lambda p: 0 if p < 16 else 255).getbbox()
     if not bbox:
-        return im
+        return
     l, t, r, b = bbox
-    l = max(0, l - pad)
-    t = max(0, t - pad)
-    r = min(im.width, r + pad)
-    b = min(im.height, b + pad)
-    return im.crop((l, t, r, b))
+    im.crop((max(0, l - pad), max(0, t - pad), min(im.width, r + pad), min(im.height, b + pad))).save(path, optimize=True)
 
 
-def render_page(pdf: Path, page: int, dest_dir: Path) -> Path:
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    prefix = dest_dir / f"page-{page}"
-    run([
-        "pdftocairo", "-png", "-r", str(DPI),
-        "-f", str(page), "-l", str(page),
-        str(pdf), str(prefix),
-    ])
-    # pdftocairo appends a page number: page-3-3.png or page-3.png
-    matches = sorted(dest_dir.glob(f"{prefix.name}*.png"))
-    if not matches:
-        raise FileNotFoundError(f"no render for {pdf} page {page}")
-    return matches[0]
+def extract_one(arxiv: str) -> int:
+    import pymupdf
 
-
-def extract_one(arxiv: str) -> list[Path]:
     pdf = pdf_for(arxiv)
     if pdf is None:
-        return []
+        return 0
     out_dir = FIG_DIR / arxiv
-    out_dir.mkdir(parents=True, exist_ok=True)
-    pages = parse_bbox(pdf)
-    caps = find_captions(pages)
-    written: list[Path] = []
-    if not caps:
-        print(f"  {arxiv}: no Figure captions found")
-        return written
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        rendered: dict[int, Path] = {}
-        for cap in caps:
-            page = cap["page"]
-            if page not in rendered:
-                rendered[page] = render_page(pdf, page, tmp_path)
-            im = Image.open(rendered[page]).convert("RGB")
-            crop = crop_figure_image(im, cap)
-            if crop is None or crop.size[0] < 40 or crop.size[1] < 40:
-                print(f"  {arxiv} fig {cap['num']}: no ink region, skip")
-                continue
-            dest = out_dir / f"fig{cap['num'].replace('.', '_')}.png"
-            if dest.exists():
-                print(f"  {arxiv} fig {cap['num']}: already saved, keep first crop")
-                continue
-            crop.save(dest, optimize=True)
-            written.append(dest)
-            print(f"  {arxiv} fig {cap['num']}: {crop.size[0]}x{crop.size[1]} -> {dest.name}")
-    return written
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+    out_dir.mkdir(parents=True)
+    doc = pymupdf.open(pdf)
+    pages = [
+        [(pymupdf.Rect(b[:4]), b[4].strip()) for b in page.get_text("blocks") if b[6] == 0 and b[4].strip()]
+        for page in doc
+    ]
 
+    # Running headers repeat on many pages; figures must start below them.
+    def top_key(rect, text, page_h):
+        if rect.y0 > 0.1 * page_h or len(text) > 120 or len(re.findall(r"[A-Za-z]", text)) < 8:
+            return None
+        return re.sub(r"\d+", "", text)
+
+    counts: dict[str, int] = {}
+    for page, blocks in zip(doc, pages):
+        for key in {top_key(r, t, page.rect.height) for r, t in blocks} - {None}:
+            counts[key] = counts.get(key, 0) + 1
+    running = {k for k, n in counts.items() if n >= 3}
+
+    saved: set[str] = set()
+    for page, blocks in zip(doc, pages):
+        header = max(
+            (r.y1 for r, t in blocks if top_key(r, t, page.rect.height) in running), default=0.0
+        )
+        graphics = None
+        for rect, text in blocks:
+            merged = None
+            m = CAPTION_RE.match(text)
+            if not m:
+                # Sub-figure labels such as "(c) Recall@10" can share the caption's block.
+                lines = text.split("\n")
+                idx = next((i for i, ln in enumerate(lines) if i and CAPTION_RE.match(ln.strip())), None)
+                if idx is None or any(len(ln) > 40 for ln in lines[:idx]):
+                    continue
+                hit = lines[idx]
+                m = CAPTION_RE.match(hit.strip())
+                found = page.search_for(hit.strip()[:24], clip=rect)
+                if not found:
+                    continue
+                merged = rect
+                rect = pymupdf.Rect(rect.x0, found[0].y0, rect.x1, rect.y1)
+            stem = fig_stem(bool(m.group(1)), m.group(2))
+            if stem in saved:
+                continue
+            if graphics is None:
+                graphics = _graphics(page)
+            clip = figure_rect(page, rect, blocks, graphics, header, merged)
+            if clip is None:
+                print(f"  {arxiv} {stem}: no graphics above caption on p.{page.number + 1}")
+                continue
+            dest = out_dir / f"{stem}.png"
+            page.get_pixmap(clip=clip, dpi=DPI).save(dest)
+            trim_whitespace(dest)
+            saved.add(stem)
+            print(f"  {arxiv} {stem}: p.{page.number + 1} {clip.width:.0f}x{clip.height:.0f}pt")
+    if not saved:
+        out_dir.rmdir()
+    return len(saved)
+
+
+# ---------------------------------------------------------------- HTML patching
 
 def inject_head(html: str) -> str:
     if "MathJax-script" not in html:
@@ -365,93 +373,68 @@ def inject_head(html: str) -> str:
     return html
 
 
-def fig_src(arxiv: str, num: str) -> str | None:
-    path = FIG_DIR / arxiv / f"fig{num.replace('.', '_')}.png"
-    if path.is_file():
-        return f"figures/{arxiv}/{path.name}"
-    return None
+def drop_missing_images(html: str) -> str:
+    return IMG_RE.sub(lambda m: m.group(0) if (CN_DIR / m.group(1)).is_file() else "", html)
 
 
-def insert_into_figure(block: str, src: str, num: str) -> str:
-    if "<img" in block or "<svg" in block:
-        return block
-    img = f'<img class="paper-fig" src="{src}" alt="图 {num}">\n'
-    if "<figcaption" in block:
-        return re.sub(r"(<figure[^>]*>)", r"\1\n" + img, block, count=1, flags=re.I)
-    return block
+def src_for(arxiv: str, caption: str) -> tuple[str, str] | None:
+    supp = CN_SUPP_RE.search(caption)
+    if supp:
+        stem, label = fig_stem(True, supp.group(1)), f"SuppFigure {supp.group(1)}"
+    else:
+        num = CN_FIG_RE.search(caption)
+        if not num:
+            return None
+        stem, label = fig_stem(False, num.group(1)), f"图 {num.group(1)}"
+    if not (FIG_DIR / arxiv / f"{stem}.png").is_file():
+        return None
+    return f"figures/{arxiv}/{stem}.png", label
 
 
-def insert_into_placeholder(block: str, src: str, num: str) -> str:
-    if "<img" in block or "<svg" in block:
-        return block
-    img = f'<img class="paper-fig" src="{src}" alt="图 {num}">\n'
-    return re.sub(
-        r'(<div class="figure-placeholder"[^>]*>)',
-        r"\1\n" + img,
-        block,
-        count=1,
-        flags=re.I,
-    )
+def _img(src: str, label: str) -> str:
+    return f'<img class="paper-fig" src="{src}" alt="{label}">\n'
 
 
 def patch_html(arxiv: str) -> None:
     html_path = html_for(arxiv)
     if html_path is None:
         return
-    text = html_path.read_text(encoding="utf-8")
-    text = inject_head(text)
+    text = drop_missing_images(inject_head(html_path.read_text(encoding="utf-8")))
     inserted = 0
 
     def repl_figure(m: re.Match) -> str:
         nonlocal inserted
         block = m.group(0)
+        if "<img" in block or "<svg" in block:
+            return block
         cap = re.search(r"<figcaption[^>]*>(.*?)</figcaption>", block, re.S | re.I)
-        if not cap:
+        found = cap and src_for(arxiv, cap.group(1))
+        if not found:
             return block
-        num_m = CN_FIG_RE.search(cap.group(1))
-        if not num_m:
-            return block
-        src = fig_src(arxiv, num_m.group(1))
-        if not src:
-            return block
-        out = insert_into_figure(block, src, num_m.group(1))
-        if out != block:
-            inserted += 1
-        return out
+        inserted += 1
+        return re.sub(r"(<figure[^>]*>)", lambda h: h.group(1) + "\n" + _img(*found), block, count=1, flags=re.I)
 
-    text = re.sub(r"<figure\b.*?</figure>", repl_figure, text, flags=re.S | re.I)
-
-    def repl_ph(m: re.Match) -> str:
+    def repl_placeholder(m: re.Match) -> str:
         nonlocal inserted
         block = m.group(0)
-        num_m = CN_FIG_RE.search(block)
-        if not num_m:
+        if "<img" in block or "<svg" in block:
             return block
-        src = fig_src(arxiv, num_m.group(1))
-        if not src:
+        found = src_for(arxiv, block)
+        if not found:
             return block
-        out = insert_into_placeholder(block, src, num_m.group(1))
-        if out != block:
-            inserted += 1
-        return out
+        inserted += 1
+        return re.sub(r'(<div class="figure-placeholder"[^>]*>)', lambda h: h.group(1) + "\n" + _img(*found),
+                      block, count=1, flags=re.I)
 
-    text = re.sub(r'<div class="figure-placeholder"[^>]*>.*?</div>', repl_ph, text, flags=re.S | re.I)
+    text = re.sub(r"<figure\b.*?</figure>", repl_figure, text, flags=re.S | re.I)
+    text = re.sub(r'<div class="figure-placeholder"[^>]*>.*?</div>', repl_placeholder, text, flags=re.S | re.I)
 
-    # Drop the "figures were not embedded" disclaimer once images exist.
-    if inserted:
-        text = re.sub(
-            r"原文中的图[^。]*未嵌入图片，仅保留图注说明[。；]?",
-            "原文图已按英文本裁切嵌入。",
-            text,
-        )
-        text = re.sub(
-            r"原文中的图[^。]*仅保留图注[和及、]表格内容。",
-            "原文图已按英文本裁切嵌入。",
-            text,
-        )
+    if "paper-fig" in text:
+        text = re.sub(r"原文中的图[^。]*未嵌入图片，仅保留图注说明[。；]?", "原文图已按英文本裁切嵌入。", text)
+        text = re.sub(r"原文中的图[^。]*仅保留图注[和及、]表格内容。", "原文图已按英文本裁切嵌入。", text)
 
     html_path.write_text(text, encoding="utf-8")
-    print(f"  patched {html_path.name}: +MathJax, inserted {inserted} figures")
+    print(f"  patched {html_path.name}: inserted {inserted} figures")
 
 
 def main() -> int:
@@ -465,8 +448,8 @@ def main() -> int:
     ids = args.only or pdf_ids()
     if do_extract:
         print("Extracting figures from English PDFs…")
-        for arxiv in ids:
-            extract_one(arxiv)
+        total = sum(extract_one(arxiv) for arxiv in ids)
+        print(f"  {total} figures")
     if do_patch:
         print("Patching Chinese HTML…")
         for arxiv in ids:

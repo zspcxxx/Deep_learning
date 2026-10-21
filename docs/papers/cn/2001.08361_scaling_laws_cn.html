@@ -85,6 +85,7 @@ Dario Amodei，OpenAI，damodei@openai.com
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig1.png" alt="图 1">
 
+
 <figcaption>图 1：随着我们增加模型大小、数据集大小和训练所用计算量，语言建模性能平滑改善。为获得最优性能，三个因素必须同步放大。当不受其他两个因素瓶颈限制时，经验性能与每个单独因素呈幂律关系。</figcaption>
 </figure>
 
@@ -101,11 +102,13 @@ Dario Amodei，OpenAI，damodei@openai.com
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig2.png" alt="图 2">
 
+
 <figcaption>图 2：我们展示一系列语言模型训练运行，模型大小从 \(10^3\) 到 \(10^9\) 参数（不包括嵌入）。</figcaption>
 </figure>
 
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig3.png" alt="图 3">
+
 
 <figcaption>图 3：随着更多计算可用，我们可以选择将多少计算分配给训练更大的模型、使用更大的批量以及训练更多步骤。我们以计算量增加十亿倍来说明。对于最优计算高效训练，大部分增加应投向增大模型大小。为避免数据复用，只需要相对较小的数据增加。在数据增加中，大部分可用于通过更大批量增加并行性，只需非常小的串行训练时间增加。</figcaption>
 </figure>
@@ -121,6 +124,7 @@ Dario Amodei，OpenAI，damodei@openai.com
 
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig4.png" alt="图 4">
+
 
 <figcaption>图 4：左：早停测试损失 \(L(N,D)\) 根据式 (1.5) 可预测地随数据集大小 \(D\) 和模型大小 \(N\) 变化。右：经过初始瞬态期后，所有模型大小 \(N\) 的学习曲线都可用式 (1.6) 拟合，该式以 \(S_{\min}\) 参数化，即在大批量下训练时的步数（细节见第 5.1 节）。</figcaption>
 </figure>
@@ -203,11 +207,13 @@ Dario Amodei，OpenAI，damodei@openai.com
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig5.png" alt="图 5">
 
+
 <figcaption>图 5：当总非嵌入参数 \(N\) 固定时，性能对模型形状依赖非常轻微。在很宽形状范围内损失仅变化几个百分点。参数计数的微小差异通过使用 \(L(N)\) 拟合作为基线来补偿。特别是宽高比可以变化 40 倍而仅轻微影响性能；\((n_{\mathrm{layer}},d_{\mathrm{model}})=(6,4288)\) 达到的损失在 [RWC+19] 所用 \((48,1600)\) 模型的 3% 以内。</figcaption>
 </figure>
 
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig6.png" alt="图 6">
+
 
 <figcaption>图 6：左：当我们包括嵌入参数时，性能似乎除参数数量外还强烈依赖层数。右：当我们排除嵌入参数时，不同深度模型的性能收敛到单一趋势。只有少于 2 层或极端深度宽度比的模型显著偏离趋势。</figcaption>
 </figure>
@@ -223,7 +229,6 @@ Dario Amodei，OpenAI，damodei@openai.com
 <div class="formula">\(L(N)\approx\left(\frac{N_c}{N}\right)^{\alpha_N}\)&nbsp;&nbsp;&nbsp;&nbsp;(3.1)</div>
 
 <figure>
-<img class="paper-fig" src="figures/2001.08361/fig7.png" alt="图 7">
 
 <figcaption>图 7：注：原文图 7 在提供文本中未完整显示图注；正文将其用于 LSTM 与 Transformer 比较。</figcaption>
 </figure>
@@ -261,6 +266,7 @@ Dario Amodei，OpenAI，damodei@openai.com
 
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig9.png" alt="图 9">
+
 
 <figcaption>图 9：早停测试损失 \(L(N,D)\) 根据式 (1.5) 可预测地依赖数据集大小 \(D\) 和模型大小 \(N\)。左：对于大 \(D\)，性能是 \(N\) 的直线幂律。对于较小的固定 \(D\)，性能随 \(N\) 增加停止改善，模型开始过拟合。（反之亦然，见图 4。）右：过拟合程度主要取决于比值 \(N^{\frac{\alpha_N}{\alpha_D}}/D\)，如式 (4.3) 所预测。线为该式拟合。</figcaption>
 </figure>
@@ -356,6 +362,7 @@ Dario Amodei，OpenAI，damodei@openai.com
 
 <figure>
 <img class="paper-fig" src="figures/2001.08361/fig15.png" alt="图 15">
+
 
 <figcaption>图 15：远超我们经验研究的模型大小，我们发现 \(L(C_{\min})\) 和 \(L(D)\) 方程之间矛盾，因为计算高效训练所需数据增长缓慢。交点标记我们预期预测失效之前的点。该点位置高度敏感于幂律拟合的精确指数。</figcaption>
 </figure>

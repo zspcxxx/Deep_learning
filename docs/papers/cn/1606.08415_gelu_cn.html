@@ -66,22 +66,8 @@ Kevin Gimpel，Toyota Technological Institute at Chicago，kgimpel@ttic.edu
 <p>我们通过结合 dropout、zoneout 和 ReLU 的性质来启发我们的激活函数。首先注意，ReLU 和 dropout 都产生神经元输出：ReLU 确定性地将输入乘以 0 或 1，而 dropout 随机地乘以 0。此外，一种新的 RNN 正则化器 zoneout 随机地将输入乘以 1（Krueger et al., 2016）。我们将这种功能合并：将输入乘以 0 或 1，但这个 0-1 掩码的值是随机确定的，同时也依赖于输入。具体来说，我们可以将神经元输入 \(x\) 乘以 \(m \sim \mathrm{Bernoulli}(\Phi(x))\)，其中 \(\Phi(x)=P(X\le x)\)，\(X\sim\mathcal{N}(0,1)\) 是标准正态分布的累积分布函数。我们选择该分布，是因为神经元输入倾向于服从正态分布，尤其是在使用批归一化时。在此设置下，随着 \(x\) 减小，输入被“丢弃”的概率更高，因此施加于 \(x\) 的变换是随机的，但依赖于输入。以这种方式掩蔽输入保留了非确定性，同时保持对输入值的依赖。随机选择的掩码相当于对输入进行随机零变换或恒等变换。这很像 Adaptive Dropout（Ba &amp; Frey, 2013），但 adaptive dropout 与非线性配合使用，并使用 logistic 分布而不是标准正态分布。我们发现，仅使用这种随机正则化器、完全不使用任何非线性，也可以训练出有竞争力的 MNIST 和 TIMIT 网络。</p>
 
 <figure>
-<svg class="paper-fig" viewBox="0 0 640 320" width="100%" role="img" aria-label="GELU、ReLU 与 ELU 曲线">
-  <rect x="1" y="1" width="638" height="318" fill="#fff" stroke="#e5e7eb"/>
-  <line x1="60" y1="160" x2="600" y2="160" stroke="#888"/>
-  <line x1="330" y1="20" x2="330" y2="300" stroke="#888"/>
-  <text x="608" y="164" font-size="13">x</text>
-  <text x="40" y="24" font-size="13">y</text>
-  <polyline fill="none" stroke="#16a34a" stroke-width="2.4" points="60,160 195,160 330,160 465,70 600,0"/>
-  <polyline fill="none" stroke="#f59e0b" stroke-width="2.4" points="60,220 127,205 195,188 262,172 330,160 400,113 465,70 532,25 600,0"/>
-  <polyline fill="none" stroke="#2563eb" stroke-width="2.6" points="60,164 100,165 140,166 180,167 220,168 260,167 290,164 310,160 330,160 360,145 400,118 440,88 480,56 520,24 560,0 600,0"/>
-  <g font-size="13" font-family="sans-serif">
-    <line x1="430" y1="36" x2="458" y2="36" stroke="#2563eb" stroke-width="2.6"/><text x="466" y="40">GELU</text>
-    <line x1="430" y1="56" x2="458" y2="56" stroke="#16a34a" stroke-width="2.4"/><text x="466" y="60">ReLU</text>
-    <line x1="430" y1="76" x2="458" y2="76" stroke="#f59e0b" stroke-width="2.4"/><text x="466" y="80">ELU</text>
-  </g>
-</svg>
-<figcaption>图 1：GELU（\(\mu=0,\sigma=1\)）、ReLU 和 ELU（\(\alpha=1\)）。GELU 在原点附近平滑，正半轴略低于线性，负半轴有小幅负值。</figcaption>
+<img class="paper-fig" src="figures/1606.08415/fig1.png" alt="图 1">
+<figcaption>图 1：GELU（\(\mu=0,\sigma=1\)）、ReLU 和 ELU（\(\alpha=1\)）。</figcaption>
 </figure>
 
 <p>我们通常希望神经网络给出确定性决策，这引出了我们的新非线性。该非线性是随机正则化器对输入 \(x\) 的期望变换，即 \(\Phi(x)\times Ix+(1-\Phi(x))\times 0x=x\Phi(x)\)。粗略地说，这个表达式表示：我们按 \(x\) 比其他输入大多少来缩放 \(x\)。由于高斯累积分布函数通常用误差函数计算，我们定义高斯误差线性单元（GELU）为</p>

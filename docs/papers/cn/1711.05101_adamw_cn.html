@@ -275,21 +275,33 @@ University of Freiburg，Freiburg, Germany<br>
 <p>SuppFigure 5 和 SuppFigure 6 对应正文图 4，但在底行补充了训练损失曲线。结果表明，Adam 及其解耦权重衰减变体在 CIFAR-10 上收敛更快（按训练损失），比相应的 SGD 变体（ImageNet32x32 差异很小）。正如正文所讨论，当考虑相同训练损失值时，AdamW 的测试误差优于 Adam。有趣的是，SuppFigure 5 和 SuppFigure 6 显示，重启变体 AdamWR 和 SGDWR 也分别比 AdamW 和 SGDW 表现出更好的泛化。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp1.png" alt="SuppFigure 1">
+
 <figcaption>SuppFigure 1：学习率乘子随 epoch 索引变化的示例计划。第一次运行计划在 epoch T<sub>i=0</sub> = 100 收敛，然后下一次运行的预算加倍为 T<sub>i=1</sub> = T<sub>i=0</sub>T<sub>mult</sub> = 200，依此类推。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp2.png" alt="SuppFigure 2">
+
 <figcaption>SuppFigure 2：“标准 Adam”（带 L2 正则化和固定学习率的 Adam）的性能。我们展示 26×96 ResNet 在 CIFAR-10 上使用原始 Adam 训练 1800 个 epoch 后，不同学习率和用于 L2 正则化的权重衰减设置的最终测试误差。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp3.png" alt="SuppFigure 3">
+
 <figcaption>SuppFigure 3：归一化权重衰减的效果。我们展示 26 2×64d ResNet 在不同 epoch 数（见列）后 CIFAR-10 上的最终测试 Top-1 误差（前两行分别为 AdamW 无归一化权重衰减和有归一化权重衰减）以及 ImageNet32x32 上的 Top-5 误差（后两行为 AdamW 和 SGDW，均使用归一化权重衰减）。虽然原始权重衰减的最优设置随运行预算显著变化（见第一行），归一化权重衰减值在不同预算（见第二行）和不同数据集（此处 CIFAR-10 和 ImageNet32x32）之间保持非常相似，甚至在 AdamW 和 SGDW 之间也相似。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp4.png" alt="SuppFigure 4">
+
 <figcaption>SuppFigure 4：26 2×96d ResNet 在 ImageNet32x32 上使用 Adam 和 AdamW 训练得到的学习曲线（顶行）和泛化结果（底行 Top-5 误差）。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp5.png" alt="SuppFigure 5">
+
 <figcaption>SuppFigure 5：CIFAR-10 的测试误差曲线（顶行）和训练损失曲线（底行）。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1711.05101/supp6.png" alt="SuppFigure 6">
+
 <figcaption>SuppFigure 6：ImageNet32x32 的测试误差曲线（顶行）和训练损失曲线（底行）。</figcaption>
 </figure>
 
