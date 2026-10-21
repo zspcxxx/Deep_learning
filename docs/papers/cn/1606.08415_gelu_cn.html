@@ -1,114 +1,230 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>高斯误差线性单元（GELUs）</title>
+<title>高斯误差线性单元（GELU）</title>
 <style>
-  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 1050px; padding: 0 1em; color: #222; background: #fff; }
   h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
   h1 { text-align: center; margin-bottom: 0.4em; }
-  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
   .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
   .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
   .abstract h2 { border: none; margin-top: 0; }
   .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
-  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
-  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  table { border-collapse: collapse; margin: 1em auto; width: 100%; font-size: 0.9em; }
+  th, td { border: 1px solid #999; padding: 0.35em 0.5em; text-align: center; vertical-align: top; }
   caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
-  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  figure { margin: 1.2em 0; }
+  figcaption { font-size: 0.95em; color: #444; }
+  blockquote { margin: 0.8em 0; padding: 0.3em 1em; border-left: 3px solid #ccc; color: #333; }
   .note { font-size: 0.95em; color: #555; }
   .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
-  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
-  a { color: #1f6feb; }
+  code { font-family: Consolas, monospace; }
+  sup, sub { font-size: 0.75em; }
+  ul, ol { margin-top: 0.3em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
 
-<p class="banner">中文导读译自 arXiv:1606.08415（对照 <a href="../en/1606.08415_gelu.pdf">英文 PDF</a>）。图表未嵌入，仅保留图注与实验数字；附录中关于 SiLU / Swish 命名史从略。</p>
-
-<h1>高斯误差线性单元（GELUs）</h1>
-<p class="subtitle">Gaussian Error Linear Units (GELUs)</p>
+<h1>高斯误差线性单元（GELU）</h1>
 
 <div class="authors">
-Dan Hendrycks*，加州大学伯克利分校，hendrycks@berkeley.edu<br>
-Kevin Gimpel，芝加哥丰田工业大学，kgimpel@ttic.edu
+Dan Hendrycks*，University of California, Berkeley，hendrycks@berkeley.edu<br>
+Kevin Gimpel，Toyota Technological Institute at Chicago，kgimpel@ttic.edu
 </div>
 
 <div class="abstract">
 <h2>摘要</h2>
-<p>我们提出高斯误差线性单元（Gaussian Error Linear Unit，GELU），一种表现良好的神经网络激活函数。GELU 定义为 \(x\Phi(x)\)，其中 \(\Phi(x)\) 是标准高斯分布的累积分布函数。与 ReLU（\(x\cdot\mathbf{1}_{x&gt;0}\)）按输入符号做硬门控不同，GELU 按输入取值大小对其加权。我们在计算机视觉、自然语言处理与语音任务上，将 GELU 与 ReLU、ELU 对照，在所考察任务上均观察到性能提升。</p>
+<p>我们提出高斯误差线性单元（Gaussian Error Linear Unit，GELU），一种高性能神经网络激活函数。GELU 激活函数为 \(x\Phi(x)\)，其中 \(\Phi(x)\) 是标准高斯累积分布函数。与 ReLU（\(x\mathbf{1}_{x>0}\)）按输入符号进行门控不同，GELU 非线性按输入的值对输入进行加权。我们对 GELU 非线性与 ReLU、ELU 激活进行了实证评估，发现在所有考虑的计算机视觉、自然语言处理和语音任务上都取得了性能提升。</p>
 </div>
 
 <h2>1 引言</h2>
-<p>早期人工神经元使用二值阈值单元（Hopfield, 1982；McCulloch &amp; Pitts, 1943）。Sigmoid 把硬阈值决策平滑化，使神经元具有“发放率”解释，并可用反向传播训练。但网络变深后，用 Sigmoid 训练往往不如非光滑、概率意味更弱的 ReLU（Nair &amp; Hinton, 2010）有效——ReLU 按输入符号做硬门控。尽管统计动机较弱，ReLU 仍是常用工程方案，收敛常快于、优于 Sigmoid。在此基础上，ELU（Clevert et al., 2016）允许类 ReLU 非线性输出负值，有时能加快训练。总之，只要网络不是深层线性分类器，激活函数的选择仍是必要的架构决策。</p>
-<p>深层非线性分类器极易拟合数据，设计者往往还要在隐藏层加噪声或使用 Dropout（Srivastava et al., 2014）等随机正则；这一选择通常与激活函数分开。部分随机正则可使网络表现得像网络集成（伪集成，Bachman et al., 2014），显著提高精度。例如 Dropout 通过随机乘零改变部分激活决策。非线性与 Dropout 共同决定神经元输出，但二者长期彼此独立：常见随机正则不依赖输入，而非线性又往往需要这类正则。</p>
-<p>本文引入新的非线性——高斯误差线性单元（GELU）。它与随机正则相关：可视为对 Adaptive Dropout（Ba &amp; Frey, 2013）的一种改写后的期望。这提示我们用更概率化的视角看待神经元输出。实验表明，在计算机视觉、自然语言处理与自动语音识别任务上，GELU 可匹配或超过带 ReLU / ELU 的模型。</p>
+<p>早期人工神经元使用二值阈值单元（Hopfield, 1982; McCulloch &amp; Pitts, 1943）。这些硬二值决策通过 sigmoid 激活被平滑，使神经元具有“发放率”解释，并能够用反向传播训练。但随着网络变深，使用 sigmoid 激活训练被证明不如非平滑、概率性更弱的 ReLU（Nair &amp; Hinton, 2010）有效，后者基于输入符号做出硬门控决策。尽管统计动机较弱，ReLU 仍是一种有竞争力的工程解决方案，通常比 sigmoid 实现更快、更好的收敛。在 ReLU 成功的基础上，最近一种称为 ELU（Clevert et al., 2016）的修改允许类 ReLU 非线性输出负值，有时能提高训练速度。总之，激活选择仍然是神经网络必要的架构决策，否则网络将只是深度线性分类器。</p>
+<p>深度非线性分类器可以很好地拟合数据，以至于网络设计者经常面临选择：是否加入随机正则化器，例如向隐藏层添加噪声或应用 dropout（Srivastava et al., 2014），而这一选择与激活函数保持分离。一些随机正则化器可以使网络表现得像网络集成，即伪集成（pseudoensemble，Bachman et al., 2014），并可能带来显著的准确率提升。例如，随机正则化器 dropout 通过零乘法随机改变一些激活决策，从而创建伪集成。因此，非线性与 dropout 共同决定神经元的输出，但这两项创新一直彼此独立。此外，二者都没有包含另一方，因为流行的随机正则化器与输入无关，而非线性会受益于这类正则化器。</p>
+<p>在这项工作中，我们引入一种新的非线性：高斯误差线性单元（GELU）。它与随机正则化器相关：它是 Adaptive Dropout（Ba &amp; Frey, 2013）某种修改的期望。这提示了一种更具概率性的神经元输出视角。我们发现，这种新非线性在计算机视觉、自然语言处理和自动语音识别任务上匹配或超过使用 ReLU 或 ELU 的模型。</p>
 
-<h2>2 GELU 的形式</h2>
-<p>我们结合 Dropout、Zoneout 与 ReLU 的性质来动机化该激活。ReLU 确定性地把输入乘以 0 或 1；Dropout 随机地把输入乘以 0；RNN 正则 Zoneout（Krueger et al., 2016）则随机地把输入乘以 1。我们合并这些行为：仍用 0/1 掩码乘输入，但掩码取值既随机又依赖输入。具体地，令神经元输入 \(x\) 乘以 \(m\sim\mathrm{Bernoulli}(\Phi(x))\)，其中 \(\Phi(x)=P(X\le x)\)，\(X\sim\mathcal{N}(0,1)\) 为标准正态的 CDF。选用该分布是因为神经元输入常近似正态（尤其配合 Batch Normalization）。此时 \(x\) 越小，“被丢弃”的概率越高，因而变换随机却仍依赖输入。</p>
-<p>这种掩码保留随机性，同时依赖输入取值；随机 0/1 掩码相当于对输入做随机的零变换或恒等变换。这类似 Adaptive Dropout，但 Adaptive Dropout 与非线性联用，且用 logistic 而非标准正态。我们发现仅用这种随机正则（不加其他非线性）也能在 MNIST、TIMIT 上训出有竞争力的网络。</p>
-<p>实际中往往需要确定性决策，由此得到新的非线性：对上述随机正则在输入 \(x\) 上的期望变换，即 \(\Phi(x)\cdot x+(1-\Phi(x))\cdot 0=x\Phi(x)\)。直观上，它按 \(x\) 相对其他输入有多大来缩放 \(x\)。由于高斯 CDF 常用误差函数计算，定义</p>
-<div class="formula">\[\mathrm{GELU}(x)=x\,P(X\le x)=x\Phi(x)=x\cdot\tfrac12\bigl(1+\mathrm{erf}(x/\sqrt{2})\bigr).\]</div>
-<p>若更看重前向速度，可用近似</p>
-<div class="formula">\[0.5x\bigl(1+\tanh[\sqrt{2/\pi}\,(x+0.044715x^3)]\bigr)\]</div>
-<p>或 \(x\sigma(1.702x)\)。</p>
-<p>也可换用其他 CDF。例如用 Logistic CDF \(\sigma(x)\) 得到我们称为 Sigmoid Linear Unit（SiLU）的 \(x\sigma(x)\)。也可令 \(X\sim\mathcal{N}(\mu,\sigma^2)\) 并把 \(\mu,\sigma\) 设为可学习超参；本文始终取 \(\mu=0,\sigma=1\)，因而实验中不引入新超参。下一节表明，GELU 在多项任务上超过 ReLU 与 ELU。</p>
-<p><em>图 1：</em>GELU（\(\mu=0,\sigma=1\)）、ReLU 与 ELU（\(\alpha=1\)）的曲线对照。</p>
+<h2>2 GELU 公式</h2>
+<p>我们通过结合 dropout、zoneout 和 ReLU 的性质来启发我们的激活函数。首先注意，ReLU 和 dropout 都产生神经元输出：ReLU 确定性地将输入乘以 0 或 1，而 dropout 随机地乘以 0。此外，一种新的 RNN 正则化器 zoneout 随机地将输入乘以 1（Krueger et al., 2016）。我们将这种功能合并：将输入乘以 0 或 1，但这个 0-1 掩码的值是随机确定的，同时也依赖于输入。具体来说，我们可以将神经元输入 \(x\) 乘以 \(m \sim \mathrm{Bernoulli}(\Phi(x))\)，其中 \(\Phi(x)=P(X\le x)\)，\(X\sim\mathcal{N}(0,1)\) 是标准正态分布的累积分布函数。我们选择该分布，是因为神经元输入倾向于服从正态分布，尤其是在使用批归一化时。在此设置下，随着 \(x\) 减小，输入被“丢弃”的概率更高，因此施加于 \(x\) 的变换是随机的，但依赖于输入。以这种方式掩蔽输入保留了非确定性，同时保持对输入值的依赖。随机选择的掩码相当于对输入进行随机零变换或恒等变换。这很像 Adaptive Dropout（Ba &amp; Frey, 2013），但 adaptive dropout 与非线性配合使用，并使用 logistic 分布而不是标准正态分布。我们发现，仅使用这种随机正则化器、完全不使用任何非线性，也可以训练出有竞争力的 MNIST 和 TIMIT 网络。</p>
 
-<h2>3 实验</h2>
-<p>我们在以下任务上比较 GELU、ELU 与 ReLU：MNIST 分类、MNIST 自编码、推文词性标注、TIMIT 帧识别，以及 CIFAR-10/100 分类。因与 ReLU 过于相近，未单独评估 LReLU。</p>
+<figure>
+<svg class="paper-fig" viewBox="0 0 640 320" width="100%" role="img" aria-label="GELU、ReLU 与 ELU 曲线">
+  <rect x="1" y="1" width="638" height="318" fill="#fff" stroke="#e5e7eb"/>
+  <line x1="60" y1="160" x2="600" y2="160" stroke="#888"/>
+  <line x1="330" y1="20" x2="330" y2="300" stroke="#888"/>
+  <text x="608" y="164" font-size="13">x</text>
+  <text x="40" y="24" font-size="13">y</text>
+  <polyline fill="none" stroke="#16a34a" stroke-width="2.4" points="60,160 195,160 330,160 465,70 600,0"/>
+  <polyline fill="none" stroke="#f59e0b" stroke-width="2.4" points="60,220 127,205 195,188 262,172 330,160 400,113 465,70 532,25 600,0"/>
+  <polyline fill="none" stroke="#2563eb" stroke-width="2.6" points="60,164 100,165 140,166 180,167 220,168 260,167 290,164 310,160 330,160 360,145 400,118 440,88 480,56 520,24 560,0 600,0"/>
+  <g font-size="13" font-family="sans-serif">
+    <line x1="430" y1="36" x2="458" y2="36" stroke="#2563eb" stroke-width="2.6"/><text x="466" y="40">GELU</text>
+    <line x1="430" y1="56" x2="458" y2="56" stroke="#16a34a" stroke-width="2.4"/><text x="466" y="60">ReLU</text>
+    <line x1="430" y1="76" x2="458" y2="76" stroke="#f59e0b" stroke-width="2.4"/><text x="466" y="80">ELU</text>
+  </g>
+</svg>
+<figcaption>图 1：GELU（\(\mu=0,\sigma=1\)）、ReLU 和 ELU（\(\alpha=1\)）。GELU 在原点附近平滑，正半轴略低于线性，负半轴有小幅负值。</figcaption>
+</figure>
+
+<p>我们通常希望神经网络给出确定性决策，这引出了我们的新非线性。该非线性是随机正则化器对输入 \(x\) 的期望变换，即 \(\Phi(x)\times Ix+(1-\Phi(x))\times 0x=x\Phi(x)\)。粗略地说，这个表达式表示：我们按 \(x\) 比其他输入大多少来缩放 \(x\)。由于高斯累积分布函数通常用误差函数计算，我们定义高斯误差线性单元（GELU）为</p>
+<div class="formula">\(\mathrm{GELU}(x)=xP(X\le x)=x\Phi(x)=x\cdot\frac{1}{2}\left[1+\mathrm{erf}(x/\sqrt{2})\right].\)</div>
+<p>如果更高的前馈速度值得牺牲精确性，我们可以用以下形式近似 GELU：</p>
+<div class="formula">\(0.5x\left(1+\tanh\left[\sqrt{2/\pi}\left(x+0.044715x^3\right)\right]\right)\)</div>
+<p>或</p>
+<div class="formula">\(x\sigma(1.702x).\)</div>
+<p>我们也可以使用不同的 CDF。例如，可以使用 Logistic 分布 CDF \(\sigma(x)\)，得到我们称为 Sigmoid 线性单元（SiLU）的 \(\sigma(x)\)。我们也可以使用 \(\mathcal{N}(\mu,\sigma^2)\) 的 CDF，并让 \(\mu\) 和 \(\sigma\) 成为可学习超参数，但在本文中我们简单地令 \(\mu=0,\sigma=1\)。因此，我们在以下实验中不引入任何新超参数。下一节中，我们将展示 GELU 在大量任务上超过 ReLU 和 ELU。</p>
+
+<h2>3 GELU 实验</h2>
+<p>我们在 MNIST 分类（灰度图像，10 类，6 万训练样本和 1 万测试样本）、MNIST 自编码、Tweet 词性标注（1000 训练、327 验证、500 测试推文）、TIMIT 帧识别（3696 训练、1152 验证、192 测试音频句子）以及 CIFAR-10/100 分类（彩色图像，10/100 类，5 万训练和 1 万测试样本）上评估 GELU、ELU 和 ReLU。由于 LReLU 与 ReLU 相似，我们不评估 LReLU 等非线性（LReLU 的描述见 Maas et al., 2013）。</p>
 
 <h3>3.1 MNIST 分类</h3>
-<p>我们复现 Clevert et al. (2016) 的设定：全连接网络 8 层、宽 128，训练 50 个 epoch、批大小 128，比较 GELU、ReLU、ELU（\(\alpha=1\)）。与原文不同，我们使用 Adam，并展示有无 Dropout 时的表现；权重按行单位范数初始化。在验证集上于 \(\{10^{-3},10^{-4},10^{-5}\}\) 中调学习率，报告五次运行的中位数。图 2 显示有无 Dropout 时 GELU 常有最低的训练 log loss；图 3 显示对加噪输入，GELU 的鲁棒性不低于 ELU / ReLU。尽管动机来自不同随机过程，GELU 与 Dropout 搭配良好。</p>
+<p>让我们通过复现 Clevert et al. (2016) 的一个实验，验证这种非线性是否能与先前的激活函数竞争。为此，我们训练一个全连接神经网络，分别使用 GELU（\(\mu=0,\sigma=1\)）、ReLU 和 ELU（\(\alpha=1\)）。每个 8 层、128 个神经元的神经网络以批量大小 128 训练 50 个 epoch。该实验与 Clevert 等人的不同之处在于，我们使用 Adam 优化器（Kingma &amp; Ba, 2015），而不是无动量随机梯度下降；我们还展示了非线性应对 dropout 的能力。权重用单位范数行初始化，因为这对每种非线性的性能都有积极影响（Hendrycks &amp; Gimpel, 2016; Mishkin &amp; Matas, 2016; Saxe et al., 2014）。注意，我们使用训练集中的 5k 验证样本在学习率 \(\{10^{-3},10^{-4},10^{-5}\}\) 上调参，并取五次运行的中位数结果。使用这些分类器，我们在图 3 中证明使用 GELU 的分类器对噪声输入更稳健。图 2 显示，无论是否使用 dropout，GELU 往往具有最低的中位训练对数损失。因此，尽管 GELU 受不同随机过程启发，它与 dropout 配合良好。</p>
+
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig2.png" alt="图 2">
+
+<figcaption>图 2：MNIST 分类结果。左为无 dropout 的损失曲线，右为 dropout 率为 0.5 的曲线。每条曲线是五次运行的中位数。训练集对数损失是较深、较低的曲线，较浅、较高的曲线是验证集对数损失曲线。</figcaption>
+</figure>
+
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig3.png" alt="图 3">
+
+<figcaption>图 3：MNIST 鲁棒性结果。使用不同非线性，我们记录当输入被加噪时测试集准确率下降和对数损失增加。无 dropout 训练的 MNIST 分类器接收在每个样本上添加均匀噪声 \(\mathrm{Unif}[-a,a]\) 的输入，噪声水平 \(a\) 不同，其中 \(a=3\) 是最大噪声强度。这里 GELU 表现出匹配或超过 ELU 和 ReLU 的鲁棒性。</figcaption>
+</figure>
 
 <h3>3.2 MNIST 自编码器</h3>
-<p>网络宽度为 1000–500–250–30–250–500–1000，Adam、批大小 64，均方误差。学习率取 \(10^{-3}\) 与 \(10^{-4}\)（\(0.01\) 时 ELU 发散，GELU / ReLU 也较差）。图 4 表明 GELU 对学习率更宽容，且显著优于其他非线性。</p>
+<p>我们现在考虑自监督设置，在 MNIST 上训练深度自编码器（Desjardins et al., 2015）。为此，我们使用层宽依次为 1000、500、250、30、250、500、1000 的网络。我们再次使用 Adam 优化器和批量大小 64。损失为均方损失。学习率从 \(10^{-3}\) 到 \(10^{-4}\) 变化。我们也尝试了 0.01 的学习率，但 ELU 发散，GELU 和 ReLU 收敛很差。图 4 的结果表明 GELU 适应不同学习率，并显著优于其他非线性。</p>
 
-<h3>3.3 推文词性标注</h3>
-<p>在小规模 NLP 数据上检验泛化：25 类 POS 标注推文，双层网络（宽 256），输入为当前词与左右邻接词的预训练词向量拼接，Dropout keep 概率 0.8，Adam。各学习率训练五次，测试错误率中位数：GELU 12.57%，ReLU 12.67%，ELU 12.91%。</p>
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig4.png" alt="图 4">
+
+<figcaption>图 4：MNIST 自编码结果。每条曲线是三次运行的中位数。左为学习率 \(10^{-3}\) 的损失曲线，右图为学习率 \(10^{-4}\) 的曲线。浅色细曲线对应测试集对数损失。</figcaption>
+</figure>
+
+<h3>3.3 Twitter 词性标注</h3>
+<p>自然语言处理中的许多数据集相对较小，因此激活函数能否从少量样本中很好地泛化很重要。为应对这一挑战，我们在带 POS 标注的推文上比较非线性（Gimpel et al., 2011; Owoputi et al., 2013），其中包含 25 个标签。推文标注器只是一个两层网络，使用在 5600 万条推文语料上预训练的词向量（Owoputi et al., 2013）。输入是待标注词及其左右相邻词向量的拼接。每层有 256 个神经元，dropout 保留概率为 0.8，网络用 Adam 优化，并在学习率 \(\{10^{-3},10^{-4},10^{-5}\}\) 上调参。我们对每个学习率训练每个网络五次，中位测试集错误率为：GELU 12.57%，ReLU 12.67%，ELU 12.91%。</p>
 
 <h3>3.4 TIMIT 帧分类</h3>
-<p>五层、宽 2048 的分类器，39 个音素标签，Dropout 0.5；输入 11 帧、每帧 26 维 MFCC / 能量 / 导数特征，预测中心帧。Adam 调学习率。验证最优对应的测试错误率中位数：GELU 29.3%，ReLU 29.5%，ELU 29.6%（见图 5）。</p>
+<p>我们的下一个挑战是使用 TIMIT 数据集进行音素识别，该数据集包含 680 名说话人在无噪声环境中的录音。系统是五层、2048 个神经元宽的分类器，如 Mohamed et al. (2012)，有 39 个输出音素标签，dropout 率为 0.5，如 Srivastava (2013)。该网络以 11 帧为输入，必须使用每帧 26 个 MFCC、能量和导数特征预测中心帧的音素。我们在学习率 \(\{10^{-3},10^{-4},10^{-5}\}\) 上调参，并用 Adam 优化。每种设置运行五次后，我们得到图 5 的中位曲线；在最低验证误差处选择的中位测试误差为：GELU 29.3%，ReLU 29.5%，ELU 29.6%。</p>
 
-<h3>3.5 CIFAR-10 / 100</h3>
-<p>较浅的 9 层 CNN（Salimans &amp; Kingma, 2016 的结构与流程，加 BatchNorm，无数据增强）上，Adam 训练 200 epoch，第 100 epoch 起学习率线性降到 0。测试错误率中位数：GELU 7.89%，ReLU 8.16%，ELU 8.41%（图 6）。</p>
-<p>在 CIFAR-100 上使用宽残差网络（40 层，widen=4）。ELU 在残差网络上可能梯度爆炸，故采用对 ELU 更友好的 Conv–Activation–Conv–Activation–BatchNorm 块。错误率中位数：GELU 20.74%，ReLU 21.77%，ELU 22.98%（图 7）。</p>
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig5.png" alt="图 5">
 
-<table>
-<caption>表：主要实验结果摘要（中位数）</caption>
-<thead>
-<tr><th>任务</th><th>指标</th><th>GELU</th><th>ReLU</th><th>ELU</th></tr>
-</thead>
-<tbody>
-<tr><td>推文 POS</td><td>错误率 ↓</td><td>12.57%</td><td>12.67%</td><td>12.91%</td></tr>
-<tr><td>TIMIT</td><td>错误率 ↓</td><td>29.3%</td><td>29.5%</td><td>29.6%</td></tr>
-<tr><td>CIFAR-10</td><td>错误率 ↓</td><td>7.89%</td><td>8.16%</td><td>8.41%</td></tr>
-<tr><td>CIFAR-100 WideResNet</td><td>错误率 ↓</td><td>20.74%</td><td>21.77%</td><td>22.98%</td></tr>
-</tbody>
-</table>
+<figcaption>图 5：TIMIT 帧分类。学习曲线显示训练集收敛，较浅曲线显示验证集收敛。</figcaption>
+</figure>
+
+<h3>3.5 CIFAR-10/100 分类</h3>
+<p>接下来，我们证明对于更复杂的架构，GELU 非线性再次优于其他非线性。我们分别在浅层和深层卷积神经网络上使用 CIFAR-10 和 CIFAR-100 数据集（Krizhevsky, 2009）评估该激活函数。</p>
+<p>我们的较浅卷积神经网络是一个 9 层网络，架构和训练过程来自 Salimans &amp; Kingma (2016)，同时使用批归一化加速训练。架构见附录 A，最近在无数据增强的 CIFAR-10 上取得了最先进结果。训练该网络未使用数据增强。我们使用 5k 验证样本在学习初始率 \(\{10^{-3},10^{-4},10^{-5}\}\) 上调参，然后根据交叉验证得到的学习率在整个训练集上重新训练。网络用 Adam 优化 200 个 epoch，在第 100 个 epoch 学习率线性衰减到零。结果见图 6，每条曲线是三次运行的中位数。最终，GELU 获得中位错误率 7.89%，ReLU 为 8.16%，ELU 为 8.41%。</p>
+<p>接下来，我们考虑在 CIFAR-100 上使用 40 层、加宽因子为 4 的宽残差网络（Zagoruyko &amp; Komodakis, 2016）。我们使用 Loshchilov &amp; Hutter (2016) 描述的学习率计划（\(T_0=50,\eta=0.1\)）和 Nesterov 动量训练 50 个 epoch，dropout 保留概率为 0.7。有人指出 ELU 在残差网络中会出现梯度爆炸（Shah et al., 2016），通过在残差块末尾使用批归一化可以缓解。因此，我们使用 Conv-Activation-Conv-Activation-BatchNorm 块架构，以对 ELU 更公平。三次运行后，我们得到图 7 的中位收敛曲线。同时，GELU 达到中位错误率 20.74%，ReLU 为 21.77%（不使用上述我们的修改时，原始 40-4 WideResNet 使用 ReLU 为 22.89%（Zagoruyko &amp; Komodakis, 2016）），ELU 为 22.98%。</p>
+
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig6.png" alt="图 6">
+
+<figcaption>图 6：CIFAR-10 结果。每条曲线是三次运行的中位数。学习曲线显示训练集错误率，较浅曲线显示测试集错误率。</figcaption>
+</figure>
+
+<figure>
+<img class="paper-fig" src="figures/1606.08415/fig7.png" alt="图 7">
+
+<figcaption>图 7：CIFAR-100 上宽残差网络结果。每条曲线是三次运行的中位数。学习曲线显示训练集错误率，较浅曲线显示测试集错误率。</figcaption>
+</figure>
 
 <h2>4 讨论</h2>
-<p>多项实验中 GELU 优于既有非线性，但与 ReLU、ELU 仍有联系：若 \(\mu=0\) 且 \(\sigma\to 0\)，GELU 退化为 ReLU；二者在渐近意义下也可对齐。GELU 可视为对 ReLU 的平滑：ReLU \(=x\cdot\mathbf{1}(x&gt;0)\)，而 GELU \(=x\Phi(x)\)，CDF 平滑了指示函数，恰如 Sigmoid 平滑了硬阈值。与 ReLU 不同，GELU 与 ELU 均可取负。若改用标准 Cauchy 的 CDF，ELU（\(\alpha=1/\pi\)）在负半轴上与 \(xP(C\le x)\) 渐近一致。</p>
-<p>重要差别在于：GELU 非凸、非单调，在正半轴也非线性、处处有曲率；ReLU / ELU 凸且单调，正半轴线性。更大的曲率与非单调性可能使 GELU 更易逼近复杂函数。再者，ReLU 按符号门控，GELU 按“相对其他输入有多大”加权；且 GELU 是某随机正则的期望，具有概率解释。</p>
-<p>实践建议：（1）配合带动量的优化器；（2）用足够接近高斯 CDF 的近似。\(x\sigma(x)\)（SiLU）通常优于 ReLU / ELU 但弱于 GELU；本文实验采用 tanh 近似式。</p>
+<p>在多个实验中，GELU 都优于先前的非线性，但在其他方面它与 ReLU 和 ELU 有相似之处。例如，当 \(\sigma\to0\) 且 \(\mu=0\) 时，GELU 变成 ReLU。此外，ReLU 和 GELU 在渐近意义上相等。事实上，GELU 可以看作平滑 ReLU 的一种方式。为看到这一点，回想 \(\mathrm{ReLU}=\max(x,0)=x\mathbb{1}(x>0)\)（其中 \(\mathbb{1}\) 是指示函数），而 GELU 在 \(\mu=0,\sigma=1\) 时为 \(x\Phi(x)\)。于是 CDF 是 ReLU 所用二值函数的平滑近似，就像 sigmoid 平滑二值阈值激活一样。与 ReLU 不同，GELU 和 ELU 可以同时为负和为正。事实上，如果我们使用标准 Cauchy 分布的累积分布函数，那么 ELU（当 \(\alpha=1/\pi\) 时）在负值上渐近等于 \(xP(C\le x), C\sim\mathrm{Cauchy}(0,1)\)，在正值上若将直线下移 \(1/\pi\) 则为 \(xP(C\le x)\)。这些是与先前非线性的一些基本关系。</p>
+<p>然而，GELU 有几个显著差异。这个非凸、非单调函数在正域不是线性的，并且在所有点都表现出曲率。而 ReLU 和 ELU 是凸且单调的激活，在正域是线性的，因此可能缺乏曲率。因此，增加的曲率和非单调性可能使 GELU 比 ReLU 或 ELU 更容易逼近复杂函数。此外，由于 \(\mathrm{ReLU}(x)=x\mathbb{1}(x>0)\)，而 \(\mathrm{GELU}(x)=x\Phi(x)\)（\(\mu=0,\sigma=1\)），我们可以看到 ReLU 根据输入符号对输入进行门控，而 GELU 根据输入比其他输入大多少对输入进行加权。此外且重要的是，GELU 具有概率解释，因为它是随机正则化器的期望。</p>
+<p>对于使用 GELU，我们还有两条实用建议。首先，我们建议在使用 GELU 训练时使用带动量的优化器，这是深度神经网络的标准做法。其次，使用高斯分布累积分布函数的紧密近似很重要。sigmoid 函数 \(\sigma(x)=1/(1+e^{-x})\) 是正态分布累积分布函数的一种近似。然而，我们发现 Sigmoid 线性单元（SiLU）\(x\sigma(x)\) 表现不如 GELU，但通常优于 ReLU 和 ELU，因此我们的 SiLU 也是合理的非线性选择。我们没有使用 \(x\sigma(x)\) 近似 \(\Phi(x)\)，而是使用 \(0.5x(1+\tanh[\sqrt{2/\pi}(x+0.044715x^3)])\)（Choudhury, 2014）或 \(x\sigma(1.702x)\)。二者都是足够快、易于实现的近似，本文每个实验都使用前者。</p>
 
 <h2>5 结论</h2>
-<p>在本文评估的多个数据集上，GELU 持续超过 ELU 与 ReLU 的精度，可作为既有激活函数的可行替代。BERT、GPT 等后续 Transformer 广泛采用 GELU，使其成为现代语言模型的默认选择之一（亦见本课第 04、09、15 课）。</p>
+<p>对于本文评估的众多数据集，GELU 一致超过 ELU 和 ReLU 的准确率，使其成为先前非线性的可行替代方案。</p>
+
+<h2>致谢</h2>
+<p>我们感谢 NVIDIA Corporation 捐赠本研究中使用的若干 TITAN X GPU。</p>
 
 <h2>参考文献</h2>
 <div class="refs">
-<p>Jimmy Ba and Brendan Frey. Adaptive dropout for training deep neural networks. NeurIPS, 2013.</p>
-<p>Djork-Arné Clevert, Thomas Unterthiner, and Sepp Hochreiter. Fast and accurate deep network learning by exponential linear units (ELUs). ICLR, 2016.</p>
-<p>Dan Hendrycks and Kevin Gimpel. Gaussian Error Linear Units (GELUs). arXiv:1606.08415, 2016.</p>
-<p>Diederik Kingma and Jimmy Ba. Adam: A Method for Stochastic Optimization. ICLR, 2015.</p>
-<p>Vinod Nair and Geoffrey E. Hinton. Rectified linear units improve restricted boltzmann machines. ICML, 2010.</p>
-<p>Nitish Srivastava et al. Dropout: A simple way to prevent neural networks from overfitting. JMLR, 2014.</p>
+<p>Jimmy Ba and Brendan Frey. Adaptive dropout for training deep neural networks. In Neural Information Processing Systems, 2013.</p>
+<p>Philip Bachman, Ouais Alsharif, and Doina Precup. Learning with pseudo-ensembles. In Neural Information Processing Systems, 2014.</p>
+<p>Amit Choudhury. A simple approximation to the area under standard normal curve. In Mathematics and Statistics, 2014.</p>
+<p>Djork-Arné Clevert, Thomas Unterthiner, and Sepp Hochreiter. Fast and accurate deep network learning by exponential linear units (ELUs). In International Conference on Learning Representations, 2016.</p>
+<p>Guillaume Desjardins, Karen Simonyan, Razvan Pascanu, and Koray Kavukcuoglu. Natural neural networks. In arXiv, 2015.</p>
+<p>Kevin Gimpel, Nathan Schneider, Brendan O’Connor, Dipanjan Das, Daniel Mills, Jacob Eisenstein, Michael Heilman, Dani Yogatama, Jeffrey Flanigan, and Noah A. Smith. Part-of-Speech Tagging for Twitter: Annotation, Features, and Experiments. Association for Computational Linguistics (ACL), 2011.</p>
+<p>Dan Hendrycks and Kevin Gimpel. Adjusting for dropout variance in batch normalization and weight initialization. In arXiv, 2016.</p>
+<p>John Hopfield. Neural networks and physical systems with emergent collective computational abilities. In Proceedings of the National Academy of Sciences of the USA, 1982.</p>
+<p>Diederik Kingma and Jimmy Ba. Adam: A Method for Stochastic Optimization. International Conference for Learning Representations, 2015.</p>
+<p>Alex Krizhevsky. Learning Multiple Layers of Features from Tiny Images, 2009.</p>
+<p>David Krueger, Tegan Maharaj, János Kramár, Mohammad Pezeshki, Nicolas Ballas, Nan Rosemary Ke, Anirudh Goyal, Yoshua Bengio, Hugo Larochelle, Aaron Courville, and Chris Pal. Zoneout: Regularizing RNNs by randomly preserving hidden activations. In Neural Information Processing Systems, 2016.</p>
+<p>Ilya Loshchilov and Frank Hutter. SGDR: Stochastic gradient descent with restarts. arXiv, 2016.</p>
+<p>Andrew L. Maas, Awni Y. Hannun, and Andrew Y. Ng. Rectifier nonlinearities improve neural network acoustic models. In International Conference on Machine Learning, 2013.</p>
+<p>Warren S. McCulloch and Walter Pitts. A logical calculus of the ideas immanent in nervous activity. In Bulletin of Mathematical Biophysics, 1943.</p>
+<p>Dmytro Mishkin and Jiri Matas. All you need is a good init. In International Conference on Learning Representations, 2016.</p>
+<p>Abdelrahman Mohamed, George E. Dahl, and Geoffrey E. Hinton. Acoustic modeling using deep belief networks. In IEEE Transactions on Audio, Speech, and Language Processing, 2012.</p>
+<p>Vinod Nair and Geoffrey E. Hinton. Rectified linear units improve restricted boltzmann machines. In International Conference on Machine Learning, 2010.</p>
+<p>Olutobi Owoputi, Brendan O’Connor, Chris Dyer, Kevin Gimpel, Nathan Schneider, and Noah A. Smith. Improved part-of-speech tagging for online conversational text with word clusters. In North American Chapter of the Association for Computational Linguistics (NAACL), 2013.</p>
+<p>Tim Salimans and Diederik P. Kingma. Weight normalization: A simple reparameterization to accelerate training of deep neural networks. In Neural Information Processing Systems, 2016.</p>
+<p>Andrew M. Saxe, James L. McClelland, and Surya Ganguli. Exact solutions to the nonlinear dynamics of learning in deep linear neural networks. In International Conference on Learning Representations, 2014.</p>
+<p>Anish Shah, Sameer Shinde, Eashan Kadam, Hena Shah, and Sandip Shingade. Deep residual networks with exponential linear unit. In Vision Net, 2016.</p>
+<p>Nitish Srivastava. Improving neural networks with dropout. In University of Toronto, 2013.</p>
+<p>Nitish Srivastava, Geoffrey E. Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhutdinov. Dropout: A simple way to prevent neural networks from overfitting. In Journal of Machine Learning Research, 2014.</p>
+<p>Sergey Zagoruyko and Nikos Komodakis. Wide residual networks. British Machine Vision Conference, 2016.</p>
 </div>
 
+<h2>附录 A CIFAR-10 网络架构</h2>
+<table>
+<caption>表 1：CIFAR-10 的神经网络架构。</caption>
+<thead>
+<tr><th>层类型</th><th># 通道</th><th>x, y 维度</th></tr>
+</thead>
+<tbody>
+<tr><td>原始 RGB 输入</td><td>3</td><td>32</td></tr>
+<tr><td>ZCA 白化</td><td>3</td><td>32</td></tr>
+<tr><td>高斯噪声 σ = 0.15</td><td>3</td><td>32</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>96</td><td>32</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>96</td><td>33</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>96</td><td>32</td></tr>
+<tr><td>2×2 最大池化，stride 2</td><td>96</td><td>16</td></tr>
+<tr><td>dropout p = 0.5</td><td>96</td><td>16</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>192</td><td>16</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>192</td><td>15</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>192</td><td>16</td></tr>
+<tr><td>2×2 最大池化，stride 2</td><td>192</td><td>8</td></tr>
+<tr><td>dropout p = 0.5</td><td>192</td><td>8</td></tr>
+<tr><td>3×3 卷积 + 激活</td><td>192</td><td>6</td></tr>
+<tr><td>1×1 卷积 + 激活</td><td>192</td><td>6</td></tr>
+<tr><td>1×1 卷积 + 激活</td><td>192</td><td>6</td></tr>
+<tr><td>全局平均池化</td><td>192</td><td>1</td></tr>
+<tr><td>softmax 输出</td><td>10</td><td>1</td></tr>
+</tbody>
+</table>
+
+<h2>附录 B GELU 与 SiLU 的历史</h2>
+<p>本文源于 DH 在 2016 年 6 月作为本科生第一次研究实习时的工作。那一周开始时，本文被放到 arXiv 上，我们讨论了更平滑的 ReLU 激活函数（\(x\times P(X\le x)\)）及其与随机正则化器的关系。2016 年，我们将论文提交给 ICLR，并公开了论文和代码。在论文中，我们引入并创造了 Sigmoid 线性单元（SiLU）这一名称，形式为 \(x\cdot\sigma(x)\)。</p>
+<p>2017 年上半年，Elfwing 等人发表了一篇论文，提出了与 SiLU 相同的激活函数 \(x\cdot\sigma(x)\)，他们称之为“SIL”。2017 年底，即本文首次发布一年多后，Quoc Le 和 Google Brain 的其他人发表了一篇论文，提出 \(x\cdot\sigma(x)\)，但没有引用 Elfwing 等人的论文或本工作。得知此事后，我们联系了双方。Elfwing 很快更新了他们的工作，将激活称为“SiLU”而不是“SIL”，以承认我们最初引入了该激活。</p>
+<p>与 Elfwing 等人不同，Google Brain 的研究人员继续将该激活称为“swish”。然而，这并没有新颖性。“swish”论文的第一作者公开承认了他们的疏忽，说：“正如有人指出的，我们遗漏了提出相同激活函数的先前工作。错误完全在我，因为我没有进行足够彻底的文献检索。”为了平息批评，一周后发布了论文更新。更新没有为本工作的 SiLU 给予 credit，而只是为 GELU 引用了本工作，以使“swish”显得更有新颖性。在更新后的论文中，引入了一个可学习超参数 \(\beta\)，并将 swish 从 \(x\cdot\sigma(x)\) 改为 \(x\cdot\sigma(\beta\cdot x)\)。这把该想法的全部新颖性押在一个新增的可学习超参数 \(\beta\) 上。</p>
+<p>尽管添加了超参数 beta，社区中几乎所有人仍然使用没有 \(\beta\) 的原始“swish”函数（即 \(\beta=1\)）。由于这篇论文来自 Google Brain，TensorFlow 实现最终被称为“swish”，并且默认设置移除了 \(\beta\)，使其与 SiLU 完全相同。添加一个未使用超参数的做法，使得可以在有效获得别处起源想法 credit 的同时声称新颖性。具有相同资深作者的未来论文即使不使用 \(\beta\)，也一直称该函数为“swish”，使其与本工作最初提出的 SiLU 完全相同。这导致“swish”论文不恰当地获得了该想法的 credit。</p>
+<p>随着 GELU 开始在 BERT 和 GPT 中使用，并成为最先进 Transformer 的默认激活，情况发生了变化。现在它的使用远比 SiLU 普遍。</p>
+<p>另外，一个 Reddit 帖子“Google has a credit assignment problem in research”变得流行，聚焦于他们如何将 SiLU 称为 swish。作为例子，他们提到了“Smooth Adversarial Training”作为 credit assignment 不佳的例子。在来自 swish 资深作者的“Smooth Adversarial Training”论文中，使用了“swish”一词而不是“SiLU”。为减少该帖子的反噬，作者更新了论文，将“swish”替换为“SiLU”，承认本工作是该想法的原始来源。在该帖子之后，TensorFlow 和 PyTorch 等流行库也开始将该函数重命名为“SiLU”而不是“swish”。对于密切观察者而言，该问题已基本解决，我们感谢基本已经实现的适当认可。</p>
+
 <hr>
-<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与实验数字，并非逐句全译；图未嵌入。完整公式、曲线与附录见英文原文。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文部分 OCR 重复或截断处已按上下文整理。</p>
 
 </body>
 </html>

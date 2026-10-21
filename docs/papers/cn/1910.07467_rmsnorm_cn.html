@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>均方根层归一化（RMSNorm）</title>
@@ -26,6 +38,11 @@
   ul, ol { margin-top: 0.3em; }
   .small { font-size: 0.9em; }
   .keep { white-space: nowrap; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -50,6 +67,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>我们在各种任务上全面检验模型，包括机器翻译、图像分类、图像—标题检索和问答。实验结果表明，在不同模型上，RMSNorm 取得与 LayerNorm 相当的性能，但在运行速度上表现出优势，加速 \(7\%\sim64\%\)。当使用部分（\(6.25\%\)）汇总输入估计 RMS 时，pRMSNorm 取得与 RMSNorm 相当的有竞争力性能。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig1.png" alt="图 1">
+
 <figcaption>图 1：基于 GRU 的 RNNSearch [4] 前 10k 训练步的训练过程。Baseline 表示没有任何归一化的原始模型。当 Baseline 训练损失达到 7.0 时，LayerNorm 在相同训练步数 1(a) 后损失达到 5.4，但在相同训练时间 1(b) 后仅达到 5.9。</figcaption>
 </figure>
 
@@ -117,6 +136,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>为测试不同实现中层归一化的效率，我们使用 TensorFlow [1]、PyTorch [20] 和 Theano [29] 进行实验。我们将 RMSNorm 加入不同模型，与未归一化基线和 LayerNorm 比较。这些模型基于多样架构，涵盖不同 RNN 变体、卷积和自注意力模型，以及各种激活（如 sigmoid、tanh 和 softmax），初始化范围从均匀、正态、正交及不同初始化范围或方差。除非另有说明，所有速度相关统计量在一块 TITAN X（Pascal）上测量。报告时间是 3 次运行的平均值。我们还列出这三次运行的标准差。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig2.png" alt="图 2">
+
 <figcaption>图 2：RNNSearch 在 newstest2013 上的 SacreBLEU 分数。模型按 Nematus [25] 在 TensorFlow 中实现。</figcaption>
 </figure>
 
@@ -143,6 +164,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>我们还实验了 Transformer，它基于自注意力，避免循环连接并允许更高并行度。层归一化仍是架构的重要组成部分。我们使用内部 TensorFlow 实现的 Transformer，并采用 [31] 中的 base 设置，所有模型训练 300K 步。我们将无归一化的 Transformer 作为 Baseline，并比较 RMSNorm 增强的 Transformer 与配备 LayerNorm 的 Transformer。表 4 显示结果，我们观察到归一化对 Transformer 的重要性，没有它训练失败。RMSNorm 取得与 LayerNorm 相当的 BLEU 分数，并带来 \(7\%\sim9\%\) 的加速。与 RNNSearch 相比，归一化的相对成本更低，因为 Transformer 中顺序归一化操作显著更少。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig3.png" alt="图 3">
+
 <figcaption>图 3：带 pRMSNorm 的 RNNSearch 在 newstest2013（开发集）上的 SacreBLEU 分数。我们使用 TensorFlow 版 Nematus，并以 \(10\%\) 为步长改变 \(p\)。</figcaption>
 </figure>
 
@@ -195,6 +218,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p><b>RMSNorm 的鲁棒性</b>：一个遗留问题是 LayerNorm 中的重中心化操作（RMSNorm 放弃）是否使模型对任意权重/偏置初始化更鲁棒。我们在 TensorFlow 版 Nematus 的 RNNSearch 上进行实验，将权重初始化中心改为 0.2。图 4 结果显示，LayerNorm 在异常初始化下变得非常不稳定，而 RMSNorm 更鲁棒（二者都低于原始初始化）。迄今为止的实证证据表明，RMSNorm 与 LayerNorm 同样鲁棒，或更鲁棒。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig4.png" alt="图 4">
+
 <figcaption>图 4：当初始化中心为 0.2 时，LayerNorm 和 RMSNorm 在 newstest2013（开发集）上的 SacreBLEU 曲线。</figcaption>
 </figure>
 
@@ -203,6 +228,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>图 5 和表 6 显示结果。在按序列每个时间步分别统计量对 RNN 进行 BatchNorm 归一化后，BatchNorm-LSTM 和 BatchNorm-Everywhere 都帮助加速训练过程收敛。相比之下，LayerNorm 和 RMSNorm 不仅比 BatchNorm 收敛更快，而且达到更低的验证错误率，尽管 pRMSNorm 表现略差于 RMSNorm。尽管图 5 中 RMSNorm 和 LayerNorm 性能相当，但表 6 显示 RMSNorm 比 LayerNorm 快约 \(15\%\)。<sup>3</sup></p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig5.png" alt="图 5">
+
 <figcaption>图 5：注意力读者模型在验证集上的错误率。</figcaption>
 </figure>
 
@@ -226,6 +253,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>图 6 展示每 300 训练步后验证集上的 R@K 曲线，表 7 列出最终测试结果。如图 6 所示，在所有指标上，RMSNorm 和 LayerNorm 在模型收敛方面都持续优于 Baseline。我们观察到在验证集上，RMSNorm 在召回值方面略超过 LayerNorm。对于表 7 的最终测试结果，RMSNorm 和 LayerNorm 都改善模型性能，达到更高召回值（除 LayerNorm 在 R@5 上）和更低平均排名，尽管 RMSNorm 表现出比 LayerNorm 更好的泛化。此外，表 8 结果显示，RMSNorm 相比 LayerNorm 加速训练 \(40\%\sim64\%\)，突出 pRMSNorm 更好的效率。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig6.png" alt="图 6">
+
 <figcaption>图 6：顺序嵌入模型在验证集上的 Recall@K 曲线（a）Recall@1；（b）Recall@5；（c）Recall@10。</figcaption>
 </figure>
 
@@ -340,6 +369,8 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>我们还将模型与 WeightNorm 比较。我们使用 Theano 版 Nematus 提供的 WeightNorm 实现进行 RNNSearch 实验。图 7 结果显示 WeightNorm 收敛更慢，需要更多训练步。此外，WeightNorm 在测试集上的整体翻译质量（Test14/Test17 分别为 21.7/23.5）低于 LayerNorm 和 \((p)\)RMSNorm。我们还尝试使用官方 API（nn.utils.weight_norm）将 WeightNorm 集成到基于 PyTorch 的 RNNSearch，但导致内存不足问题。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.07467/fig7.png" alt="图 7">
+
 <figcaption>图 7：RNNSearch 在 newstest2013（开发集）上的 SacreBLEU 分数随训练步变化曲线。模型用 Theano 版 Nematus 训练。</figcaption>
 </figure>
 
@@ -354,7 +385,7 @@ B.Zhang@ed.ac.uk，sennrich@cl.uzh.ch
 <p>我们将层归一化应用于图像表示的宽度和高度维度，并在通道维度执行增益缩放和偏置平移。我们使用 Adam 优化器训练所有模型，批量大小 100。遵循 [22]，Baseline 学习率设为 0.0003，其他设为 0.003。考虑到该任务模型较小，我们将 pRMSNorm 的 \(p\) 设为 12.5%。</p>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 7、图 9 未嵌入图片，仅保留图注说明。原文部分表格 OCR 存在列错位或数据缺失，已按可读内容整理并注明；表 6 在提供文本中数据不完整，故以说明形式呈现。公式按原文编号保留；复杂公式以可读文本形式呈现。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文部分表格 OCR 存在列错位或数据缺失，已按可读内容整理并注明；表 6 在提供文本中数据不完整，故以说明形式呈现。公式按原文编号保留；复杂公式以可读文本形式呈现。</p>
 
 </body>
 </html>

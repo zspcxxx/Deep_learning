@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>探索统一文本到文本 Transformer 的迁移学习极限（T5）</title>
@@ -28,6 +40,11 @@
   ul, ol { margin-top: 0.3em; }
   .small { font-size: 0.9em; }
   .keep { white-space: nowrap; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -51,6 +68,8 @@ Google Research<br>
 <p>我们强调，本文的目标不是提出新方法，而是对领域现状提供全面视角。因此，我们的工作主要包括对现有技术的综述、探索和实证比较。我们还通过放大系统性研究中的洞见（训练多达 110 亿参数的模型）来探索当前方法的极限，并在许多任务上取得最先进结果。为在此规模下进行实验，我们引入了“巨量干净爬取语料”（Colossal Clean Crawled Corpus，C4），这是一个由从网络抓取的数百 GB 干净英文文本组成的数据集。认识到迁移学习的主要用途是在数据稀缺场景中利用预训练模型，我们发布了代码、数据集和预训练模型。<sup>1</sup></p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.10683/fig1.png" alt="图 1">
+
 <figcaption>图 1：我们的文本到文本框架示意图。我们考虑的每个任务——包括翻译、问答和分类——都被转化为向模型输入文本并训练其生成某些目标文本。这使我们能够在多样任务上使用相同的模型、损失函数、超参数等。它也为本实证调查中的方法提供了标准测试平台。“T5”指我们的模型，我们称之为“文本到文本迁移 Transformer”。</figcaption>
 </figure>
 
@@ -121,6 +140,8 @@ Google Research<br>
 <p>利用无标注数据预训练模型需要一个不需要标签、但（宽泛地说）教给模型可泛化知识的目标，这些知识对下游任务有用。早期将预训练和微调全参数迁移学习范式应用于 NLP 的工作使用因果语言建模目标预训练（Dai and Le, 2015；Peters et al., 2018；Radford et al., 2018；Howard and Ruder, 2018）。然而，最近表明“去噪”目标（Devlin et al., 2018；Taylor, 1953）（也称“掩码语言建模”）产生更好性能，因此迅速成为标准。去噪目标中，模型训练预测输入中缺失或损坏的词元。受 BERT“掩码语言建模”目标和“词 dropout”正则化技术（Bowman et al., 2015）启发，我们设计一个目标：随机采样并丢弃输入序列中 15% 词元。所有连续被丢弃词元跨度替换为单个哨兵词元。每个哨兵词元分配序列唯一词元 ID。哨兵 ID 是加入词表的特殊词元，不对应任何 wordpiece。目标则对应所有被丢弃词元跨度，由输入中替换它们的相同哨兵词元分隔，再加最终哨兵词元标记目标序列结束。选择掩蔽连续词元跨度且只预测被丢弃词元，是为了降低预训练计算成本。3.3 节彻底研究预训练目标。该目标变换示例见图 2。3.3 节实证比较该目标与许多其他变体。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.10683/fig2.png" alt="图 2">
+
 <figcaption>图 2：基线模型所用目标示意。示例处理句子“Thank you for inviting me to your party last week.”。词“for”“inviting”和“last”（标有 ×）被随机选择损坏。每个连续损坏词元跨度替换为示例内唯一的哨兵词元（<X> 和 <Y>）。由于“for”和“inviting”连续，它们被单个哨兵 <X> 替换。输出序列由被丢弃跨度组成，由输入中替换它们的哨兵词元分隔，再加最终哨兵词元 <Z>。</figcaption>
 </figure>
 
@@ -156,6 +177,8 @@ Google Research<br>
 <p>注意，遵循文本到文本框架时，前缀 LM 架构在分类任务上 closely resembles BERT（Devlin et al., 2018）。为看原因，考虑 MNLI 示例：前提“I hate pigeons.”，假设“My feelings towards pigeons are filled with animosity.”，正确标签“entailment”。将示例输入语言模型，转换为序列“mnli premise: I hate pigeons. hypothesis: My feelings towards pigeons are filled with animosity. target: entailment”。这里完全可见前缀对应直到“target:”的整个输入序列，可类比 BERT 使用的“分类”词元。因此模型对整输入完全可见，然后通过输出词“entailment”进行分类。模型很容易学会在任务前缀（此处“mnli”）下输出有效类别标签之一。因此，前缀 LM 与 BERT 架构的主要区别是分类器直接集成到前缀 LM 的 Transformer 解码器输出层。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.10683/fig3.png" alt="图 3">
+
 <figcaption>图 3：不同注意力掩码模式矩阵。自注意力输入和输出分别记为 \(x\) 和 \(y\)。第 \(i\) 行第 \(j\) 列深色单元表示自注意力机制在输出时间步 \(i\) 允许关注输入元素 \(j\)；浅色表示不允许。左：完全可见掩码允许每个输出时间步关注完整输入。中：因果掩码阻止第 \(i\) 个输出元素依赖“未来”输入元素。右：带前缀的因果掩码允许对输入序列一部分使用完全可见掩码。</figcaption>
 </figure>
 
@@ -274,6 +297,8 @@ Google Research<br>
 <p>图 5 展示无监督目标探索流程。总体而言，我们观察到的最大性能差异是去噪目标在预训练中优于语言建模和去混洗。在我们探索的许多去噪目标变体之间，未观察到显著差异。然而，不同目标（或目标参数化）可导致不同序列长度，从而不同训练速度。这意味着在考虑的去噪目标中选择主要应依据计算成本。结果还表明，进一步探索类似目标可能不会为我们考虑的任务和模型带来显著收益。相反，探索利用无标注数据的全新方式可能更有收获。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.10683/fig5.png" alt="图 5">
+
 <figcaption>图 5：无监督目标探索流程图。首先在 3.3.1 节考虑若干不同方法，发现 BERT 风格去噪目标表现最好。然后在 3.3.2 节考虑各种简化 BERT 目标以产生更短目标序列的方法。鉴于用哨兵词元替换被丢弃跨度表现良好且目标序列短，3.3.3 节实验不同损坏率。最后，3.3.4 节评估故意损坏连续词元跨度的目标。</figcaption>
 </figure>
 
@@ -308,6 +333,8 @@ Google Research<br>
 <p>注意当预训练数据集仅重复 64 次时这些效应有限。这表明一定量预训练数据重复可能无害。然而，鉴于额外预训练有益（3.6 节）且获取额外无标注数据便宜容易，建议尽可能使用大型预训练数据集。还注意该效应对更大模型可能更明显，即更大模型可能更易过拟合较小预训练数据集。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1910.10683/fig6.png" alt="图 6">
+
 <figcaption>图 6：原始 C4 数据集及 4 个人工截断版本的预训练损失。所列大小指每个数据集中词元数。四个大小对应预训练期间重复数据集 64 至 4,096 次。使用较小数据集导致更小训练损失，可能表明对无标注数据集有一定记忆。</figcaption>
 </figure>
 

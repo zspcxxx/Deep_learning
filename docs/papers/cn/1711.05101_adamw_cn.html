@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>解耦权重衰减正则化</title>
@@ -22,6 +34,11 @@
   sup { font-size: 0.75em; }
   ul, ol { margin-top: 0.3em; }
   .small { font-size: 0.9em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -124,6 +141,8 @@ University of Freiburg，Freiburg, Germany<br>
 <p>对于每种学习率计划和权重衰减变体，我们使用不同初始学习率 α 和权重衰减因子 λ 设置，训练 2×64d ResNet 100 个 epoch。图 1 显示，解耦权重衰减在所有学习率计划下都优于 L2 正则化，且在学习率计划更好时差异更大。我们还注意到，解耦权重衰减导致更可分的超参数搜索空间，尤其是应用阶梯下降和余弦退火等学习率计划时。图还显示余弦退火明显优于其他学习率计划；因此我们在其余实验中使用余弦退火。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1711.05101/fig1.png" alt="图 1">
+
 <figcaption>图 1：Adam 使用解耦权重衰减（底行，AdamW）比使用 L2 正则化（顶行，Adam）表现更好。我们展示 26×64d ResNet 在 CIFAR-10 上分别使用固定学习率（左列）、阶梯下降学习率（在第 30、60、80 个 epoch 下降，中列）和余弦退火（右列）训练 100 个 epoch 后的最终测试误差。AdamW 导致更可分的超参数搜索空间，尤其是应用阶梯下降和余弦退火等学习率计划时。余弦退火产生明显更优结果。</figcaption>
 </figure>
 
@@ -135,6 +154,8 @@ University of Freiburg，Freiburg, Germany<br>
 <p>总之，图 2 的结果支持我们的假设：权重衰减和学习率超参数可以解耦，这反过来简化了 SGD 的超参数调优问题，并将 Adam 的性能提高到可与带动量 SGD 竞争。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1711.05101/fig2.png" alt="图 2">
+
 <figcaption>图 2：26 2×64d ResNet 在 CIFAR-10 上训练 100 个 epoch 后的 Top-1 测试误差。所提出的 SGDW 和 AdamW（右列）具有更可分的超参数空间。</figcaption>
 </figure>
 
@@ -143,6 +164,8 @@ University of Freiburg，Freiburg, Germany<br>
 <p>我们将初始学习率固定为 0.001，这既是 Adam 的默认学习率，也是在我们实验中表现相当好的学习率。图 3 显示 Adam 的 12 个 L2 正则化设置和 AdamW 的 7 个归一化权重衰减设置的结果（归一化权重衰减表示附录 B.1 正式定义的重新缩放；它相当于一个取决于批次遍历次数的乘法因子）。有趣的是，虽然 Adam 和 AdamW 的学习曲线动态在训练前半段经常重合，但 AdamW 往往导致更低的训练损失和测试误差（分别见图 3 左上和右上）。重要的是，Adam 中使用 L2 权重衰减并未产生像 AdamW 中解耦权重衰减那样好的结果（另见图 3 左下）。接下来我们研究 AdamW 的更好结果仅由于更好收敛还是由于更好泛化。图 3（右下）中 Adam 和 AdamW 最佳设置的结果表明，AdamW 不仅产生更好的训练损失，而且在相似训练损失值下也产生更好的泛化性能。ImageNet32x32 上的结果（见附录 SuppFigure 4）得出相同结论：泛化性能显著改善。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1711.05101/fig3.png" alt="图 3">
+
 <figcaption>图 3：26 2×96d ResNet 在 CIFAR-10 上使用 Adam 和 AdamW 训练得到的学习曲线（顶行）和泛化结果（底行）。详见正文。附录 SuppFigure 4 显示 ImageNet32x32 上的相同定性结果。</figcaption>
 </figure>
 
@@ -151,6 +174,8 @@ University of Freiburg，Freiburg, Germany<br>
 <p>AdamWR 取得相同的改善结果，但 anytime 性能好得多。这些改进缩小了 CIFAR-10 上 Adam 与 SGDWR 之间的大部分差距，并在 ImageNet32x32 上产生可比性能。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1711.05101/fig4.png" alt="图 4">
+
 <figcaption>图 4：CIFAR-10 上的 Top-1 测试误差（左）和 ImageNet32x32 上的 Top-5 测试误差（右）。更高分辨率和训练损失曲线见补充材料 SuppFigure 5 和 SuppFigure 6。</figcaption>
 </figure>
 
@@ -269,7 +294,7 @@ University of Freiburg，Freiburg, Germany<br>
 </figure>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 4、SuppFigure 1—6 未嵌入图片，仅保留图注说明。原文算法 1、算法 2 及部分公式存在 OCR 错位，已按论文上下文整理为可读形式；附录中少量 OCR 噪声行已忽略。原文表/图编号按正文保留。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文算法 1、算法 2 及部分公式存在 OCR 错位，已按论文上下文整理为可读形式；附录中少量 OCR 噪声行已忽略。原文表/图编号按正文保留。</p>
 
 </body>
 </html>

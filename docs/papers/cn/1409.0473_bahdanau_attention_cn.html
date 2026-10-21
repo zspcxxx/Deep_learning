@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>联合学习对齐与翻译的神经机器翻译</title>
@@ -22,6 +34,11 @@
   .note { font-size: 0.95em; color: #555; }
   .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
   code { font-family: Consolas, monospace; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -114,6 +131,8 @@ KyungHyun Cho，Yoshua Bengio*，蒙特利尔大学
 <p>表 1 列出了以 BLEU 分数衡量的翻译性能。从表中可以清楚地看出，在所有情况下，所提出的 RNNsearch 都优于传统的 RNNencdec。更重要的是，当只考虑由已知词组成的句子时，RNNsearch 的性能与传统的基于短语的翻译系统（Moses）一样高。考虑到 Moses 除了我们用于训练 RNNsearch 和 RNNencdec 的平行语料外，还使用了单独的单语语料（4.18 亿词），这是一个重大成就。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1409.0473/fig2.png" alt="图 2">
+
 <figcaption>图 2：生成翻译在测试集上的 BLEU 分数与句子长度的关系。结果是在完整测试集上得到的，其中包括模型含有未知词的句子。</figcaption>
 </figure>
 
@@ -142,6 +161,8 @@ KyungHyun Cho，Yoshua Bengio*，蒙特利尔大学
 <p>软对齐相对于硬对齐的优势，例如从图 3（d）中可以明显看出。考虑源短语 [the man]，它被翻译为 [l’ homme]。任何硬对齐都会将 [the] 映射到 [l’]，将 [man] 映射到 [homme]。这对翻译没有帮助，因为必须考虑 [the] 后面的词才能确定它应翻译为 [le]、[la]、[les] 还是 [l’]。我们的软对齐自然地解决了这个问题，让模型同时查看 [the] 和 [man]；在这个例子中，我们看到模型能够正确地将 [the] 翻译为 [l’]。我们在图 3 展示的所有类似情况中都观察到这种行为。软对齐的另一个好处是，它自然地处理长度不同的源短语和目标短语，而不需要某种反直觉的映射，将某些词映射到或映射自“无处”（[NULL]）（例如见 Koehn，2010，第 4 章和第 5 章）。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1409.0473/fig3.png" alt="图 3">
+
 <figcaption>图 3：RNNsearch-50 找到的四个样本对齐。每个图的 x 轴和 y 轴分别对应源句子（英语）中的词和生成翻译（法语）中的词。每个像素以灰度显示第 j 个源词的注释对第 i 个目标词的权重 α<sub>ij</sub>（见式（6））（0：黑色，1：白色）。（a）任意句子。（b—d）从测试集中随机选择的三个样本，这些句子没有任何未知词且长度在 10 到 20 个词之间。</figcaption>
 </figure>
 

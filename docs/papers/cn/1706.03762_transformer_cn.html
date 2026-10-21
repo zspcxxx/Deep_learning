@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Attention Is All You Need（你只需要注意力）</title>
@@ -24,6 +36,11 @@
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
   ul { margin-top: 0.3em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -65,6 +82,8 @@ Illia Polosukhin*
 <p>大多数有竞争力的神经序列转换模型具有编码器—解码器结构 [5, 2, 35]。这里，编码器将输入符号表示序列 \((x_1,\ldots,x_n)\) 映射为连续表示序列 \(\mathbf{z}=(z_1,\ldots,z_n)\)。给定 \(\mathbf{z}\)，解码器随后一次一个元素地生成输出符号序列 \((y_1,\ldots,y_m)\)。每一步模型都是自回归的 [10]，在生成下一个符号时将先前生成的符号作为额外输入。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1706.03762/fig1.png" alt="图 1">
+
 <figcaption>图 1：Transformer 模型架构。</figcaption>
 </figure>
 
@@ -78,6 +97,8 @@ Illia Polosukhin*
 <p>注意力函数可以描述为将查询和一组键—值对映射到输出，其中查询、键、值和输出都是向量。输出计算为值的加权和，其中分配给每个值的权重由查询与相应键的兼容性函数计算。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1706.03762/fig2.png" alt="图 2">
+
 <figcaption>图 2：（左）缩放点积注意力。（右）多头注意力由多个并行运行的注意力层组成。</figcaption>
 </figure>
 
@@ -300,17 +321,23 @@ Illia Polosukhin*
 
 <h2>附录图注</h2>
 <figure>
+<img class="paper-fig" src="figures/1706.03762/fig3.png" alt="图 3">
+
 <figcaption>图 3：编码器自注意力第 5 层（共 6 层）中注意力机制跟随长距离依赖的示例。许多注意力头关注动词 “making” 的远距离依赖，完成短语 “making...more difficult”。这里仅显示 “making” 一词的注意力。不同颜色代表不同头。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1706.03762/fig4.png" alt="图 4">
+
 <figcaption>图 4：第 5 层（共 6 层）中两个似乎参与指代消解的注意力头。上：头 5 的完整注意力。下：仅来自 “its” 一词的头 5 和头 6 注意力。注意该词的注意力非常尖锐。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1706.03762/fig5.png" alt="图 5">
+
 <figcaption>图 5：许多注意力头表现出似乎与句子结构相关的行为。上面给出两个例子，来自第 5 层（共 6 层）编码器自注意力的两个不同头。这些头明显学会了执行不同任务。</figcaption>
 </figure>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 5 未嵌入图片，仅保留图注说明。原文部分 OCR 重复、截断或表格错位处已按上下文整理；表 3 因原文 OCR 列缺失较严重，按可读内容整理并保留关键变体。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文部分 OCR 重复、截断或表格错位处已按上下文整理；表 3 因原文 OCR 列缺失较严重，按可读内容整理并保留关键变体。</p>
 
 </body>
 </html>

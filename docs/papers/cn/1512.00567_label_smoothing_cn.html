@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>重新思考计算机视觉中的 Inception 架构</title>
@@ -23,6 +35,11 @@
   .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -66,26 +83,38 @@ Zbigniew Wojna，University College London，zbigniewwojna@gmail.com
 <h3>3.1 分解为更小的卷积</h3>
 <p>具有较大空间滤波器的卷积（例如 \(5\times5\) 或 \(7\times7\)）在计算上往往不成比例地昂贵。例如，在具有 \(m\) 个滤波器的网格上使用 \(n\) 个滤波器的 \(5\times5\) 卷积，其计算成本是具有相同滤波器数量的 \(3\times3\) 卷积的 \(25/9=2.78\) 倍。当然，\(5\times5\) 滤波器可以捕获早期层中更远单元激活之间的信号依赖关系，因此减少滤波器几何尺寸会以表达力为代价。然而，我们可以问：是否可以用一个参数更少、输入尺寸和输出深度相同的多层网络替换 \(5\times5\) 卷积？如果放大 \(5\times5\) 卷积的计算图，我们会看到每个输出看起来像一个小型全连接网络在其输入上滑动 \(5\times5\) 图块（见图 1）。由于我们构建的是视觉网络，再次利用平移不变性并用两层卷积架构替换全连接组件似乎很自然：第一层是 \(3\times3\) 卷积，第二层是在第一层 \(3\times3\) 输出网格上的全连接层（见图 1）。在输入激活网格上滑动这个小网络，归结为用两层 \(3\times3\) 卷积替换 \(5\times5\) 卷积（比较图 4 与图 5）。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig1.png" alt="图 1">
+
 <figcaption>图 1：替换 \(5\times5\) 卷积的迷你网络。</figcaption>
 </figure>
 <p>这种设置通过在相邻图块之间共享权重，明显减少了参数数量。为了分析预期计算成本节省，我们做几个适用于典型情况的简化假设：可以假设 \(n=\alpha m\)，即我们希望将激活/单元数量改变一个常数 alpha 因子。由于 \(5\times5\) 卷积是聚合的，\(\alpha\) 通常略大于 1（GoogLeNet 中约为 1.5）。用两层替换 \(5\times5\) 层时，分两步达到这种扩展似乎是合理的：两步中都将滤波器数量增加 \(\sqrt{\alpha}\)。为简化估计，选择 \(\alpha=1\)（不扩展）。如果朴素地滑动网络而不复用相邻网格图块之间的计算，我们会增加计算成本。滑动该网络可以表示为两个 \(3\times3\) 卷积层，它们在相邻图块之间复用激活。这样，我们最终获得净 \(\frac{9+9}{25}\times\) 的计算减少，这种分解带来 28% 的相对收益。参数数量也有完全相同的节省，因为每个参数在计算每个单元的激活时恰好使用一次。尽管如此，这种设置提出两个一般性问题：这种替换是否会导致任何表达力损失？如果我们的主要目标是分解计算的线性部分，是否建议在第一层保持线性激活？我们进行了几个控制实验（例如见图 2），使用线性激活在分解的所有阶段总是劣于使用修正线性单元。我们将这一收益归因于网络可以学习的变化空间增强，尤其是当我们对输出激活进行批归一化 [7] 时。对降维组件使用线性激活时也可以看到类似效果。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig2.png" alt="图 2">
+
 <figcaption>图 2：两个 Inception 模型之间的若干控制实验之一：一个使用分解为线性 + ReLU 层，另一个使用两个 ReLU 层。经过 386 万次操作后，前者在验证集上稳定在 76.2% top-1 准确率，而后者达到 77.2%。</figcaption>
 </figure>
 
 <h3>3.2 空间分解为非对称卷积</h3>
 <p>上述结果表明，大于 \(3\times3\) 的滤波器卷积可能并不普遍有用，因为它们总是可以约简为一系列 \(3\times3\) 卷积层。但我们仍可以问：是否应将它们分解为更小的，例如 \(2\times2\) 卷积？然而，事实证明，使用非对称卷积（例如 \(n\times1\)）可以比 \(2\times2\) 做得更好。例如，使用 \(3\times1\) 卷积后接 \(1\times3\) 卷积，等价于滑动一个具有与 \(3\times3\) 卷积相同感受野的两层网络（见图 3）。在输入和输出滤波器数量相等时，对于相同数量的输出滤波器，两层解决方案仍便宜 33%。相比之下，将 \(3\times3\) 卷积分解为两个 \(2\times2\) 卷积只节省 11% 计算。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig3.png" alt="图 3">
+
 <figcaption>图 3：替换 \(3\times3\) 卷积的迷你网络。该网络的下层由具有 3 个输出单元的 \(3\times1\) 卷积组成。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig4.png" alt="图 4">
+
 <figcaption>图 4：[20] 中描述的原始 Inception 模块。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig5.png" alt="图 5">
+
 <figcaption>图 5：每个 \(5\times5\) 卷积被两个 \(3\times3\) 卷积替换的 Inception 模块，如第 2 节原则 3 所建议。</figcaption>
 </figure>
 <p>理论上，我们甚至可以进一步认为，任何 \(n\times n\) 卷积都可以替换为 \(1\times n\) 卷积后接 \(n\times1\) 卷积，并且计算成本节省随 \(n\) 增长而急剧增加（见图 6）。实践中，我们发现这种分解在早期层效果不佳，但在中等网格尺寸上效果很好（在 \(m\times m\) 特征图上，\(m\) 在 12 到 20 之间）。在该层级上，使用 \(1\times7\) 卷积后接 \(7\times1\) 卷积可以取得很好的结果。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig6.png" alt="图 6">
+
 <figcaption>图 6：\(n\times n\) 卷积分解后的 Inception 模块。在我们提出的架构中，对于 \(17\times17\) 网格选择 \(n=7\)。（滤波器大小使用原则 3 选择。）</figcaption>
 </figure>
 
@@ -96,15 +125,23 @@ Zbigniew Wojna，University College London，zbigniewwojna@gmail.com
 <h2>5. 高效网格尺寸缩减</h2>
 <p>传统上，卷积网络使用某种池化操作来减小特征图的网格尺寸。为了避免表示瓶颈，在应用最大或平均池化之前，会扩展网络滤波器的激活维度。例如，从具有 \(k\) 个滤波器的 \(d\times d\) 网格开始，如果我们希望得到具有 \(2k\) 个滤波器的 \(\frac{d}{2}\times\frac{d}{2}\) 网格，首先需要计算具有 \(2k\) 个滤波器的 stride-1 卷积，然后应用额外池化步骤。这意味着总体计算成本由较大网格上使用 \(2d^2k^2\) 操作的昂贵卷积主导。一种可能性是改用带卷积的池化，从而得到 \(2(\frac{d}{2})^2k^2\)，将计算成本减少四分之一。然而，这会产生表示瓶颈，因为表示的总维度降至 \((\frac{d}{2})^2k\)，导致网络表达力下降（见图 9）。我们建议另一种变体，在消除表示瓶颈的同时进一步降低计算成本（见图 10）。我们可以使用两个并行的 stride 2 块：\(P\) 和 \(C\)。\(P\) 是池化层（平均或最大池化），二者的激活都是 stride 2，其滤波器组如图 10 所示拼接。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig7.png" alt="图 7">
+
 <figcaption>图 7：扩展滤波器组输出的 Inception 模块。该架构用于最粗的 \((8\times8)\) 网格，以促进高维表示，如第 2 节原则 2 所建议。我们仅在最粗网格上使用该方案，因为在那里生成高维稀疏表示最为关键，因为相比空间聚合，局部处理（通过 \(1\times1\) 卷积）的比例增加了。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig8.png" alt="图 8">
+
 <figcaption>图 8：最后一个 \(17\times17\) 层之上的辅助分类器。侧头中各层的批归一化 [7] 带来 0.4% 的 top-1 准确率绝对增益。下方轴显示执行的迭代次数，每批大小为 32。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig9.png" alt="图 9">
+
 <figcaption>图 9：减小网格尺寸的两种替代方式。左侧方案违反第 2 节原则 1，即不引入表示瓶颈。右侧版本计算成本高 3 倍。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1512.00567/fig10.png" alt="图 10">
+
 <figcaption>图 10：在扩展滤波器组的同时减小网格尺寸的 Inception 模块。它既便宜又避免表示瓶颈，如原则 1 所建议。右图从网格尺寸而非操作角度表示同一方案。</figcaption>
 </figure>
 
@@ -262,7 +299,7 @@ Zbigniew Wojna，University College London，zbigniewwojna@gmail.com
 </div>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 10 未嵌入图片，仅保留图注说明；表 2 在所提供的原文中仅见标题，未包含具体数据行，故以说明形式呈现。原文中部分 OCR 重复段落已合并整理。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。表 2 在所提供的原文中仅见标题，未包含具体数据行，故以说明形式呈现。原文中部分 OCR 重复段落已合并整理。</p>
 
 </body>
 </html>

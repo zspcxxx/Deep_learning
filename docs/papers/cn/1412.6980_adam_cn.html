@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Adam：一种随机优化方法</title>
@@ -21,6 +33,11 @@
   .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -114,6 +131,8 @@ return θt              （所得参数）
 <p>如 Duchi 等（2011）所讨论，Adagrad 的主要理论结果之一是能够高效处理稀疏特征和梯度，而 SGD 在学习稀有特征方面较弱。步长按 \(1/\sqrt{t}\) 衰减的 Adam 理论上应与 Adagrad 性能匹配。我们使用 Maas 等（2011）的 IMDB 电影评论数据集检查稀疏特征问题。我们将 IMDB 电影评论预处理为词袋（BoW）特征向量，包括前 10,000 个最频繁词。每条评论的 10,000 维 BoW 特征向量高度稀疏。如 Wang & Manning（2013）所建议，训练期间可对 BoW 特征应用 50% dropout 噪声以防止过拟合。在图 1 中，无论有无 dropout 噪声，Adagrad 都大幅优于带 Nesterov 动量的 SGD。Adam 的收敛速度与 Adagrad 一样快。Adam 的实证表现与第 2 节和第 4 节的理论发现一致。与 Adagrad 类似，Adam 可以利用稀疏特征，并获得比普通带动量 SGD 更快的收敛速度。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1412.6980/fig1.png" alt="图 1">
+
 <figcaption>图 1：在 MNIST 图像和 IMDB 电影评论（10,000 维词袋特征向量）上训练逻辑回归的负对数似然。</figcaption>
 </figure>
 
@@ -123,6 +142,8 @@ return θt              （所得参数）
 <p>随机正则化方法（如 dropout）是防止过拟合的有效方式，因其简单而常用于实践。SFO 假设确定性替换，因此在带随机正则化的代价函数上确实无法收敛。我们在带 dropout 噪声训练的多层神经网络上比较 Adam 与其他随机一阶方法的有效性。图 2 显示我们的结果；Adam 比其他方法收敛更好。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1412.6980/fig2.png" alt="图 2">
+
 <figcaption>图 2：在 MNIST 图像上训练多层神经网络。（a）使用 dropout 随机正则化的神经网络。（b）具有确定性代价函数的神经网络。我们与 sum-of-functions（SFO）优化器（Sohl-Dickstein 等，2014）比较。</figcaption>
 </figure>
 
@@ -131,6 +152,8 @@ return θt              （所得参数）
 <p>有趣的是，尽管 Adam 和 Adagrad 在训练初期都快速降低代价（图 3 左），但对于 CNN，Adam 和 SGD 最终收敛速度显著快于 Adagrad（图 3 右）。我们注意到，二阶矩估计 \(\hat{v}_t\) 在几个 epoch 后消失为零，并被算法 1 中的 \(\epsilon\) 主导。因此，与第 6.2 节的全连接网络相比，二阶矩估计对 CNN 代价函数几何的近似较差。而通过一阶矩降低小批量方差在 CNN 中更重要，并有助于加速。因此，在这个特定实验中，Adagrad 收敛得比其他方法慢得多。尽管 Adam 相对带动量 SGD 只显示出边际改进，但它为不同层自适应调整学习率尺度，而不是像 SGD 那样手动挑选。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1412.6980/fig3.png" alt="图 3">
+
 <figcaption>图 3：卷积神经网络训练代价。（左）前三个 epoch 的训练代价。（右）45 个 epoch 的训练代价。CIFAR-10，c64-c64-c128-1000 架构。</figcaption>
 </figure>
 
@@ -139,6 +162,8 @@ return θt              （所得参数）
 <p>在图 4 中，当没有偏差校正项时，\(\beta_2\) 接近 1 确实导致训练不稳定，尤其是在训练最初几个 epoch。最佳结果在较小的 \((1-\beta_2)\) 值和偏差校正下取得；这在优化末期更明显，此时随着隐藏单元专门化到特定模式，梯度往往变得更稀疏。总之，无论超参数设置如何，Adam 的表现等于或优于 RMSProp。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1412.6980/fig4.png" alt="图 4">
+
 <figcaption>图 4：在学习变分自编码器（VAE）（Kingma & Welling，2013）时，经过 10 个 epoch（左）和 100 个 epoch（右）后，偏差校正项（红线）与无偏差校正项（绿线）对不同步长 \(\alpha\)（x 轴）和超参数 \(\beta_1,\beta_2\) 设置下损失（y 轴）的影响。</figcaption>
 </figure>
 
@@ -254,7 +279,7 @@ return θt              （所得参数）
 <p>因此得到定理 10.5 中的遗憾界。</p>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 4 未嵌入图片，仅保留图注说明；算法伪代码按原文整理为可读文本。PDF 末尾的 OCR 噪声行已忽略。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。算法伪代码按原文整理为可读文本。PDF 末尾的 OCR 噪声行已忽略。</p>
 
 </body>
 </html>

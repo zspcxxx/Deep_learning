@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>层归一化（Layer Normalization）</title>
@@ -24,6 +36,11 @@
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
   .small { font-size: 0.9em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -130,6 +147,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>图 1 展示了有和没有层归一化的模型验证曲线。我们绘制图像检索任务的 R@1、R@5 和 R@10。我们观察到层归一化在所有指标上提供每次迭代的加速，并在基线模型所需时间的 60% 内收敛到其最佳验证模型。表 2 报告了测试集结果，我们观察到层归一化也比原始模型带来更好的泛化。我们报告的结果是 RNN 嵌入模型的最先进结果，只有 Wang et al. [2016] 的结构保持模型在该任务上报告了更好结果。然而，他们是在不同条件下评估（1 个测试集而不是 5 个平均），因此不能直接比较。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig1.png" alt="图 1">
+
 <figcaption>图 1：使用顺序嵌入时有和没有层归一化的 Recall@K 曲线。</figcaption>
 </figure>
 
@@ -152,6 +171,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>该实验结果见图 2。我们观察到层归一化不仅训练更快，而且在验证集上收敛到比基线和 BN 变体更好的结果。在 Cooijmans et al. [2016] 中，认为 BN 中的尺度参数必须仔细选择，并在实验中设为 0.1。我们尝试了层归一化的 1.0 和 0.1 尺度初始化，发现前者模型表现显著更好。这表明层归一化不像循环 BN 那样对初始尺度敏感。<sup>3</sup></p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig2.png" alt="图 2">
+
 <figcaption>图 2：注意力读者模型的验证曲线。BN 结果取自 [Cooijmans et al., 2016]。</figcaption>
 </figure>
 
@@ -161,6 +182,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>实验结果见图 3。我们观察到应用层归一化既带来相对基线的加速，也在 1M 次迭代后带来更好的最终结果，如表 3 所示。我们还让带层归一化的模型训练总共一个月，在除一个任务外的所有任务上带来进一步性能提升。我们注意到，原始报告结果与我们结果之间的性能差异很可能是因为公开代码没有在解码器每个时间步进行条件化，而原始模型有。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig3.png" alt="图 3">
+
 <figcaption>图 3：带和不带层归一化的 skip-thought 向量在下游任务上的性能随训练迭代的变化。原始线是 [Kiros et al., 2015] 中报告的结果。带误差的图使用 10 折交叉验证。最佳效果见彩色版本。</figcaption>
 </figure>
 
@@ -182,6 +205,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>图 4 显示前 100 个 epoch 的测试变分界。它突出了应用层归一化的加速收益：层归一化 DRAW 的收敛速度几乎是基线模型的两倍。200 个 epoch 后，基线模型在测试数据上收敛到 82.36 nats 的变分对数似然，层归一化模型达到 82.09 nats。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig4.png" alt="图 4">
+
 <figcaption>图 4：有和没有层归一化的 DRAW 模型测试负对数似然。</figcaption>
 </figure>
 
@@ -191,6 +216,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>小批量大小与非常长序列的结合，使得非常稳定的隐藏动态很重要。图 5 表明层归一化收敛到与基线模型相当的对数似然，但快得多。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig5.png" alt="图 5">
+
 <figcaption>图 5：有和没有层归一化的手写序列生成模型负对数似然。模型使用小批量大小 8 和序列长度 500 训练。</figcaption>
 </figure>
 
@@ -199,6 +226,8 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>所有模型使用 55000 个训练数据点和 Adam [Kingma and Ba, 2014] 优化器训练。对于较小批量，批归一化的方差项使用无偏估计器计算。图 6 的实验结果突出表明，层归一化对小批量大小稳健，并且相比应用于所有层的批归一化表现出更快的训练收敛。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1607.06450/fig6.png" alt="图 6">
+
 <figcaption>图 6：置换不变 MNIST 784-1000-1000-10 模型在层归一化和批归一化下的负对数似然与测试误差。（左）模型使用批量大小 128 训练。（右）模型使用批量大小 4 训练。</figcaption>
 </figure>
 
@@ -298,7 +327,7 @@ Geoffrey E. Hinton，University of Toronto and Google Inc.，hinton@cs.toronto.e
 <p>因此，批归一化和层归一化模型对输入及其参数的缩放比标准模型更稳健。</p>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 6 未嵌入图片，仅保留图注说明。原文中部分 OCR 噪声和重复段落已按上下文整理修正。公式按原文编号保留，复杂矩阵公式以可读文本形式呈现。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文中部分 OCR 噪声和重复段落已按上下文整理修正。公式按原文编号保留，复杂矩阵公式以可读文本形式呈现。</p>
 
 </body>
 </html>

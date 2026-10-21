@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>BERT：用于语言理解的深度双向 Transformer 预训练</title>
@@ -26,6 +38,11 @@
   ul, ol { margin-top: 0.3em; }
   .small { font-size: 0.9em; }
   .keep { white-space: nowrap; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -83,6 +100,8 @@ Google AI Language
 <p>对于给定词元，其输入表示通过求和相应的词元、片段和位置嵌入构建。该构建的可视化见图 2。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1810.04805/fig1.png" alt="图 1">
+
 <figcaption>图 1：BERT 的整体预训练和微调流程。除输出层外，预训练和微调使用相同架构。相同预训练模型参数用于初始化不同下游任务的模型。微调期间，所有参数都被微调。[CLS] 是添加在每个输入示例前面的特殊符号，[SEP] 是特殊分隔词元（例如分隔问题/答案）。</figcaption>
 </figure>
 
@@ -96,6 +115,8 @@ Google AI Language
 <p><b>预训练数据</b>：预训练过程大体遵循现有语言模型预训练文献。预训练语料使用 BooksCorpus（8 亿词）（Zhu et al., 2015）和英语 Wikipedia（25 亿词）。对于 Wikipedia，我们只提取文本段落，忽略列表、表格和标题。使用文档级语料而非像 Billion Word Benchmark（Chelba et al., 2013）那样打乱的句子级语料，对于提取长连续序列至关重要。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1810.04805/fig2.png" alt="图 2">
+
 <figcaption>图 2：BERT 输入表示。输入嵌入是词元嵌入、分段嵌入和位置嵌入之和。</figcaption>
 </figure>
 
@@ -389,9 +410,13 @@ Google AI Language
 <p>BERT 在不同任务上微调的图示见图 4。我们的任务特定模型通过将 BERT 与一个额外输出层结合形成，因此只需从零学习最少参数。在这些任务中，(a) 和 (b) 是序列级任务，(c) 和 (d) 是词元级任务。图中 \(E\) 表示输入嵌入，\(T_i\) 表示词元 \(i\) 的上下文表示，[CLS] 是分类输出的特殊符号，[SEP] 是分隔非连续词元序列的特殊符号。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1810.04805/fig3.png" alt="图 3">
+
 <figcaption>图 3：预训练模型架构差异。BERT 使用双向 Transformer。OpenAI GPT 使用从左到右 Transformer。ELMo 使用独立训练的从左到右和从右到左 LSTM 的拼接来为下游任务生成特征。三者中，只有 BERT 表示在所有层中联合以左右上下文为条件。除架构差异外，BERT 和 OpenAI GPT 是微调方法，而 ELMo 是基于特征的方法。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1810.04805/fig4.png" alt="图 4">
+
 <figcaption>图 4：在不同任务上微调 BERT 的图示。</figcaption>
 </figure>
 
@@ -419,6 +444,8 @@ Google AI Language
 </ol>
 
 <figure>
+<img class="paper-fig" src="figures/1810.04805/fig5.png" alt="图 5">
+
 <figcaption>图 5：训练步数消融。展示从预训练 \(k\) 步的模型参数开始微调后的 MNLI 准确率。x 轴是 \(k\) 的值。</figcaption>
 </figure>
 
@@ -446,7 +473,7 @@ Google AI Language
 </table>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 5 未嵌入图片，仅保留图注说明。原文部分表格 OCR 存在列错位或数据缺失，已按可读内容整理并注明；表 1、表 5 在提供文本中仅见标题/说明，未包含完整数值，故以说明形式呈现。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文部分表格 OCR 存在列错位或数据缺失，已按可读内容整理并注明；表 1、表 5 在提供文本中仅见标题/说明，未包含完整数值，故以说明形式呈现。</p>
 
 </body>
 </html>

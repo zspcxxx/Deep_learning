@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>带相对位置表示的自注意力</title>
@@ -23,6 +35,11 @@
   code { font-family: Consolas, monospace; }
   sup, sub { font-size: 0.75em; }
   ul, ol { margin-top: 0.3em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -80,6 +97,8 @@ Ashish Vaswani，Google Brain，avaswani@google.com
 <p>在式（3）和式（4）中使用简单加法纳入边表示的主要动机，是为了支持 3.3 节描述的高效实现。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1803.02155/fig1.png" alt="图 1">
+
 <figcaption>图 1：表示相对位置或元素之间距离的边示例。我们为裁剪距离 \(k\) 内的每个相对位置学习表示。该图假设 \(2\le k\le n-4\)。注意并非所有边都已显示。</figcaption>
 </figure>
 
@@ -114,15 +133,15 @@ Ashish Vaswani，Google Brain，avaswani@google.com
 <p>对于英德，我们的方法在 base 和 big 配置上分别比基线提升 0.3 和 1.3 BLEU。对于英法，在 base 和 big 配置上分别提升 0.5 和 0.3 BLEU。在我们的实验中，没有观察到在相对位置表示之外再加入正弦位置编码带来任何额外收益。结果见表 1。</p>
 
 <table>
-<caption>表 1：使用 newstest2014 测试集在 WMT 2014 英德（EN-DE）和英法（EN-FR）翻译任务上的实验结果。注：所提供原文中该表仅见标题，未包含具体数据行；正文报告了相对基线的 BLEU 改进：EN-DE base +0.3、big +1.3；EN-FR base +0.5、big +0.3。</caption>
+<caption>表 1：WMT 2014 newstest2014 上的英德 / 英法结果（对照英文本完整表）。</caption>
 <thead>
-<tr><th>任务</th><th>模型配置</th><th>相对基线 BLEU 改进</th></tr>
+<tr><th>模型</th><th>位置信息</th><th>EN-DE BLEU</th><th>EN-FR BLEU</th></tr>
 </thead>
 <tbody>
-<tr><td>EN-DE</td><td>base</td><td>+0.3</td></tr>
-<tr><td>EN-DE</td><td>big</td><td>+1.3</td></tr>
-<tr><td>EN-FR</td><td>base</td><td>+0.5</td></tr>
-<tr><td>EN-FR</td><td>big</td><td>+0.3</td></tr>
+<tr><td>Transformer (base)</td><td>绝对位置（正弦）</td><td>26.5</td><td>38.2</td></tr>
+<tr><td>Transformer (base)</td><td>相对位置表示</td><td><b>26.8</b></td><td><b>38.7</b></td></tr>
+<tr><td>Transformer (big)</td><td>绝对位置（正弦）</td><td>27.9</td><td>41.2</td></tr>
+<tr><td>Transformer (big)</td><td>相对位置表示</td><td><b>29.2</b></td><td><b>41.5</b></td></tr>
 </tbody>
 </table>
 
@@ -131,7 +150,7 @@ Ashish Vaswani，Google Brain，avaswani@google.com
 <p>我们评估了改变最大绝对相对位置差的裁剪距离 \(k\) 的影响。值得注意的是，对于 \(k\ge2\)，BLEU 分数似乎没有太大变化。然而，由于我们使用多个编码器层，精确的相对位置信息可能能够传播到裁剪距离之外。结果见表 2。</p>
 
 <table>
-<caption>表 2：改变裁剪距离 \(k\) 的结果（EN-DE 开发集 BLEU）。注：原文表格 OCR 存在列错位，下表按可读内容整理；部分 \(k\) 值对应的精确分数可能受 OCR 影响。</caption>
+<caption>表 2：改变裁剪距离 \(k\) 的结果（EN-DE 开发集 newstest2013 BLEU）。</caption>
 <thead>
 <tr><th>\(k\)</th><th>EN-DE BLEU</th></tr>
 </thead>
@@ -139,9 +158,10 @@ Ashish Vaswani，Google Brain，avaswani@google.com
 <tr><td>0</td><td>12.5</td></tr>
 <tr><td>1</td><td>25.5</td></tr>
 <tr><td>2</td><td>25.8</td></tr>
-<tr><td>3</td><td>25.9</td></tr>
-<tr><td>6</td><td>25.8</td></tr>
-<tr><td>4 / 9（OCR 不确定）</td><td>25.9 / 25.8</td></tr>
+<tr><td>4</td><td>25.9</td></tr>
+<tr><td>16</td><td>25.8</td></tr>
+<tr><td>64</td><td>25.9</td></tr>
+<tr><td>256</td><td>25.8</td></tr>
 </tbody>
 </table>
 
@@ -183,7 +203,7 @@ Ashish Vaswani，Google Brain，avaswani@google.com
 </div>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1 未嵌入图片，仅保留图注说明。表 1 在提供文本中仅见标题，未包含具体数据行，故按正文报告的改进整理；表 2 原文 OCR 存在列错位，已按可读内容整理并标注不确定项。公式中缺失的括号与上下标已按上下文修正为可读形式。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。表 1、表 2 已按英文本补全数值。</p>
 
 </body>
 </html>

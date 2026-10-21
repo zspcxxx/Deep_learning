@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>用于图像识别的深度残差学习</title>
@@ -24,6 +36,11 @@
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
   .small { font-size: 0.9em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -45,6 +62,8 @@ Microsoft Research<br>
 <h2>1. 引言</h2>
 <p>深度卷积神经网络 [22, 21] 已经带来了一系列图像分类突破 [21, 50, 40]。深度网络以端到端多层方式自然整合低/中/高层特征 [50] 和分类器，并且特征的“层级”可以通过堆叠层数（深度）来丰富。近期证据 [41, 44] 表明网络深度至关重要，具有挑战性的 ImageNet 数据集 [36] 上的领先结果 [41, 44, 13, 16] 都利用了“非常深” [41] 的模型，深度从十六层 [41] 到三十层 [16]。许多其他非平凡的视觉识别任务 [8, 12, 7, 32, 27] 也从非常深的模型中大大受益。</p>
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig1.png" alt="图 1">
+
 <figcaption>图 1：在 CIFAR-10 上，20 层和 56 层“普通”网络的训练误差（左）和测试误差（右）。更深的网络具有更高的训练误差，因而测试误差也更高。ImageNet 上的类似现象见图 4。</figcaption>
 </figure>
 <p>受深度重要性的驱动，一个问题出现了：学习更好的网络是否像堆叠更多层一样简单？回答这个问题的一个障碍是臭名昭著的梯度消失/爆炸问题 [1, 9]，它从一开始就阻碍收敛。然而，这个问题已在很大程度上通过归一化初始化 [23, 9, 37, 13] 和中间归一化层 [16] 得到解决，使具有数十层的网络能够开始用带反向传播的随机梯度下降（SGD）[22] 收敛。</p>
@@ -52,6 +71,8 @@ Microsoft Research<br>
 <p>（训练精度的）退化表明，并非所有系统都同样容易优化。让我们考虑一个较浅的架构及其通过添加更多层得到的更深对应物。对于更深的模型，存在一个按构造得到的解：添加的层是恒等映射，其他层从已学习的较浅模型复制而来。这个构造解的存在表明，更深的模型不应产生比其较浅对应物更高的训练误差。但实验表明，我们当前手头的求解器无法找到与构造解相当好或更好的解（或无法在可行时间内做到）。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig2.png" alt="图 2">
+
 <figcaption>图 2：残差学习：一个构建块。</figcaption>
 </figure>
 
@@ -91,6 +112,8 @@ Microsoft Research<br>
 <p>值得注意的是，我们的模型比 VGG 网络 [41]（图 3 左）具有更少的滤波器和更低的复杂度。我们的 34 层基线有 36 亿 FLOPs（乘加），仅为 VGG-19（196 亿 FLOPs）的 18%。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig3.png" alt="图 3">
+
 <figcaption>图 3：ImageNet 的示例网络架构。左：VGG-19 模型 [41]（196 亿 FLOPs）作为参考。中：具有 34 个参数层的普通网络（36 亿 FLOPs）。右：具有 34 个参数层的残差网络（36 亿 FLOPs）。虚线捷径增加维度。表 1 显示更多细节和其他变体。</figcaption>
 </figure>
 
@@ -109,6 +132,8 @@ Microsoft Research<br>
 <p>我们认为这种优化困难不太可能由梯度消失引起。这些普通网络使用 BN [16] 训练，确保前向传播信号具有非零方差。我们还验证了反向传播梯度在 BN 下表现出健康的范数。因此前向和后向信号都没有消失。事实上，34 层普通网络仍能达到有竞争力的精度（表 3），表明求解器在某种程度上有效。我们推测深度普通网络可能具有指数级低的收敛速率，影响训练误差的降低。这种优化困难的原因将在未来研究。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig4.png" alt="图 4">
+
 <figcaption>图 4：ImageNet 上的训练。细曲线表示训练误差，粗曲线表示中心裁剪的验证误差。左：18 层和 34 层普通网络。右：18 层和 34 层 ResNet。在此图中，残差网络与其普通对应物相比没有额外参数。</figcaption>
 </figure>
 
@@ -171,6 +196,8 @@ Microsoft Research<br>
 <p>最后，我们还注意到 18 层普通/残差网络精度相当（表 2），但 18 层 ResNet 收敛更快（图 4 右 vs. 左）。当网络“不是过深”（这里 18 层）时，当前 SGD 求解器仍能为普通网络找到良好解。在这种情况下，ResNet 通过在早期阶段提供更快收敛来缓解优化。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig5.png" alt="图 5">
+
 <figcaption>图 5：ImageNet 的更深的残差函数 \(\mathcal{F}\)。左：ResNet-34 的构建块（在 \(56\times56\) 特征图上），如图 3。右：ResNet-50/101/152 的“瓶颈”构建块。</figcaption>
 </figure>
 
@@ -250,6 +277,8 @@ Microsoft Research<br>
 <p>我们进一步探索 \(n=18\)，得到 110 层 ResNet。在这种情况下，我们发现初始学习率 0.1 略大，无法开始收敛。因此我们使用 0.01 预热训练，直到训练误差低于 80%（约 400 次迭代），然后回到 0.1 继续训练。其余学习计划如前。这个 110 层网络收敛良好（图 6 中）。它比其他深而瘦的网络（如 FitNet [35] 和 Highway [42]）参数更少（表 6），但仍处于最先进结果之列（6.43%，表 6）。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig6.png" alt="图 6">
+
 <figcaption>图 6：CIFAR-10 上的训练。虚线表示训练误差，粗线表示测试误差。左：普通网络。plain-110 的误差高于 60%，未显示。中：ResNets。右：110 层和 1202 层 ResNets。</figcaption>
 </figure>
 
@@ -275,6 +304,8 @@ Microsoft Research<br>
 <p><b>层响应分析。</b>图 7 显示层响应的标准差（std）。响应是每个 \(3\times3\) 层在 BN 之后、其他非线性（ReLU/加法）之前的输出。对于 ResNets，该分析揭示残差函数的响应强度。图 7 表明 ResNets 通常比其普通对应物具有更小的响应。这些结果支持我们的基本动机（第 3.1 节）：残差函数通常可能比非残差函数更接近零。我们还注意到更深的 ResNet 具有更小的响应幅度，如图 7 中 ResNet-20、56 和 110 的比较所示。当层更多时，ResNets 的单个层倾向于更少地修改信号。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1512.03385/fig7.png" alt="图 7">
+
 <figcaption>图 7：CIFAR-10 上层响应的标准差（std）。响应是每个 \(3\times3\) 层在 BN 之后、非线性之前的输出。上：层按原始顺序显示。下：响应按降序排列。</figcaption>
 </figure>
 
@@ -455,7 +486,7 @@ Microsoft Research<br>
 </table>
 
 <hr>
-<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文中的图 1—图 7 未嵌入图片，仅保留图注说明。原文部分 OCR 重复段落已合并整理；表 13 在提供文本中未完整显示，已按正文引用说明。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文部分 OCR 重复段落已合并整理；表 13 在提供文本中未完整显示，已按正文引用说明。</p>
 
 </body>
 </html>

@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>使用子词单元进行稀有词的神经机器翻译</title>
@@ -24,6 +36,11 @@
   .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
   code { font-family: Consolas, monospace; }
   sup { font-size: 0.75em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
@@ -196,9 +213,13 @@ def merge_vocab(pair, v_in):
 <p>对于英→俄，未知人名很少能被复制，通常需要音译。因此，WDICT 基线在 OOV 上表现更差（精确率 9.2%；召回率 5.2%），而子词模型同时改善了精确率和召回率（BPE-J90k 为精确率 21.9%、召回率 15.6%）。完整的 unigram \(F_1\) 图见图 3。</p>
 
 <figure>
+<img class="paper-fig" src="figures/1508.07909/fig2.png" alt="图 2">
+
 <figcaption>图 2：newstest2015 上英→德 unigram \(F_1\)，按训练集频率排名对不同 NMT 系统绘制。</figcaption>
 </figure>
 <figure>
+<img class="paper-fig" src="figures/1508.07909/fig3.png" alt="图 3">
+
 <figcaption>图 3：newstest2015 上英→俄 unigram \(F_1\)，按训练集频率排名对不同 NMT 系统绘制。</figcaption>
 </figure>
 

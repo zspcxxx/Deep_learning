@@ -1,50 +1,438 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
+
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['\(', '\)'], ['$', '$']],
+    displayMath: [['\[', '\]'], ['$$', '$$']],
+    processEscapes: true
+  }
+};
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RoFormer：带旋转位置嵌入的增强 Transformer</title>
+<title>RoFormer：带有旋转位置嵌入的增强 Transformer</title>
 <style>
-  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 980px; padding: 0 1em; color: #222; background: #fff; }
+  body { font-family: "Noto Serif CJK SC", "Songti SC", SimSun, serif; line-height: 1.7; margin: 2em auto; max-width: 1120px; padding: 0 1em; color: #222; background: #fff; }
   h1, h2, h3, h4 { font-family: "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; line-height: 1.3; }
   h1 { text-align: center; margin-bottom: 0.4em; }
-  .subtitle { text-align: center; color: #555; margin-bottom: 0.8em; }
   h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.2em; margin-top: 1.6em; }
-  .authors { text-align: center; margin-bottom: 1.5em; color: #444; }
+  h3 { margin-top: 1.2em; }
+  h4 { margin-top: 1em; }
+  .authors { text-align: center; margin-bottom: 1.5em; color: #444; font-size: 0.95em; }
   .abstract { margin: 1.5em 0; padding: 1em; background: #f7f7f7; border-left: 4px solid #888; }
   .abstract h2 { border: none; margin-top: 0; }
   .formula { margin: 0.8em 0; padding-left: 1.5em; font-family: "Cambria Math", "Times New Roman", serif; overflow-x: auto; }
-  table { border-collapse: collapse; margin: 1em auto; font-size: 0.92em; }
-  th, td { border: 1px solid #999; padding: 0.35em 0.6em; text-align: center; }
+  table { border-collapse: collapse; margin: 1em auto; width: 100%; font-size: 0.85em; }
+  th, td { border: 1px solid #999; padding: 0.3em 0.4em; text-align: center; vertical-align: top; }
   caption { caption-side: top; font-weight: bold; margin-bottom: 0.5em; text-align: left; }
-  figcaption { font-size: 0.95em; color: #444; margin: 0.4em 0 1em; }
+  figure { margin: 1.2em 0; }
+  figcaption { font-size: 0.95em; color: #444; }
   .note { font-size: 0.95em; color: #555; }
-  .refs p { margin: 0.35em 0; text-indent: -2em; padding-left: 2em; }
-  .banner { font-size: 0.92em; color: #444; background: #f0f4f8; padding: 0.6em 0.9em; border-radius: 6px; margin-bottom: 1.2em; }
-  a { color: #1f6feb; }
+  .refs p { margin: 0.3em 0; text-indent: -2em; padding-left: 2em; font-size: 0.86em; }
+  code { font-family: Consolas, monospace; }
+  sup, sub { font-size: 0.75em; }
+  ul, ol { margin-top: 0.3em; }
+
+  figure { text-align: center; margin: 1.6em auto; }
+  figure img, .paper-fig { max-width: 100%; height: auto; border: 1px solid #e5e7eb; background: #fff; }
+  figcaption, .caption { font-size: 0.95em; color: #444; margin-top: 0.5em; text-align: left; }
+  .figure-placeholder { border: none; padding: 0; background: transparent; }
 </style>
 </head>
 <body>
-<p class="banner">中文导读译自 arXiv:2104.09864（对照 <a href="../en/2104.09864_rope.pdf">英文 PDF</a>）。LLaMA 等默认 RoPE；对照相对位置与 ALiBi。</p>
-<h1>RoFormer：带旋转位置嵌入的增强 Transformer</h1>
-<p class="subtitle">RoFormer: Enhanced Transformer with Rotary Position Embedding</p>
-<div class="authors">Jianlin Su，Yu Lu，Shengfeng Pan，Ahmed Murtadha，Bo Wen，Yunfeng Liu（追一科技）</div>
-<div class="abstract"><h2>摘要</h2><p>位置编码有助于建模序列中不同位置的依赖。本文梳理多种注入位置信息的方式，并提出旋转位置嵌入（RoPE）：用旋转矩阵编码绝对位置，同时在自注意力中显式体现相对位置依赖。RoPE 具有长度灵活、随相对距离衰减的交互、以及可为线性注意力配备相对位置等性质。在长文本分类等基准上，RoFormer 稳定优于对照；文中给出理论分析，实现已进入 Hugging Face。</p></div>
-<h2>1 核心构造</h2>
-<p>把偶数维特征两两分成平面，对 query / key 按位置角 \(\theta_m\) 旋转。关键恒等式是：</p>
-<div class="formula">\[\langle R_{m}q,\,R_{n}k\rangle = \langle q,\,R_{n-m}k\rangle,\]</div>
-<p>即点积只依赖相对位移，同时又由绝对位置的旋转生成，无需额外相对偏置参数表。</p>
-<h2>2 性质</h2>
+
+<h1>RoFormer：带有旋转位置嵌入的增强 Transformer</h1>
+
+<div class="authors">
+Jianlin Su，Yu Lu，Shengfeng Pan，Ahmed Murtadha，Bo Wen，Yunfeng Liu<br>
+追一科技（Zhuiyi Technology Co., Ltd.），深圳<br>
+bojonesu@wezhuiyi.com，julianlu@wezhuiyi.com，nickpan@wezhuiyi.com，mengjiayi@wezhuiyi.com，brucewen@wezhuiyi.com，glenliu@wezhuiyi.com<br>
+2023 年 11 月 9 日
+</div>
+
+<div class="abstract">
+<h2>摘要</h2>
+<p>位置编码最近在 Transformer 架构中显示出有效性。它为序列中不同位置元素之间的依赖建模提供了有价值的监督。在本文中，我们首先研究了将位置信息整合到基于 Transformer 的语言模型学习过程中的各种方法。然后，我们提出了一种名为旋转位置嵌入（Rotary Position Embedding，RoPE）的新方法，以有效利用位置信息。具体而言，所提出的 RoPE 用旋转矩阵编码绝对位置，同时在自注意力公式中融入了显式的相对位置依赖。值得注意的是，RoPE 具有一些有价值的性质，包括序列长度的灵活性、随相对距离增加而衰减的 token 间依赖，以及使线性自注意力具备相对位置编码的能力。最后，我们在各种长文本分类基准数据集上评估了带有旋转位置嵌入的增强 Transformer（也称为 RoFormer）。实验表明，它始终优于替代方案。此外，我们提供了理论分析来解释一些实验结果。RoFormer 已集成到 Huggingface：https://huggingface.co/docs/transformers/model_doc/roformer。</p>
+<p><b>关键词</b>：预训练语言模型 · 位置信息编码 · 预训练 · 自然语言处理</p>
+</div>
+
+<h2>1 引言</h2>
+<p>词的顺序对于自然语言理解具有重要价值。基于循环神经网络（RNN）的模型通过沿时间维度递归计算隐藏状态来编码 token 的顺序。基于卷积神经网络（CNN）的模型 Gehring et al. [2017] 通常被认为与位置无关，但近期工作 Islam et al. [2020] 表明，常用的填充（padding）操作可以隐式学习位置信息。最近，建立在 Transformer Vaswani et al. [2017] 之上的预训练语言模型（PLM）在各种自然语言处理（NLP）任务上取得了最先进的性能，包括上下文表示学习 Devlin et al. [2019]、机器翻译 Vaswani et al. [2017] 和语言建模 Radford et al. [2019] 等。与基于 RNN 和 CNN 的模型不同，PLM 利用自注意力机制来语义地捕获给定语料库的上下文表示。因此，PLM 在并行化方面相比 RNN 取得了显著改进，并且相比 CNN 提高了对更长 token 内部关系的建模能力<sup>1</sup>。</p>
+<p>值得注意的是，当前 PLM 的自注意力架构已被证明与位置无关 Yun et al. [2020]。根据这一论断，人们提出了各种方法将位置信息编码到学习过程中。一方面，通过预定义函数 Vaswani et al. [2017] 生成的绝对位置编码被加到上下文表示中；而可训练的绝对位置编码 Gehring et al. [2017]、Devlin et al. [2019]、Lan et al. [2020]、Clark et al. [2020]、Radford et al. [2019]、Radford and Narasimhan [2018] 也被采用。另一方面，先前的工作 Parikh et al. [2016]、Shaw et al. [2018]、Huang et al. [2018]、Dai et al. [2019]、Yang et al. [2019]、Raffel et al. [2020]、Ke et al. [2020]、He et al. [2020]、Huang et al. [2020] 关注相对位置编码，通常将相对位置信息编码到注意力机制中。除这些方法外，Liu et al. [2020] 的作者提出从神经 ODE（Neural ODE）Chen et al. [2018a] 的角度建模位置编码的依赖关系，Wang et al. [2020] 的作者提出在复空间中建模位置信息。尽管这些方法有效，但它们通常将位置信息加到上下文表示中，因此不适用于线性自注意力架构。</p>
+<p>在本文中，我们引入一种新方法，即旋转位置嵌入（Rotary Position Embedding，RoPE），将位置信息利用到 PLM 的学习过程中。具体而言，RoPE 用旋转矩阵编码绝对位置，同时在自注意力公式中融入显式的相对位置依赖。值得注意的是，所提出的 RoPE 凭借有价值的性质优先于现有方法，包括序列长度灵活性、随相对距离增加而衰减的 token 间依赖，以及使线性自注意力具备相对位置编码的能力。在各种长文本分类基准数据集上的实验结果表明，带有旋转位置嵌入的增强 Transformer（即 RoFormer）相比基线替代方案能给出更好的性能，从而证明了所提出 RoPE 的有效性。</p>
+<p>简言之，我们的贡献有三方面：</p>
 <ul>
-<li>序列长度可外推（实践中常配合插值或 NTK 等技巧）。</li>
-<li>相对距离增大时，依赖倾向于衰减。</li>
-<li>与线性注意力等变体兼容较好。</li>
+<li>我们研究了现有的相对位置编码方法，发现它们大多建立在将位置编码加到上下文表示的分解思想之上。我们引入一种新方法，即旋转位置嵌入（RoPE），将位置信息利用到 PLM 的学习过程中。关键思想是通过将上下文表示与旋转矩阵相乘来编码相对位置，并具有清晰的理论解释。</li>
+<li>我们研究了 RoPE 的性质，并表明它随相对距离增加而衰减，这正是自然语言编码所期望的。我们谨慎地认为，先前基于相对位置编码的方法与线性自注意力不兼容。</li>
+<li>我们在各种长文本基准数据集上评估了所提出的 RoFormer。实验表明，它始终比替代方案取得更好的性能。一些预训练语言模型的实验可在 GitHub 上获取：https://github.com/ZhuiyiTechnology/roformer。</li>
 </ul>
-<h2>3 影响</h2>
-<p>LLaMA 及大量开源 LLM 默认 RoPE。可与 Shaw 相对位置（显式边表示）、ALiBi（分数上的距离惩罚）对照：目标都是「让注意力知道远近」，机制不同。</p>
-<h2>参考文献（节选）</h2>
-<div class="refs"><p>Jianlin Su et al. RoFormer: Enhanced Transformer with Rotary Position Embedding. arXiv:2104.09864.</p><p>Peter Shaw et al. Self-Attention with Relative Position Representations. 2018.</p><p>Ofir Press et al. ALiBi. 2022.</p></div>
+<p>本文其余部分组织如下。第 2 节建立自注意力架构中位置编码问题的形式化描述，并回顾先前工作。第 3 节描述旋转位置编码（RoPE）并研究其性质。第 4 节报告实验。最后，第 5 节总结全文。</p>
+
+<h2>2 背景与相关工作</h2>
+
+<h3>2.1 预备知识</h3>
+<p>令 \(\mathbb{S}_N=\{w_i\}_{i=1}^N\) 为 \(N\) 个输入 token 的序列，\(w_i\) 为第 \(i\) 个元素。\(\mathbb{S}_N\) 对应的词嵌入记为 \(\mathbb{E}_N=\{x_i\}_{i=1}^N\)，其中 \(x_i\in\mathbb{R}^d\) 是 token \(w_i\) 的 \(d\) 维词嵌入向量，不含位置信息。自注意力首先将位置信息融入词嵌入，并将其转换为查询、键和值表示。</p>
+<div class="formula">
+\(\pmb{q}_m=f_q(\pmb{x}_m,m)\)<br>
+\(\pmb{k}_n=f_k(\pmb{x}_n,n)\)<br>
+\(\pmb{v}_n=f_v(\pmb{x}_n,n)\)&nbsp;&nbsp;&nbsp;&nbsp;(1)
+</div>
+<p>其中 \(\pmb{q}_m,\pmb{k}_n,\pmb{v}_n\) 分别通过 \(f_q,f_k,f_v\) 融入第 \(m\) 和第 \(n\) 个位置。查询和键值随后用于计算注意力权重，输出计算为值表示的加权和。</p>
+<div class="formula">
+\(a_{m,n}=\frac{\exp(\pmb{q}_m^T\pmb{k}_n/\sqrt{d})}{\sum_{j=1}^{N}\exp(\pmb{q}_m^T\pmb{k}_j/\sqrt{d})}\)<br>
+\(\pmb{o}_m=\sum_{n=1}^{N}a_{m,n}\pmb{v}_n\)&nbsp;&nbsp;&nbsp;&nbsp;(2)
+</div>
+<p>现有基于 Transformer 的位置编码方法主要关注选择合适的函数来构造式 (1)。</p>
+
+<h3>2.2 绝对位置嵌入</h3>
+<p>式 (1) 的一个典型选择是</p>
+<div class="formula">
+\(f_{t:t\in\{q,k,v\}}(\pmb{x}_i,i):=\pmb{W}_{t:t\in\{q,k,v\}}(\pmb{x}_i+\pmb{p}_i),\)&nbsp;&nbsp;&nbsp;&nbsp;(3)
+</div>
+<p>其中 \(\pmb{p}_i\in\mathbb{R}^d\) 是依赖于 token \(\pmb{x}_i\) 位置的 \(d\) 维向量。先前工作 Devlin et al. [2019]、Lan et al. [2020]、Clark et al. [2020]、Radford et al. [2019]、Radford and Narasimhan [2018] 引入了一组可训练向量 \(\pmb{p}_i\in\{\pmb{p}_i\}_{i=1}^L\)，其中 \(L\) 是最大序列长度。Vaswani et al. [2017] 的作者提出使用正弦函数生成 \(\pmb{p}_i\)。</p>
+<div class="formula">
+\(\begin{cases}p_{i,2t}=\sin(k/10000^{2t/d})\\p_{i,2t+1}=\cos(k/10000^{2t/d})\end{cases}\)&nbsp;&nbsp;&nbsp;&nbsp;(4)
+</div>
+<p>其中 \(\pmb{p}_{i,2t}\) 是 \(d\) 维向量 \(\pmb{p}_i\) 的第 \(2t\) 个元素。下一节我们将表明，从正弦函数角度看，所提出的 RoPE 与这一直觉相关。然而，RoPE 不是直接将位置加到上下文表示中，而是提出通过乘以正弦函数来融入相对位置信息。</p>
+
+<h3>2.3 相对位置嵌入</h3>
+<p>Shaw et al. [2018] 的作者对式 (1) 采用了不同设置：</p>
+<div class="formula">
+\(f_q(\pmb{x}_m):=\pmb{W}_q\pmb{x}_m\)<br>
+\(f_k(\pmb{x}_n,n):=\pmb{W}_k(\pmb{x}_n+\tilde{\pmb{p}}_r^k)\)<br>
+\(f_v(\pmb{x}_n,n):=\pmb{W}_v(\pmb{x}_n+\tilde{\pmb{p}}_r^v)\)&nbsp;&nbsp;&nbsp;&nbsp;(5)
+</div>
+<p>其中 \(\tilde{\pmb{p}}_r^k,\tilde{\pmb{p}}_r^v\in\mathbb{R}^d\) 是可训练的相对位置嵌入。注意 \(r=\mathrm{clip}(m-n,r_{\min},r_{\max})\) 表示位置 \(m\) 和 \(n\) 之间的相对距离。他们裁剪相对距离，假设超过一定距离的精确相对位置信息不再有用。保持式 (3) 的形式，Dai et al. [2019] 的作者提出将式 (2) 中的 \(\pmb{q}_m^T\pmb{k}_n\) 分解为</p>
+<div class="formula">
+\(\pmb{q}_m^T\pmb{k}_n=\pmb{x}_m^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+\pmb{x}_m^T\pmb{W}_q^T\widetilde{\pmb{W}}_k\tilde{\pmb{p}}_{m-n}+\mathbf{u}^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+\mathbf{v}^T\pmb{W}_q^T\widetilde{\pmb{W}}_k\tilde{\pmb{p}}_{m-n}\)&nbsp;&nbsp;&nbsp;&nbsp;(6)
+</div>
+<p>关键思想是用正弦编码的相对版本 \(\tilde{\pmb{p}}_{m-n}\) 替换绝对位置嵌入 \(\pmb{p}_n\)，同时用两个与查询位置无关的可训练向量 \(\mathbf{u}\) 和 \(\mathbf{v}\) 替换第三、四项中的绝对位置 \(\pmb{p}_m\)。此外，\(\pmb{W}_k\) 对基于内容和基于位置的键向量 \(\pmb{x}_n\) 和 \(\pmb{p}_n\) 分别记为 \(\pmb{W}_k\) 和 \(\widetilde{\pmb{W}}_k\)，得到：</p>
+<div class="formula">
+\(\pmb{q}_m^T\pmb{k}_n=\pmb{x}_m^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+\pmb{x}_m^T\pmb{W}_q^T\widetilde{\pmb{W}}_k\tilde{\pmb{p}}_{m-n}+\mathbf{u}^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+\mathbf{v}^T\pmb{W}_q^T\widetilde{\pmb{W}}_k\tilde{\pmb{p}}_{m-n}\)&nbsp;&nbsp;&nbsp;&nbsp;(7)
+</div>
+<p>值得注意的是，通过设置 \(f_v(\pmb{x}_j):=\pmb{W}_v\pmb{x}_j\)，值项中的位置信息被移除。后续工作 Raffel et al. [2020]、He et al. [2020]、Ke et al. [2020]、Huang et al. [2020] 遵循这些设置，仅将相对位置信息编码到注意力权重中。然而，Raffel et al. [2020] 的作者将式 (6) 重构为：</p>
+<div class="formula">
+\(\pmb{q}_m^T\pmb{k}_n=\pmb{x}_m^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+b_{i,j}\)&nbsp;&nbsp;&nbsp;&nbsp;(8)
+</div>
+<p>其中 \(b_{i,j}\) 是可训练偏置。Ke et al. [2020] 的作者研究了式 (6) 的中间两项，发现绝对位置与词之间几乎没有相关性。Raffel et al. [2020] 的作者提出使用不同投影矩阵建模一对词或位置。</p>
+<div class="formula">
+\(\pmb{q}_m^T\pmb{k}_n=\pmb{x}_m^T\pmb{W}_q^T\pmb{W}_k\pmb{x}_n+\pmb{p}_m^T\mathbf{U}_q^T\mathbf{U}_k\pmb{p}_n+b_{i,j}\)&nbsp;&nbsp;&nbsp;&nbsp;(9)
+</div>
+<p>He et al. [2020] 的作者认为，两个 token 的相对位置只能通过式 (6) 的中间两项完全建模。因此，绝对位置嵌入 \(\pmb{p}_m\) 和 \(\pmb{p}_n\) 被简单替换为相对位置嵌入 \(\tilde{\pmb{p}}_{m-n}\)：</p>
+<div class="formula">
+\(\pmb{q}_m^{\mathsf{T}}\pmb{k}_n=\pmb{x}_m^{\mathsf{T}}\pmb{W}_q^{\mathsf{T}}\pmb{W}_k\pmb{x}_n+\pmb{x}_m^{\mathsf{T}}\pmb{W}_q^{\mathsf{T}}\pmb{W}_k\tilde{\pmb{p}}_{m-n}+\tilde{\pmb{p}}_{m-n}^{\mathsf{T}}\pmb{W}_q^{\mathsf{T}}\pmb{W}_k\pmb{x}_n\)&nbsp;&nbsp;&nbsp;&nbsp;(10)
+</div>
+<p>对相对位置嵌入四种变体的比较 Radford and Narasimhan [2018] 表明，类似于式 (10) 的变体在其他三种中最有效。总体而言，所有这些方法都试图在式 (2) 的自注意力设置下，基于式 (3) 的分解修改式 (6)，这最初由 Vaswani et al. [2017] 提出。它们通常引入直接将位置信息加到上下文表示中。与它们不同，我们的方法旨在在某些约束下从式 (1) 推导相对位置编码。接下来，我们表明所推导的方法通过用上下文表示的旋转融入相对位置信息而更具可解释性。</p>
+
+<h2>3 所提出的方法</h2>
+<p>本节讨论所提出的旋转位置嵌入（RoPE）。首先在 3.1 节形式化相对位置编码问题，然后在 3.2 节推导 RoPE，并在 3.3 节研究其性质。</p>
+
+<h3>3.1 形式化</h3>
+<p>基于 Transformer 的语言建模通常通过自注意力机制利用单个 token 的位置信息。从式 (2) 可观察到，\(\pmb{q}_m^{\mathsf{T}}\pmb{k}_n\) 通常使不同位置的 token 之间能够传递知识。为融入相对位置信息，我们要求查询 \(\pmb{q}_m\) 和键 \(\pmb{k}_n\) 的内积由一个函数 \(g\) 表述，该函数仅以词嵌入 \(\pmb{x}_m,\pmb{x}_n\) 及其相对位置 \(m-n\) 为输入变量。换句话说，我们希望内积仅以相对形式编码位置信息：</p>
+<div class="formula">
+\(\langle f_q(\pmb{x}_m,m),f_k(\pmb{x}_n,n)\rangle=g(\pmb{x}_m,\pmb{x}_n,m-n).\)&nbsp;&nbsp;&nbsp;&nbsp;(11)
+</div>
+<p>最终目标是找到一种等价的编码机制，求解函数 \(f_q(\pmb{x}_m,m)\) 和 \(f_k(\pmb{x}_n,n)\)，以符合上述关系。</p>
+
+<h3>3.2 旋转位置嵌入</h3>
+
+<h4>3.2.1 二维情形</h4>
+<p>我们从维度 \(d=2\) 的简单情形开始。在此设置下，利用二维平面上向量的几何性质及其复数形式，可以证明（详见 3.4.1 节）我们形式化式 (11) 的一个解为：</p>
+<div class="formula">
+\(f_q(\pmb{x}_m,m)=(\pmb{W}_q\pmb{x}_m)e^{im\theta}\)<br>
+\(f_k(\pmb{x}_n,n)=(\pmb{W}_k\pmb{x}_n)e^{in\theta}\)<br>
+\(g(\pmb{x}_m,\pmb{x}_n,m-n)=\mathrm{Re}[(\pmb{W}_q\pmb{x}_m)(\pmb{W}_k\pmb{x}_n)^{*}e^{i(m-n)\theta}]\)&nbsp;&nbsp;&nbsp;&nbsp;(12)
+</div>
+<p>其中 \(\mathrm{Re}[\cdot]\) 是复数的实部，\((\pmb{W}_k\pmb{x}_n)^{*}\) 表示 \((\pmb{W}_k\pmb{x}_n)\) 的共轭复数，\(\theta\in\mathbb{R}\) 是预设的非零常数。我们可以进一步将 \(f_{(q,k)}\) 写成矩阵乘法形式：</p>
+<div class="formula">
+\(f_{(q,k)}(\pmb{x}_m,m)=\begin{pmatrix}\cos m\theta&-\sin m\theta\\\sin m\theta&\cos m\theta\end{pmatrix}\begin{pmatrix}W_{(q,k)}^{(11)}&W_{(q,k)}^{(12)}\\W_{(q,k)}^{(21)}&W_{(q,k)}^{(22)}\end{pmatrix}\begin{pmatrix}x_m^{(1)}\\x_m^{(2)}\end{pmatrix}\)&nbsp;&nbsp;&nbsp;&nbsp;(13)
+</div>
+<p>其中 \((x_m^{(1)},x_m^{(2)})\) 是 \(\pmb{x}_m\) 在二维坐标中的表示。类似地，\(g\) 可以视为矩阵，从而在二维情形下使 3.1 节的形式化问题有解。具体而言，融入相对位置嵌入很直接：只需将仿射变换后的词嵌入向量旋转其位置索引的角度倍数，这就解释了旋转位置嵌入背后的直觉。</p>
+
+<h4>3.2.2 一般形式</h4>
+<p>为了将二维结果推广到任意偶数维的 \(\mathbf{x}_i\in\mathbb{R}^d\)，我们将 \(d\) 维空间划分为 \(d/2\) 个子空间，并利用内积的线性性组合它们，将 \(f_{\{q,k\}}\) 变为：</p>
+<div class="formula">
+\(f_{\{q,k\}}(\pmb{x}_m,m)=\pmb{R}_{\Theta,m}^d\pmb{W}_{\{q,k\}}\pmb{x}_m\)&nbsp;&nbsp;&nbsp;&nbsp;(14)
+</div>
+<p>其中</p>
+<div class="formula">
+\(\pmb{R}_{\Theta,m}^d=\begin{pmatrix}\cos m\theta_1&-\sin m\theta_1&0&0&\dots&0&0\\\sin m\theta_1&\cos m\theta_1&0&0&\dots&0&0\\0&0&\cos m\theta_2&-\sin m\theta_2&\dots&0&0\\0&0&\sin m\theta_2&\cos m\theta_2&\dots&0&0\\\vdots&\vdots&\vdots&\vdots&\ddots&\vdots&\vdots\\0&0&0&0&\dots&\cos m\theta_{d/2}&-\sin m\theta_{d/2}\\0&0&0&0&\dots&\sin m\theta_{d/2}&\cos m\theta_{d/2}\end{pmatrix}\)&nbsp;&nbsp;&nbsp;&nbsp;(15)
+</div>
+<p>是带有预定义参数 \(\Theta=\{\theta_i=10000^{-2(i-1)/d},i\in[1,2,\dots,d/2]\}\) 的旋转矩阵。RoPE 的图形说明见图 1。将 RoPE 应用于式 (2) 中的自注意力，得到：</p>
+<div class="formula">
+\(\pmb{q}_m^T\pmb{k}_n=(\pmb{R}_{\Theta,m}^d\pmb{W}_q\pmb{x}_m)^T(\pmb{R}_{\Theta,n}^d\pmb{W}_k\pmb{x}_n)=\pmb{x}_m^T\pmb{W}_q\pmb{R}_{\Theta,n-m}^d\pmb{W}_k\pmb{x}_n\)&nbsp;&nbsp;&nbsp;&nbsp;(16)
+</div>
+<p>其中 \(\pmb{R}_{\Theta,n-m}^d=(\pmb{R}_{\Theta,m}^d)^T\pmb{R}_{\Theta,n}^d\)。注意 \(\pmb{R}_{\Theta,n}^d\) 是正交矩阵，这保证了编码位置信息过程中的稳定性。此外，由于 \(\pmb{R}_{\Theta,n}^d\) 的稀疏性，直接按式 (16) 进行矩阵乘法在计算上并不高效；我们在理论解释中提供了另一种实现。</p>
+<p>与先前工作中位置嵌入方法的加法性质（即式 (3) 至 (10)）不同，我们的方法是乘法性的。此外，RoPE 在应用于自注意力时，通过旋转矩阵乘积自然地融入相对位置信息，而不是修改加法位置编码展开式中的项。</p>
+
+<figure>
+<img class="paper-fig" src="figures/2104.09864/fig1.png" alt="图 1">
+
+<figcaption>图 1：旋转位置嵌入（RoPE）的实现。</figcaption>
+</figure>
+
+<h3>3.3 RoPE 的性质</h3>
+<p><b>长期衰减</b>：遵循 Vaswani et al. [2017]，我们设 \(\theta_i=10000^{-2i/d}\)。可以证明该设置提供了长期衰减性质（详见 3.4.3 节），即内积会随相对位置增加而衰减。这一性质符合直觉：相对距离较远的一对 token 应有较少的联系。</p>
+<p><b>RoPE 与线性注意力</b>：自注意力可以重写为更一般的形式。</p>
+<div class="formula">
+\(\mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})_m=\frac{\sum_{n=1}^{N}\mathrm{sim}(\pmb{q}_m,\pmb{k}_n)\pmb{v}_n}{\sum_{n=1}^{N}\mathrm{sim}(\pmb{q}_m,\mathbf{k}_n)}.\)&nbsp;&nbsp;&nbsp;&nbsp;(17)
+</div>
+<p>原始自注意力选择 \(\mathrm{sim}(\pmb{q}_m,\pmb{k}_n)=\exp(\pmb{q}_m^{\mathrm{T}}\pmb{k}_n/\sqrt{d})\)。注意原始自注意力需要为每对 token 计算查询和键的内积，复杂度为二次 \(\mathbb{O}(N^2)\)。遵循 Katharopoulos et al. [2020]，线性注意力将式 (17) 重新表述为</p>
+<div class="formula">
+\(\mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})_m=\frac{\sum_{n=1}^{N}\phi(\pmb{q}_m)^{\intercal}\phi(\pmb{k}_n)\pmb{v}_n}{\sum_{n=1}^{N}\phi(\pmb{q}_m)^{\intercal}\phi(\pmb{k}_n)},\)&nbsp;&nbsp;&nbsp;&nbsp;(18)
+</div>
+<p>其中 \(\phi(\cdot),\phi(\cdot)\) 通常是非负函数。Katharopoulos et al. [2020] 的作者提出 \(\phi(x)=\phi(x)=\mathrm{elu}(x)+1\)，并利用矩阵乘法的结合性先计算键和值的乘积。Shen et al. [2021] 使用 softmax 函数在内积之前分别归一化查询和键，等价于 \(\phi(\pmb{q}_i)=\mathrm{softmax}(\pmb{q}_i)\) 和 \(\phi(\pmb{k}_j)=\exp(\pmb{k}_j)\)。关于线性注意力的更多细节，建议读者参阅原始论文。本节重点讨论将 RoPE 与式 (18) 结合。由于 RoPE 通过旋转注入位置信息，保持隐藏表示的范数不变，我们可以通过将旋转矩阵与非负函数输出相乘，将 RoPE 与线性注意力结合。</p>
+<div class="formula">
+\(\mathrm{Attention}(\mathbf{Q},\mathbf{K},\mathbf{V})_m=\frac{\sum_{n=1}^{N}\left(\pmb{R}_{\Theta,m}^d\phi(\pmb{q}_m)\right)^{\intercal}\left(\pmb{R}_{\Theta,n}^d\phi(\pmb{k}_n)\right)\pmb{v}_n}{\sum_{n=1}^{N}\phi(\pmb{q}_m)^{\intercal}\phi(\pmb{k}_n)}.\)&nbsp;&nbsp;&nbsp;&nbsp;(19)
+</div>
+<p>值得注意的是，我们保持分母不变以避免除以零的风险，分子中的求和可能包含负项。尽管式 (19) 中每个值 \(\pmb{v}_i\) 的权重并非严格概率归一化，但我们谨慎地认为该计算仍能建模值的重要性。</p>
+
+<h3>3.4 理论解释</h3>
+
+<h4>3.4.1 二维情形下 RoPE 的推导</h4>
+<p>在 \(d=2\) 的情况下，考虑两个词嵌入向量 \(\pmb{x}_q,\pmb{x}_k\) 分别对应查询和键，其位置分别为 \(m\) 和 \(n\)。根据式 (1)，它们的位置编码对应物为：</p>
+<div class="formula">
+\(\pmb{q}_m=f_q(\pmb{x}_q,m),\quad \pmb{k}_n=f_k(\pmb{x}_k,n),\)&nbsp;&nbsp;&nbsp;&nbsp;(20)
+</div>
+<p>其中 \(\pmb{q}_m\) 和 \(\pmb{k}_n\) 的下标表示编码的位置信息。假设存在函数 \(g\) 定义 \(f_{\{q,k\}}\) 产生向量之间的内积：</p>
+<div class="formula">
+\(\pmb{q}_m^{\intercal}\pmb{k}_n=\langle f_q(\pmb{x}_m,m),f_k(\pmb{x}_n,n)\rangle=g(\pmb{x}_m,\pmb{x}_n,n-m),\)&nbsp;&nbsp;&nbsp;&nbsp;(21)
+</div>
+<p>我们进一步要求满足以下初始条件：</p>
+<div class="formula">
+\(\pmb{q}=f_q(\pmb{x}_q,0),\quad \pmb{k}=f_k(\pmb{x}_k,0),\)&nbsp;&nbsp;&nbsp;&nbsp;(22)
+</div>
+<p>这可理解为未编码位置信息的向量。给定这些设置，我们尝试求解 \(f_q,f_k\)。首先利用二维向量的几何意义及其复数对应形式，将式 (20) 和 (21) 中的函数分解为：</p>
+<div class="formula">
+\(f_q(\pmb{x}_q,m)=R_q(\pmb{x}_q,m)e^{i\Theta_q(\pmb{x}_q,m)},\)<br>
+\(f_k(\pmb{x}_k,n)=R_k(\pmb{x}_k,n)e^{i\Theta_k(\pmb{x}_k,n)},\)<br>
+\(g(\pmb{x}_q,\pmb{x}_k,n-m)=R_g(\pmb{x}_q,\pmb{x}_k,n-m)e^{i\Theta_g(\pmb{x}_q,\pmb{x}_k,n-m)},\)&nbsp;&nbsp;&nbsp;&nbsp;(23)
+</div>
+<p>其中 \(R_f,R_g\) 和 \(\Theta_f,\Theta_g\) 分别是 \(f_{\{q,k\}}\) 和 \(g\) 的径向和角分量。代入式 (21) 得到关系：</p>
+<div class="formula">
+\(R_q(\pmb{x}_q,m)R_k(\pmb{x}_k,n)=R_g(\pmb{x}_q,\pmb{x}_k,n-m),\)<br>
+\(\Theta_k(\pmb{x}_k,n)-\Theta_q(\pmb{x}_q,m)=\Theta_g(\pmb{x}_q,\pmb{x}_k,n-m),\)&nbsp;&nbsp;&nbsp;&nbsp;(24)
+</div>
+<p>对应的初始条件为：</p>
+<div class="formula">
+\(\pmb{q}=\|\pmb{q}\|e^{i\theta_q}=R_q(\pmb{x}_q,0)e^{i\Theta_q(\pmb{x}_q,0)},\)<br>
+\(\pmb{k}=\|\pmb{k}\|e^{i\theta_k}=R_k(\pmb{x}_k,0)e^{i\Theta_k(\pmb{x}_k,0)},\)&nbsp;&nbsp;&nbsp;&nbsp;(25)
+</div>
+<p>其中 \(\|\pmb{q}\|,\|\pmb{k}\|\) 和 \(\theta_q,\theta_k\) 是 \(\pmb{q}\) 和 \(\pmb{k}\) 在二维平面上的径向和角分量。</p>
+<p>接下来，在式 (24) 中令 \(m=n\)，并考虑式 (25) 的初始条件：</p>
+<div class="formula">
+\(R_q(\pmb{x}_q,m)R_k(\pmb{x}_k,m)=R_q(\pmb{x}_q,0)R_k(\pmb{x}_k,0)=\|\pmb{q}\|\|\pmb{k}\|,\)&nbsp;&nbsp;&nbsp;&nbsp;(26a)<br>
+\(\Theta_k(\pmb{x}_k,m)-\Theta_q(\pmb{x}_q,m)=\Theta_g(\pmb{x}_q,\pmb{x}_k,0)=\Theta_k(\pmb{x}_k,0)-\Theta_q(\pmb{x}_q,0)=\theta_k-\theta_q.\)&nbsp;&nbsp;&nbsp;&nbsp;(26b)
+</div>
+<p>一方面，由式 (26a) 可直接得到 \(R_f\) 的解：</p>
+<div class="formula">
+\(R_q(\pmb{x}_q,m)=R_q(\pmb{x}_q,0)=\|\pmb{q}\|\)<br>
+\(R_k(\pmb{x}_k,n)=R_k(\pmb{x}_k,0)=\|\pmb{k}\|\)<br>
+\(R_g(\pmb{x}_q,\pmb{x}_k,n-m)=R_q(\pmb{x}_q,0)R_k(\pmb{x}_k,0)=\|\pmb{q}\|\|\pmb{k}\|\)&nbsp;&nbsp;&nbsp;&nbsp;(27)
+</div>
+<p>这表明径向函数 \(R_q,R_k,R_g\) 独立于位置信息。另一方面，从式 (26b) 可注意到 \(\Theta_q(\pmb{x}_q,m)-\theta_q=\Theta_k(\pmb{x}_k,m)-\theta_k\)，表明角函数不依赖于查询和键。令 \(\Theta_f:=\Theta_q=\Theta_k\)，且 \(\Theta_f(\pmb{x}_{\{q,k\}},m)-\theta_{\{q,k\}}\) 是位置 \(m\) 的函数且独立于词嵌入 \(\pmb{x}_{\{q,k\}}\)，记为 \(\phi(m)\)，得到：</p>
+<div class="formula">
+\(\Theta_f(\pmb{x}_{\{q,k\}},m)=\phi(m)+\theta_{\{q,k\}}.\)&nbsp;&nbsp;&nbsp;&nbsp;(28)
+</div>
+<p>进一步，将 \(n=m+1\) 代入式 (24) 并考虑上述方程，得到：</p>
+<div class="formula">
+\(\phi(m+1)-\phi(m)=\Theta_g(\pmb{x}_q,\pmb{x}_k,1)+\theta_q-\theta_k.\)&nbsp;&nbsp;&nbsp;&nbsp;(29)
+</div>
+<p>由于右侧是与 \(m\) 无关的常数，具有连续整数输入的 \(\phi(m)\) 构成等差数列：</p>
+<div class="formula">
+\(\phi(m)=m\theta+\gamma,\)&nbsp;&nbsp;&nbsp;&nbsp;(30)
+</div>
+<p>其中 \(\theta,\gamma\in\mathbb{R}\) 是常数，\(\theta\) 非零。总结式 (27) 至 (30) 的解：</p>
+<div class="formula">
+\(f_q(\pmb{x}_q,m)=\|\pmb{q}\|e^{i\theta_q+m\theta+\gamma}=\pmb{q}e^{i(m\theta+\gamma)},\)<br>
+\(f_k(\pmb{x}_k,n)=\|\pmb{k}\|e^{i\theta_k+n\theta+\gamma}=\pmb{k}e^{i(n\theta+\gamma)}.\)&nbsp;&nbsp;&nbsp;&nbsp;(31)
+</div>
+<p>注意我们并未对式 (22) 中的 \(f_q,f_k\) 施加任何约束，因此 \(f_q(\pmb{x}_m,0)\) 和 \(f_k(\pmb{x}_n,0)\) 可自由选择。为使结果与式 (3) 可比，定义：</p>
+<div class="formula">
+\(\pmb{q}=f_q(\pmb{x}_m,0)=\pmb{W}_q\pmb{x}_n,\quad \pmb{k}=f_k(\pmb{x}_n,0)=\pmb{W}_k\pmb{x}_n.\)&nbsp;&nbsp;&nbsp;&nbsp;(32)
+</div>
+<p>然后简单令式 (31) 中 \(\gamma=0\)，得到最终解：</p>
+<div class="formula">
+\(f_q(\pmb{x}_m,m)=(\pmb{W}_q\pmb{x}_m)e^{im\theta},\)<br>
+\(f_k(\pmb{x}_n,n)=(\pmb{W}_k\pmb{x}_n)e^{in\theta}.\)&nbsp;&nbsp;&nbsp;&nbsp;(33)
+</div>
+
+<h4>3.4.2 旋转矩阵乘法的高效实现</h4>
+<p>利用式 (15) 中 \(\pmb{R}_{\Theta,m}^d\) 的稀疏性，\(\pmb{R}_{\Theta}^d\) 与 \(\pmb{x}\in\mathbb{R}^d\) 相乘的一种更高效实现为：</p>
+<div class="formula">
+\(\pmb{R}_{\Theta,m}^d\pmb{x}=\begin{pmatrix}x_1\\x_2\\x_3\\x_4\\\vdots\\x_{d-1}\\x_d\end{pmatrix}\otimes\begin{pmatrix}\cos m\theta_1\\\cos m\theta_1\\\cos m\theta_2\\\cos m\theta_2\\\vdots\\\cos m\theta_{d/2}\\\cos m\theta_{d/2}\end{pmatrix}+\begin{pmatrix}-x_2\\x_1\\-x_4\\x_3\\\vdots\\-x_d\\x_{d-1}\end{pmatrix}\otimes\begin{pmatrix}\sin m\theta_1\\\sin m\theta_1\\\sin m\theta_2\\\sin m\theta_2\\\vdots\\\sin m\theta_{d/2}\\\sin m\theta_{d/2}\end{pmatrix}\)&nbsp;&nbsp;&nbsp;&nbsp;(34)
+</div>
+
+<h4>3.4.3 RoPE 的长期衰减</h4>
+<p>我们可以将向量 \(\pmb{q}=\pmb{W}_q\pmb{x}_m\) 和 \(\pmb{k}=\pmb{W}_k\pmb{x}_n\) 的条目成对分组，式 (16) 中 RoPE 的内积可以写成复数乘法。</p>
+<div class="formula">
+\((\pmb{R}_{\Theta,m}^{\mathrm{d}}\pmb{W}_q\pmb{x}_m)^{\mathrm{T}}(\pmb{R}_{\Theta,n}^{\mathrm{d}}\pmb{W}_k\pmb{x}_n)=\mathrm{Re}\left[\sum_{i=0}^{d/2-1}\pmb{q}_{[2i;2i+1]}\pmb{k}_{[2i;2i+1]}^{*}e^{i(m-n)\theta_i}\right]\)&nbsp;&nbsp;&nbsp;&nbsp;(35)
+</div>
+<p>其中 \(\pmb{q}_{[2i;2i+1]}\) 表示 \(\pmb{q}\) 的第 \(2i\) 至 \((2i+1)\) 个条目。记 \(h_i=\pmb{q}_{[2i;2i+1]}\pmb{k}_{[2i;2i+1]}^{*}\)，\(S_j=\sum_{i=0}^{j-1}e^{i(m-n)\theta_i}\)，并令 \(h_{d/2}=0\)，\(S_0=0\)，可用 Abel 变换重写求和：</p>
+<div class="formula">
+\(\sum_{i=0}^{d/2-1}\pmb{q}_{[2i;2i+1]}\pmb{k}_{[2i;2i+1]}^{*}e^{i(m-n)\theta_i}=\sum_{i=0}^{d/2-1}h_i(S_{i+1}-S_i)=-\sum_{i=0}^{d/2-1}S_{i+1}(h_{i+1}-h_i).\)&nbsp;&nbsp;&nbsp;&nbsp;(36)
+</div>
+<p>因此，</p>
+<div class="formula">
+\(\left|\sum_{i=0}^{d/2-1}\pmb{q}_{[2i;2i+1]}\pmb{k}_{[2i;2i+1]}^{*}e^{i(m-n)\theta_i}\right|=\left|\sum_{i=0}^{d/2-1}S_{i+1}(h_{i+1}-h_i)\right|\le\sum_{i=0}^{d/2-1}|S_{i+1}||(h_{i+1}-h_i)|\le\left(\max_i|h_{i+1}-h_i|\right)\sum_{i=0}^{d/2-1}|S_{i+1}|\)&nbsp;&nbsp;&nbsp;&nbsp;(37)
+</div>
+<p>注意，通过设置 \(\theta_i=10000^{-2i/d}\)，\(\frac{1}{d/2}\sum_{i=1}^{d/2}|S_i|\) 的值随相对距离 \(m-n\) 增加而衰减，如图 2 所示。</p>
+
+<h2>4 实验与评估</h2>
+<p>我们在各种 NLP 任务上评估所提出的 RoFormer。首先在机器翻译任务上验证所提出解决方案的性能（4.1 节）。然后，在预训练阶段将我们的 RoPE 实现与 BERT Devlin et al. [2019] 进行比较（4.2 节）。基于预训练模型，在 4.3 节进一步在 GLUE 基准 Singh et al. [2018] 的不同下游任务上进行评估。此外，在 4.4 节使用 PerFormer Choromanski et al. [2020] 的线性注意力进行 RoPE 实验。最后，4.5 节包含中文数据的额外测试。所有实验均在配备 4 块 V100 GPU 的两台云服务器上运行。</p>
+
+<h3>4.1 机器翻译</h3>
+<p>首先展示 RoFormer 在序列到序列语言翻译任务上的性能。</p>
+
+<h4>4.1.1 实验设置</h4>
+<p>我们选择标准的 WMT 2014 英德数据集 Bojar et al. [2014]，约包含 450 万句对。与基于 Transformer 的基线 Vaswani et al. [2017] 进行比较。</p>
+
+<h4>4.1.2 实现细节</h4>
+<p>我们对基线模型 Vaswani et al. [2017] 的自注意力层进行一些修改，使 RoPE 能融入其学习过程。我们复现英德翻译设置，使用基于联合源目标字节对编码（BPE）Sennrich et al. [2015] 的 37k 词表。评估时，通过对最后 5 个检查点取平均获得单个模型。结果使用束大小 4、长度惩罚 0.6 的束搜索。我们在 fairseq 工具包（MIT 许可证）Ott et al. [2019] 的 PyTorch 中实现实验。模型使用 Adam 优化器，\(\beta_1=0.9\)，\(\beta_2=0.98\)，学习率从 \(1e-7\) 线性增加到 \(5e-4\)，然后按步数平方根倒数成比例衰减。还采用 0.1 的标签平滑。我们报告测试集上的 BLEU Papineni et al. [2002] 分数作为最终指标。</p>
+
+<h4>4.1.3 结果</h4>
+<p>我们在相同设置下训练基线模型和 RoFormer，结果见表 1。可以看出，我们的模型相比基线 Transformer 给出更好的 BLEU 分数。</p>
+
+<table>
+<caption>表 1：在 WMT 2014 英德翻译任务 Bojar et al. [2014] 上，所提出的 RoFormer 相比基线 Vaswani et al. [2017] 给出更好的 BLEU 分数。</caption>
+<thead><tr><th>模型</th><th>BLEU</th></tr></thead>
+<tbody>
+<tr><td>Transformer-base Vaswani et al. [2017]</td><td>27.3</td></tr>
+<tr><td>RoFormer</td><td>27.5</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 预训练语言建模</h3>
+<p>第二个实验验证我们的提案在学习上下文表示方面的性能。为此，在预训练阶段用 RoPE 替换 BERT 原始的正弦位置编码。</p>
+
+<h4>4.2.1 实验设置</h4>
+<p>使用 BookCorpus Zhu et al. [2015] 和 Huggingface Datasets 库（Apache License 2.0）中的 Wikipedia 语料 Foundation [2021] 进行预训练。语料按 8:2 比例划分为训练集和验证集。我们使用训练过程中的掩码语言建模（MLM）损失值作为评估指标。采用著名的 BERT Devlin et al. [2019] 作为基线模型。注意实验中使用 bert-base-uncased。</p>
+
+<h4>4.2.2 实现细节</h4>
+<p>对于 RoFormer，我们将基线模型自注意力块中的正弦位置编码替换为所提出的 RoPE，并根据式 (16) 实现自注意力。BERT 和 RoFormer 均以批量大小 64、最大序列长度 512 训练 100k 步。使用 AdamW Loshchilov and Hutter [2017] 作为优化器，学习率 1e-5。</p>
+
+<h4>4.2.3 结果</h4>
+<p>预训练期间的 MLM 损失见图 3 左图。与原始 BERT 相比，RoFormer 收敛更快。</p>
+
+<figure>
+<img class="paper-fig" src="figures/2104.09864/fig3.png" alt="图 3">
+
+<figcaption>图 3：RoPE 在语言建模预训练中的评估。左：BERT 和 RoFormer 的训练损失。右：带和不带 RoPE 的 PerFormer 训练损失。</figcaption>
+</figure>
+
+<h3>4.3 在 GLUE 任务上微调</h3>
+<p>与先前实验一致，我们在各种 GLUE 任务上微调预训练 RoFormer 的权重，以评估其在下游 NLP 任务上的泛化能力。</p>
+
+<h4>4.3.1 实验设置</h4>
+<p>我们考察 GLUE 中的几个数据集，即 MRPC Dolan and Brockett [2005]、SST-2 Socher et al. [2013]、QNLI Rajpurkar et al. [2016]、STS-B Al-Natsheh [2017]、QQP Chen et al. [2018b] 和 MNLI Williams et al. [2018]。MRPC 和 QQP 使用 F1 分数，STS-B 使用 Spearman 相关系数，其余使用准确率作为评估指标。</p>
+
+<h4>4.3.2 实现细节</h4>
+<p>使用 Huggingface Transformers 库（Apache License 2.0）Wolf et al. [2020] 对上述下游任务各微调 3 个 epoch，最大序列长度 512，批量大小 32，学习率 2、3、4、5e-5。遵循 Devlin et al. [2019]，我们报告验证集上的最佳平均结果。</p>
+
+<table>
+<caption>表 2：通过在下游 GLUE 任务上微调比较 RoFormer 和 BERT。</caption>
+<thead><tr><th>模型</th><th>MRPC</th><th>SST-2</th><th>QNLI</th><th>STS-B</th><th>QQP</th><th>MNLI (m/mm)</th></tr></thead>
+<tbody>
+<tr><td>BERT Devlin et al. [2019]</td><td>88.9</td><td>93.5</td><td>90.5</td><td>85.8</td><td>71.2</td><td>84.6/83.4</td></tr>
+<tr><td>RoFormer</td><td>89.5</td><td>90.7</td><td>88.0</td><td>87.0</td><td>86.4</td><td>80.2/79.8</td></tr>
+</tbody>
+</table>
+
+<h4>4.3.3 结果</h4>
+<p>微调任务的评估结果见表 2。可以看出，RoFormer 在六个数据集中的三个上显著优于 BERT，改进相当可观。</p>
+
+<h3>4.4 带 RoPE 的 Performer</h3>
+<p>Performer Choromanski et al. [2020] 引入了一种替代注意力机制——线性注意力，旨在避免随输入序列长度增长的二次计算成本。如 3.3 节所述，所提出的 RoPE 可以很容易地在 PerFormer 模型中实现相对位置编码，同时保持自注意力的线性缩放复杂度。我们通过语言建模的预训练任务展示其性能。</p>
+
+<h4>4.4.1 实现细节</h4>
+<p>我们在 Enwik8 数据集 Mahoney [2006] 上进行测试，该数据集来自英文维基百科，除英文文本外还包括标记、特殊字符和其他语言文本。我们将 RoPE 融入 12 层、768 维、12 头的基于字符的 PerFormer。为更好说明 RoPE 的有效性，我们报告相同设置（即学习率 1e-4、批量大小 128、固定最大序列长度 1024 等）下带和不带 RoPE 的预训练损失曲线。</p>
+
+<h4>4.4.2 结果</h4>
+<p>如图 3 右图所示，在相同训练步数下，将 RoPE 替换进 Performer 可带来更快收敛和更低损失。这些改进加上线性复杂度，使 Performer 更具吸引力。</p>
+
+<h3>4.5 中文数据评估</h3>
+<p>除英文数据实验外，我们还展示中文数据的额外结果。为验证 RoFormer 在长文本上的性能，我们在长度超过 512 个字符的长文档上进行实验。</p>
+
+<h4>4.5.1 实现</h4>
+<p>在这些实验中，我们对 WoBERT Su [2020] 进行一些修改，将绝对位置嵌入替换为所提出的 RoPE。作为与中文其他预训练 Transformer 模型（即 BERT Devlin et al. [2019]、WoBERT Su [2020] 和 NEZHA Wei et al. [2019]）的交叉比较，我们在表 3 中列出它们的 tokenization 级别和位置嵌入信息。</p>
+
+<table>
+<caption>表 3：我们的 RoFormer 与中文数据上其他预训练模型的交叉比较。“abs”和“rel”分别表示绝对位置嵌入和相对位置嵌入。</caption>
+<thead><tr><th>模型</th><th>BERT Devlin et al. [2019]</th><th>WoBERT Su [2020]</th><th>NEZHA Wei et al. [2019]</th><th>RoFormer</th></tr></thead>
+<tbody>
+<tr><td>Tokenization 级别</td><td>char</td><td>word</td><td>char</td><td>word</td></tr>
+<tr><td>位置嵌入</td><td>abs.</td><td>abs.</td><td>rel.</td><td>RoPE</td></tr>
+</tbody>
+</table>
+
+<h4>4.5.2 预训练</h4>
+<p>我们在从中文维基百科、新闻和论坛收集的约 34GB 数据上预训练 RoFormer。预训练分多个阶段进行，改变批量大小和最大输入序列长度，以使模型适应各种场景。如表 4 所示，RoFormer 的准确率随序列长度上限增加而提升，这证明了 RoFormer 处理长文本的能力。我们认为这归因于所提出 RoPE 出色的泛化性。</p>
+
+<table>
+<caption>表 4：RoFormer 在中文数据集上的预训练策略。训练过程分为多个连续阶段。每个阶段中，我们使用特定的最大序列长度和批量大小组合训练模型。</caption>
+<thead><tr><th>阶段</th><th>最大序列长度</th><th>批量大小</th><th>训练步数</th><th>损失</th><th>准确率</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>512</td><td>256</td><td>200k</td><td>1.73</td><td>65.0%</td></tr>
+<tr><td>2</td><td>1536</td><td>256</td><td>12.5k</td><td>1.61</td><td>66.8%</td></tr>
+<tr><td>3</td><td>256</td><td>256</td><td>120k</td><td>1.75</td><td>64.6%</td></tr>
+<tr><td>4</td><td>128</td><td>512</td><td>80k</td><td>1.83</td><td>63.4%</td></tr>
+<tr><td>5</td><td>1536</td><td>256</td><td>10k</td><td>1.58</td><td>67.4%</td></tr>
+<tr><td>6</td><td>512</td><td>512</td><td>30k</td><td>1.66</td><td>66.2%</td></tr>
+</tbody>
+</table>
+
+<h4>4.5.3 下游任务与数据集</h4>
+<p>我们选择中国人工智能与法律 2019 相似案例匹配（CAIL2019-SCM）Xiao et al. [2019] 数据集来说明 RoFormer 处理长文本的能力，即语义文本匹配。CAIL2019-SCM 包含 8964 个三元组……</p>
+<p class="note">（原文此处内容不完整，后续内容未提供。）</p>
+
+<h2>参考文献</h2>
+<div class="refs">
+<p>J. Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. Bert: Pre-training of deep bidirectional transformers for language understanding. In NAACL-HLT, 2019.</p>
+<p>A. Radford, Jeffrey Wu, R. Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models are unsupervised multitask learners. 2019.</p>
+<p>Chulhee Yun, Srinadh Bhojanapalli, Ankit Singh Rawat, Sashank Reddi, and Sanjiv Kumar. Are transformers universal approximators of sequence-to-sequence functions? In International Conference on Learning Representations, 2020.</p>
+<p>Zhenzhong Lan, Mingda Chen, Sebastian Goodman, Kevin Gimpel, Piyush Sharma, and Radu Soricut. Albert: A lite bert for self-supervised learning of language representations. In International Conference on Learning Representations, 2020.</p>
+<p>Kevin Clark, Minh-Thang Luong, Quoc V. Le, and Christopher D. Manning. ELECTRA: Pre-training text encoders as discriminators rather than generators. In ICLR, 2020.</p>
+<p>A. Radford and Karthik Narasimhan. Improving language understanding by generative pre-training. 2018.</p>
+<p>Ankur P. Parikh, Oscar Tackström, Dipanjan Das, and Jakob Uszkoreit. A decomposable attention model for natural language inference. In EMNLP, 2016.</p>
+<p>Peter Shaw, Jakob Uszkoreit, and Ashish Vaswani. Self-attention with relative position representations. In NAACL-HLT, 2018.</p>
+<p>Cheng-Zhi Anna Huang, Ashish Vaswani, Jakob Uszkoreit, Noam Shazeer, I. Simon, C. Hawthorne, Andrew M. Dai, M. Hoffman, M. Dinculescu, and D. Eck. Music transformer. arXiv: Learning, 2018.</p>
+<p>Zihang Dai, Z. Yang, Yiming Yang, J. Carbonell, Quoc V. Le, and R. Salakhutdinov. Transformer-xl: Attentive language models beyond a fixed-length context. In ACL, 2019.</p>
+<p>Z. Yang, Zihang Dai, Yiming Yang, J. Carbonell, R. Salakhutdinov, and Quoc V. Le. Xlnet: Generalized autoregressive pretraining for language understanding. In NeurIPS, 2019.</p>
+<p>Colin Raffel, Noam Shazeer, Adam Roberts, Katherine Lee, Sharan Narang, Michael Matena, Yanqi Zhou, W. Li, and Peter J. Liu. Exploring the limits of transfer learning with a unified text-to-text transformer. J. Mach. Learn. Res., 21:140:1–140:67, 2020.</p>
+<p>Guolin Ke, Di He, and T. Liu. Rethinking positional encoding in language pre-training. ArXiv, abs/2006.15595, 2020.</p>
+<p>Pengcheng He, Xiaodong Liu, Jianfeng Gao, and Weizhu Chen. Deberta: Decoding-enhanced bert with disentangled attention. ArXiv, abs/2006.03654, 2020.</p>
+<p>Zhiheng Huang, Davis Liang, Peng Xu, and Bing Xiang. Improve transformer models with better relative position embeddings. In Findings of the Association for Computational Linguistics: EMNLP 2020, pages 3327–3335, Online, November 2020. Association for Computational Linguistics.</p>
+<p>Xuanqing Liu, Hsiang-Fu Yu, Inderjit S. Dhillon, and Cho-Jui Hsieh. Learning to encode position for transformer with continuous dynamical model. In Proceedings of the 37th International Conference on Machine Learning, ICML 2020, volume 119, pages 6327–6335. PMLR, 2020.</p>
+<p>Tian Qi Chen, Yulia Rubanova, Jesse Bettencourt, and David Duvenaud. Neural ordinary differential equations. In NeurIPS 2018, pages 6572–6583, 2018a.</p>
+<p>Benyou Wang, Donghao Zhao, Christina Lioma, Qiuchi Li, Peng Zhang, and Jakob Grue Simonsen. Encoding word order in complex embeddings. In International Conference on Learning Representations, 2020.</p>
+<p>Angelos Katharopoulos, Apoorv Vyas, Nikolaos Pappas, and François Fleuret. Transformers are rnns: Fast autoregressive transformers with linear attention. In International Conference on Machine Learning, pages 5156–5165. PMLR, 2020.</p>
+<p>Zhuoran Shen, Mingyuan Zhang, Haiyu Zhao, Shuai Yi, and Hongsheng Li. Efficient attention: Attention with linear complexities. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision, pages 3531–3539, 2021.</p>
+<p>Rico Sennrich, Barry Haddow, and Alexandra Birch. Neural machine translation of rare words with subword units. 08 2015.</p>
+<p>Myle Ott, Sergey Edunov, Alexei Baevski, Angela Fan, Sam Gross, Nathan Ng, David Grangier, and Michael Auli. fairseq: A fast, extensible toolkit for sequence modeling. pages 48–53, 01 2019.</p>
+<p>Kishore Papineni, Salim Roukos, Todd Ward, and Wei Jing Zhu. Bleu: a method for automatic evaluation of machine translation. 10 2002.</p>
+<p>Yukun Zhu, Ryan Kiros, Richard Zemel, Ruslan Salakhutdinov, Raquel Urtasun, Antonio Torralba, and Sanja Fidler. Aligning books and movies: Towards story-like visual explanations by watching movies and reading books. In arXiv preprint arXiv:1506.06724, 2015.</p>
+<p>Wikimedia Foundation. Wikimedia downloads, https://dumps.wikimedia.org, 2021.</p>
+<p>Ilya Loshchilov and Frank Hutter. Decoupled Weight Decay Regularization. arXiv e-prints, art. arXiv:1711.05101, November 2017.</p>
+<p>William B. Dolan and Chris Brockett. Automatically constructing a corpus of sentential paraphrases. In Proceedings of the Third International Workshop on Paraphrasing (IWP2005), 2005.</p>
+<p>Richard Socher, A. Perelygin, J.Y. Wu, J. Chuang, C.D. Manning, A.Y. Ng, and C. Potts. Recursive deep models for semantic compositionality over a sentiment treebank. EMNLP, 1631:1631–1642, 01 2013.</p>
+<p>Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev, and Percy Liang. Squad: 100,000+ questions for machine comprehension of text. pages 2383–2392, 01 2016.</p>
+<p>Hussein Al-Natsheh. Udl at semeval-2017 task 1: Semantic textual similarity estimation of english sentence pairs using regression model over pairwise features. 08 2017.</p>
+<p>Z. Chen, H. Zhang, and L. Zhang, X.and Zhao. Quora question pairs., 2018b.</p>
+<p>Adina Williams, Nikita Nangia, and Samuel Bowman. A broad-coverage challenge corpus for sentence understanding through inference. pages 1112–1122, 01 2018.</p>
+<p>Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, Rémi Louf, Morgan Funtowicz, Joe Davison, Sam Shleifer, Patrick von Platen, Clara Ma, Yacine Jernite, Julien Plu, Canwen Xu, Teven Le Scao, Sylvain Gugger, Mariama Drame, Quentin Lhoest, and Alexander M. Rush. Transformers: State-of-the-art natural language processing. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing: System Demonstrations, pages 38–45, Online, October 2020. Association for Computational Linguistics.</p>
+<p>Matt Mahoney. Large text compression benchmark, http://www.mattmahoney.net/dc/text.html, 2006.</p>
+<p>Jianlin Su. Wobert: Word-based chinese bert model - zhuiyiai. Technical report, 2020.</p>
+<p>Victor Junqiu Wei, Xiaozhe Ren, Xiaoguang Li, Wenyong Huang, Yi Liao, Yasheng Wang, Jiashu Lin, Xin Jiang, Xiao Chen, and Qun Liu. Nezha: Neural contextualized representation for chinese language understanding. 08 2019.</p>
+<p>Chaojun Xiao, Haoxi Zhong, Zhipeng Guo, Cunchao Tu, Zhiyuan Liu, Maosong Sun, Tianyang Zhang, Xianpei Han, Zhen hu, Heng Wang, and Jianfeng Xu. Cail2019-scm: A dataset of similar case matching in legal domain. 11 2019.</p>
+</div>
+
 <hr>
-<p class="note">说明：本文档为课程用中文导读，对照英文 PDF 整理核心论证与关键数字，并非逐句全译。图表未嵌入；完整证明、表格与附录见英文原文。</p>
+<p class="note">说明：本文档为所提供 PDF 内容的中文翻译版；参考文献保留英文原样。原文图已按英文本裁切嵌入。原文表格 OCR 存在少量错位，已按可读内容整理；4.5.3 节原文内容在提供文本中截断，已按原文标注。公式编号按原文保留。</p>
+
 </body>
 </html>
