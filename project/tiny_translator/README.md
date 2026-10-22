@@ -11,15 +11,27 @@ Pre-LN / Post-LN 编码器与解码器层、因果掩码、共享输出层权重
 
 ```bash
 cd project/tiny_translator
-bash scripts/setup.sh        # 创建 .venv，安装 PyTorch 与 Flask
-bash scripts/run.sh          # 打开 http://<设备 IP>:8090
+bash scripts/setup.sh        # 首次：创建 .venv，安装 PyTorch / Flask / zhconv
+
+# 前台运行（Ctrl+C 停止），打开 http://<设备 IP>:8090；换端口：bash scripts/run.sh --port 9000
+bash scripts/run.sh
+
+# 或后台运行：断开 ssh 后继续，日志写到 /tmp/tiny_translator_web.log
+setsid nohup bash scripts/run.sh > /tmp/tiny_translator_web.log 2>&1 < /dev/null &
+tail -f /tmp/tiny_translator_web.log
+
+# 停止：按工作目录筛选，只停本目录启动的服务（看板的命令行也是 .venv/bin/python web/app.py）
+for p in $(pgrep -f '^.venv/bin/python web/app.py'); do
+  [ "$(readlink /proc/$p/cwd)" = "$PWD" ] && kill "$p"
+done
 ```
 
 `setup.sh` 在 Jetson Thor（aarch64、CUDA 13）上安装 `cu130` 版 PyTorch，其他 NVIDIA 机器装默认 CUDA 版，
 没有 GPU 时装 CPU 版。
 
-同样的页面也挂在上级 Deep_learning 实验看板里：`python web/app.py` 启动看板后打开 `http://<IP>:8080/translator/`
-（看板顶部导航的“模型实验”）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
+同样的页面也挂在上级 Deep_learning 实验看板里（推荐，设备上就是这样部署的）：在仓库根目录后台启动看板
+`setsid nohup .venv/bin/python web/app.py > /tmp/dllab_web.log 2>&1 < /dev/null &`，然后打开 `http://<IP>:8080/translator/`
+（看板顶部导航的“模型实验”；完整的安装、停止、重启命令见根目录 README「手动安装与启动」）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
 训练与验证页会轮询 GPU 使用率（Jetson 读 sysfs，其它机器读 nvidia-smi）。
 
 配置页每一项参数的含义、默认值与调法见网页内「说明」标签：`/translator/#guide`

@@ -115,10 +115,102 @@ python lessons/15_transformer.py
 
 数据由 `src/dllab/data_store.py` 的 `cached_dataset()` 管理：文件里记录了生成参数，实验参数一改就自动重新生成。
 
+## 手动安装与启动（完整命令）
+
+以下命令在仓库根目录执行，以 Jetson Thor（aarch64、CUDA 13，设备上路径 `~/Deep_learning`）为例。
+看板和“模型实验”页（`/translator/`）跑在同一个进程、同一个 `.venv` 里，端口 8080。
+
+**1. 首次安装**
+
+```bash
+cd ~/Deep_learning
+python3 -m venv .venv
+.venv/bin/pip install -U pip
+.venv/bin/pip install -e .                    # dllab + numpy / matplotlib / flask
+.venv/bin/pip install cupy-cuda13x            # 课程的 GPU 加速（可选，没有则全部用 NumPy）
+.venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu130   # 模型实验页需要
+.venv/bin/pip install zhconv                  # 模型实验：语料繁体转简体
+
+# 检查：两行都应为 True
+.venv/bin/python -c "import torch; print('torch', torch.__version__, torch.cuda.is_available())"
+.venv/bin/python -c "import cupy; print('cupy', cupy.__version__, cupy.cuda.runtime.getDeviceCount() > 0)"
+```
+
+其他 NVIDIA 机器把 `cu130` 换成与本机 CUDA 对应的索引；没有 GPU 时用 `https://download.pytorch.org/whl/cpu`。
+不装 PyTorch 也能启动看板，只是 `/translator/` 显示安装提示。
+
+**2. 启动**
+
+```bash
+cd ~/Deep_learning
+
+# 前台运行（Ctrl+C 停止）
+.venv/bin/python web/app.py
+
+# 或后台运行：断开 ssh 后继续运行，日志写到 /tmp/dllab_web.log
+setsid nohup .venv/bin/python web/app.py > /tmp/dllab_web.log 2>&1 < /dev/null &
+```
+
+**3. 查看、停止、重启**
+
+```bash
+cd ~/Deep_learning
+tail -f /tmp/dllab_web.log                    # 看日志
+
+# 停止：按进程的工作目录筛选，只停本仓库的看板。
+# project/tiny_translator 单独启动时命令行同样是 ".venv/bin/python web/app.py"，不要用 pkill -f 一把杀掉。
+for p in $(pgrep -f '^.venv/bin/python web/app.py'); do
+  [ "$(readlink /proc/$p/cwd)" = "$PWD" ] && kill "$p"
+done
+
+# 重启 = 停止后再执行第 2 步的后台运行命令
+```
+
+**4. 访问**
+
+| 页面 | 地址 |
+|---|---|
+| 实验看板 | `http://<设备 IP>:8080/` |
+| 学习导读 | `http://<设备 IP>:8080/learn/` |
+| 模型实验（英→中翻译） | `http://<设备 IP>:8080/translator/` |
+
+**5. 从开发机把最新代码部署到设备**
+
+```bash
+# 在开发机的仓库根目录执行；不同步 .venv、实验结果和翻译项目的语料与模型
+rsync -az --exclude .git --exclude .venv --exclude artifacts --exclude __pycache__ \
+  --exclude project/tiny_translator/data --exclude project/tiny_translator/runs \
+  ./ nvidia@192.168.40.125:~/Deep_learning/
+# 然后 ssh 到设备，按第 3 步停止、第 2 步后台启动
+```
+
+翻译项目也可以脱离看板单独运行（端口 8090，使用它自己的 `project/tiny_translator/.venv`）：
+
+```bash
+cd ~/Deep_learning/project/tiny_translator
+bash scripts/setup.sh                         # 首次：创建 .venv，安装 PyTorch / Flask / zhconv
+
+# 前台运行（Ctrl+C 停止）；换端口：bash scripts/run.sh --port 9000
+bash scripts/run.sh
+
+# 或后台运行，日志写到 /tmp/tiny_translator_web.log
+setsid nohup bash scripts/run.sh > /tmp/tiny_translator_web.log 2>&1 < /dev/null &
+tail -f /tmp/tiny_translator_web.log
+
+# 停止（同样按工作目录筛选，不影响 8080 看板）
+for p in $(pgrep -f '^.venv/bin/python web/app.py'); do
+  [ "$(readlink /proc/$p/cwd)" = "$PWD" ] && kill "$p"
+done
+```
+
 ## 在网页里运行实验
 
 ```bash
-python web/app.py
+cd ~/Deep_learning
+.venv/bin/python web/app.py                   # 前台运行
+
+# 后台运行（断开 ssh 后继续），停止与重启见上一节第 3 步
+setsid nohup .venv/bin/python web/app.py > /tmp/dllab_web.log 2>&1 < /dev/null &
 ```
 
 浏览器打开 `http://127.0.0.1:8080`（设备上则用该机 IP，例如 `http://192.168.40.125:8080`）：
@@ -137,7 +229,12 @@ python web/app.py
 ## 命令行全部跑一遍
 
 ```bash
-python scripts/run_verify.py
+cd ~/Deep_learning
+.venv/bin/python scripts/run_verify.py        # 前台运行
+
+# 或后台运行（全部实验要跑一段时间），日志写到 /tmp/dllab_verify.log
+setsid nohup .venv/bin/python scripts/run_verify.py > /tmp/dllab_verify.log 2>&1 < /dev/null &
+tail -f /tmp/dllab_verify.log
 ```
 
 结果汇总写到 `artifacts/summary.json`，看板同样会显示。
