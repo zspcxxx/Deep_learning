@@ -47,9 +47,15 @@ done
 
 ## 数据
 
-默认使用 [manythings.org](https://www.manythings.org/anki/) 整理的 Tatoeba 英中句对（约 2.9 万对，CC-BY 2.0），
-首次训练或点“下载”时自动保存为 `data/cmn-eng.tsv`。也可以放入自己的句对文件 `data/<名称>.tsv`，
-每行 `英文<Tab>中文`，刷新页面后出现在“数据集”下拉框里。
+内置可下载语料（网页「数据集」里点下载，或训练时自动拉取）：
+
+| 名称 | 来源 | 约句对数 | 说明 |
+|---|---|---|---|
+| `cmn-eng` | [manythings / Tatoeba](https://www.manythings.org/anki/) | 3 万 | 短句口语，上手快（默认） |
+| `news-commentary` | [WMT News Commentary v16](https://data.statmt.org/news-commentary/v16/) | **31 万** | 新闻评论，质量高，**推荐用来提升效果**；句子较长，可用预设「新闻语料」或把长度调到 40 / 60 |
+| `ted2020` | [OPUS TED2020](https://opus.nlpl.eu/) | 1.6 万 | TED 口语演讲句对 |
+
+也可以放入自己的句对文件 `data/<名称>.tsv`，每行 `英文<Tab>中文`，刷新后出现在下拉框。
 
 - 英文：小写，按词和标点切分，训练集中出现少于“词表最低频次”次的词记为 `<unk>`。
 - 中文：默认用 `zhconv` 统一转为简体（Tatoeba 原文繁简混杂），按字切分，保留全角标点。

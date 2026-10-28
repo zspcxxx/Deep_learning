@@ -97,6 +97,13 @@ PRESETS = {
         "values": {"name": "large", "d_model": 384, "n_heads": 6, "n_enc_layers": 4, "n_dec_layers": 4,
                    "d_ff": 1536, "dropout": 0.2, "epochs": 50, "lr": 5e-4, "warmup_steps": 800, "patience": 8},
     },
+    # News Commentary 句子更长；拉长上限才能用上大部分语料。
+    "news": {
+        "label": "新闻语料（News Commentary，更准更久）",
+        "values": {"name": "news", "dataset": "news-commentary", "max_src_len": 40, "max_tgt_len": 60,
+                   "d_model": 256, "n_heads": 4, "n_enc_layers": 3, "n_dec_layers": 3, "d_ff": 1024,
+                   "epochs": 20, "batch_size": 64, "warmup_steps": 800, "lr": 5e-4, "patience": 5},
+    },
 }
 
 

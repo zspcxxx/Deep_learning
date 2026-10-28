@@ -53,11 +53,15 @@
       （如 <code>quick</code>、<code>d256_ep30</code>），方便验证页对照。</p>
 
     <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>cmn-eng</code>）</h3>
-    <p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置 <code>cmn-eng</code> 来自
-      <a href="https://www.manythings.org/anki/" target="_blank">manythings.org</a> 整理的 Tatoeba 英中句对（约 3.2 万对，CC-BY 2.0），
-      首次训练或点「下载」时自动拉取。也可自备同格式的 TSV，刷新后会出现在下拉框。</p>
-    <div class="callout warn"><strong>注意</strong>Tatoeba 句子偏短、口语化。常见短句容易译对；长句、罕见专名、训练集没见过的说法容易错
-      （英文稀有词常变成 <code>&lt;unk&gt;</code>）。这是小数据上的正常现象，不是实现写错了。</div>
+    <p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置三套可下载语料：</p>
+    <ul>
+      <li><code>cmn-eng</code>：Tatoeba 短句约 3 万对，上手快。</li>
+      <li><code>news-commentary</code>：WMT 新闻评论约 <strong>31 万对</strong>，质量更高，想提升效果优先选它；句子更长，配合预设「新闻语料」或把长度调到约 40 / 60。</li>
+      <li><code>ted2020</code>：TED 口语约 1.6 万对。</li>
+    </ul>
+    <p>也可自备同格式的 TSV，刷新后会出现在下拉框。</p>
+    <div class="callout warn"><strong>注意</strong>短句语料上常见口语句容易译对；长句、罕见专名、训练集没见过的说法仍可能错
+      （英文稀有词常变成 <code>&lt;unk&gt;</code>）。换更大语料前，记得相应放宽长度上限，否则多数句对会被过滤掉。</div>
 
     <h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>0</code> = 全部）</h3>
     <p>从文件里最多取多少对再划分训练/验证/测试。<strong>先设 3000–5000 做烟雾测试</strong>能很快看到曲线是否正常；正式对比再用全部。</p>

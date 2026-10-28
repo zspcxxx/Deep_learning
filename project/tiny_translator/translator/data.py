@@ -21,9 +21,23 @@ SPECIALS = ["<pad>", "<bos>", "<eos>", "<unk>"]
 
 BUILTIN = {
     "cmn-eng": {
-        "label": "Tatoeba 英→中句对（manythings.org，约 2.9 万对，CC-BY 2.0）",
+        "label": "Tatoeba 英→中（manythings.org，约 3 万短句，CC-BY 2.0）",
         "url": "https://www.manythings.org/anki/cmn-eng.zip",
+        "format": "anki_zip",
         "member": "cmn.txt",
+    },
+    # WMT News Commentary：新闻评论平行语料，质量高、规模大，比短句 Tatoeba 更适合提升 BLEU。
+    # 句子偏长，建议把英文最大词数 / 中文最大字数调到约 40 / 60。
+    "news-commentary": {
+        "label": "News Commentary 英→中（WMT/statmt，约 31 万对，推荐）",
+        "url": "https://data.statmt.org/news-commentary/v16/training/news-commentary-v16.en-zh.tsv.gz",
+        "format": "tsv_gz",
+    },
+    "ted2020": {
+        "label": "TED2020 英→中（OPUS，约 1.6 万口语句对）",
+        "url": "https://object.pouta.csc.fi/OPUS-TED2020/v1/moses/en-zh.txt.zip",
+        "format": "opus_moses",
+        "prefix": "TED2020.en-zh",
     },
 }
 
@@ -77,28 +91,88 @@ def list_datasets() -> list[dict]:
     return out
 
 
+def _fetch(url: str, timeout: int = 600) -> bytes:
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (tiny-translator)"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def _ascii_ratio(text: str) -> float:
+    if not text:
+        return 0.0
+    return sum(1 for c in text if ("a" <= c <= "z") or ("A" <= c <= "Z")) / len(text)
+
+
+def _normalize_en_zh_pairs(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """Ensure (English, Chinese) order; some dumps put Chinese first."""
+    if not pairs:
+        return pairs
+    sample = pairs[:200]
+    swaps = sum(1 for en, zh in sample if _ascii_ratio(en) < _ascii_ratio(zh))
+    if swaps > len(sample) // 2:
+        pairs = [(zh, en) for en, zh in pairs]
+    # de-duplicate while keeping order
+    seen: set[tuple[str, str]] = set()
+    out: list[tuple[str, str]] = []
+    for pair in pairs:
+        if pair in seen:
+            continue
+        seen.add(pair)
+        out.append(pair)
+    return out
+
+
+def _pairs_from_anki_zip(blob: bytes, member: str) -> list[tuple[str, str]]:
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        text = zf.read(member).decode("utf-8")
+    pairs = []
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
+            pairs.append((parts[0].strip(), parts[1].strip()))
+    return pairs
+
+
+def _pairs_from_opus_moses(blob: bytes, prefix: str) -> list[tuple[str, str]]:
+    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
+        ens = zf.read(f"{prefix}.en").decode("utf-8").splitlines()
+        zhs = zf.read(f"{prefix}.zh").decode("utf-8").splitlines()
+    return [(e.strip(), z.strip()) for e, z in zip(ens, zhs) if e.strip() and z.strip()]
+
+
+def _pairs_from_tsv_gz(blob: bytes) -> list[tuple[str, str]]:
+    import gzip
+
+    text = gzip.decompress(blob).decode("utf-8", errors="replace")
+    pairs = []
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
+            pairs.append((parts[0].strip(), parts[1].strip()))
+    return pairs
+
+
 def download_dataset(name: str, log=print) -> int:
     spec = BUILTIN.get(name)
     if spec is None:
         raise ValueError(f"数据集 {name} 不支持自动下载，请把句对文件放到 data/{name}.tsv")
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     log(f"下载 {spec['url']} …")
-    req = urllib.request.Request(spec["url"], headers={"User-Agent": "Mozilla/5.0 (tiny-translator)"})
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        blob = resp.read()
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        text = zf.read(spec["member"]).decode("utf-8")
-    rows = []
-    for line in text.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
-            rows.append(f"{parts[0].strip()}\t{parts[1].strip()}")
+    blob = _fetch(spec["url"])
+    fmt = spec.get("format", "anki_zip")
+    if fmt == "anki_zip":
+        pairs = _pairs_from_anki_zip(blob, spec["member"])
+    elif fmt == "opus_moses":
+        pairs = _pairs_from_opus_moses(blob, spec["prefix"])
+    elif fmt == "tsv_gz":
+        pairs = _pairs_from_tsv_gz(blob)
+    else:
+        raise ValueError(f"未知数据集格式：{fmt}")
+    pairs = _normalize_en_zh_pairs(pairs)
     dest = dataset_path(name)
-    tmp = dest.with_suffix(".part")
-    tmp.write_text("\n".join(rows) + "\n", encoding="utf-8")
-    tmp.replace(dest)
-    log(f"已保存 {len(rows)} 个句对到 {dest.relative_to(ROOT)}")
-    return len(rows)
+    write_pairs(dest, pairs)
+    log(f"已保存 {len(pairs)} 个句对到 {dest.relative_to(ROOT)}")
+    return len(pairs)
 
 
 def read_pairs(path: Path) -> list[tuple[str, str]]:
