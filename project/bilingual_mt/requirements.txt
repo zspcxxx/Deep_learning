@@ -1,0 +1,8 @@
+# Install torch first via scripts/setup.sh (picks CUDA / CPU wheels).
+torch>=2.4
+numpy
+pyyaml
+tqdm
+sentencepiece
+sacrebleu
+zhconv

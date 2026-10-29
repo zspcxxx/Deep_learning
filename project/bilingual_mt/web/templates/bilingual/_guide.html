@@ -1,0 +1,325 @@
+{# In-page parameter guide for bilingual EN↔ZH MT (tab #guide). #}
+<div class="guide-layout">
+
+<aside class="guide-toc">
+  <h3>本页目录</h3>
+  <ol>
+    <li><a href="#guide-overview">项目是什么</a></li>
+    <li><a href="#guide-vs">与模型实验的差异</a></li>
+    <li><a href="#guide-pipeline">三步流程</a></li>
+    <li><a href="#guide-data">数据参数</a></li>
+    <li><a href="#guide-model">模型结构参数</a></li>
+    <li><a href="#guide-train">训练参数</a></li>
+    <li><a href="#guide-decode-cfg">解码参数</a></li>
+    <li><a href="#guide-presets">预设说明</a></li>
+    <li><a href="#guide-metrics">看什么指标</a></li>
+    <li><a href="#guide-decode">验证页用法</a></li>
+    <li><a href="#guide-tune">调参建议</a></li>
+    <li><a href="#guide-cli">命令行对照</a></li>
+  </ol>
+</aside>
+
+<article class="guide-doc">
+
+<div class="guide-hero">
+  <h2>参数含义与实现说明</h2>
+  <p class="muted">按配置页分组说明<strong>含义、默认值、改了会发生什么</strong>。
+    与看板「模型实验」(<code>/translator/</code> · <code>tiny_translator</code>) 对照阅读时，优先看下面的
+    <a href="#guide-vs">实现差异</a>一节。</p>
+</div>
+
+<h2 id="guide-overview">这个项目在做什么</h2>
+<p>任务是<strong>中英互译</strong>（English ↔ Chinese）：同一套 Encoder–Decoder Transformer，靠源端
+  <strong>方向标签</strong>区分「英→中」还是「中→英」。词表是<strong>中英联合 SentencePiece BPE</strong>，
+  不是英文按词、中文按字的两套词表。</p>
+<div class="card-grid">
+  <div class="card"><h4>输入</h4><p>源句经 BPE 切成子词；最前面加 <code>&lt;en2zh&gt;</code> 或 <code>&lt;zh2en&gt;</code>，末尾 <code>&lt;/s&gt;</code>。</p></div>
+  <div class="card"><h4>模型</h4><p>手写 Transformer（正弦位置编码、多头注意力、Pre-LN、因果掩码、可选共享输出层）；双语共用一份嵌入。</p></div>
+  <div class="card"><h4>目标</h4><p>标签平滑交叉熵；验证/测试用 sacrebleu（中文 <code>zh</code> 分词、英文 <code>13a</code>）。</p></div>
+  <div class="card"><h4>产出</h4><p><code>runs/&lt;时间&gt;_&lt;名称&gt;/</code>：配置、SPM 模型、history、best/last 权重；也可用 CLI 同目录训练。</p></div>
+</div>
+<div class="callout ok"><strong>建议用法</strong>先套预设「快速试跑」跑通互译；再切「Jetson 互译」或换
+  <code>news-commentary</code> 做正式实验。一次只改一类旋钮，并与「模型实验」的结果区分开（任务与分词都不同，BLEU 不可直接横比）。</div>
+
+<h2 id="guide-vs">与 tiny_translator（模型实验）的实现差异</h2>
+<p>两者都是「网页上配置 → 后台训 Transformer → 验证试译」，但<strong>定位不同</strong>：
+  模型实验是短句<strong>单向英→中</strong>教学 Demo；本项目是可 CLI / YAML / Web 共用的<strong>中英互译完整流水线</strong>。</p>
+
+<table>
+  <tr><th>维度</th><th>模型实验 <code>tiny_translator</code></th><th>本项目 <code>bilingual_mt</code></th></tr>
+  <tr>
+    <td>任务方向</td>
+    <td>仅 <strong>英 → 中</strong></td>
+    <td><code>en2zh</code> / <code>zh2en</code> / <strong><code>both</code>（互译）</strong>；源端方向标签</td>
+  </tr>
+  <tr>
+    <td>分词与词表</td>
+    <td>英文空白+标点切词；中文<strong>按字</strong>；两套 Vocab；<code>min_freq</code> 过滤稀有符号</td>
+    <td><strong>联合 SentencePiece BPE</strong>；一份词表；特殊符号含方向标签；用 <code>vocab_size</code>（过小会自动抬升）</td>
+  </tr>
+  <tr>
+    <td>长度过滤</td>
+    <td><code>max_src_len</code> = 英文<strong>词</strong>数；<code>max_tgt_len</code> = 中文<strong>字</strong>数；超长句对丢弃</td>
+    <td>两端都是 <strong>BPE 子词数</strong>（源端还含方向标签与 <code>&lt;/s&gt;</code>）；超长则截断到上限</td>
+  </tr>
+  <tr>
+    <td>嵌入共享</td>
+    <td>源 / 目标各一张嵌入表；可选 <code>tie_embeddings</code>（解码器嵌入↔输出投影）</td>
+    <td><strong>双语共用一张嵌入</strong>；同样可 tie 输出投影；方向标签也是词表里的原子片</td>
+  </tr>
+  <tr>
+    <td>组批</td>
+    <td>按长度<strong>分桶</strong>，减少 padding</td>
+    <td>标准 DataLoader + pad 到 batch 内最长；实现更简单，长句时 padding 略多</td>
+  </tr>
+  <tr>
+    <td>BLEU</td>
+    <td>自研<strong>字级</strong> corpus BLEU（适合中文按字输出）</td>
+    <td><strong>sacrebleu</strong>：英→中用 <code>tokenize=zh</code>，中→英用 <code>13a</code>；互译时报告分方向与平均</td>
+  </tr>
+  <tr>
+    <td>训练内验证解码</td>
+    <td>贪心；验证页可看<strong>交叉注意力热力图</strong></td>
+    <td>训练内贪心；验证页贪心/束搜索双向试译；<strong>不做注意力可视化</strong>（减负、聚焦互译质量）</td>
+  </tr>
+  <tr>
+    <td>混合精度</td>
+    <td>无 AMP 开关（默认 FP32）</td>
+    <td>配置项 <code>amp</code>（CUDA 下默认开），Jetson 上省显存、略加速</td>
+  </tr>
+  <tr>
+    <td>配置与入口</td>
+    <td>网页表单 + 预设；无独立 YAML/CLI 训练主路径</td>
+    <td>Web 与 <code>configs/*.yaml</code> + <code>python -m mt.cli</code>（prepare / train / eval / translate）共用同一套模型与数据代码</td>
+  </tr>
+  <tr>
+    <td>默认规模</td>
+    <td>偏小教学默认（如 d=256、3+3、batch=128、短句 20/30）</td>
+    <td>Web 默认更接近「完整体」（d=512、6+6 等）；设备上请用「快速试跑 / Jetson」预设，避免一上来 OOM</td>
+  </tr>
+  <tr>
+    <td>语料复用</td>
+    <td>自有 <code>data/*.tsv</code></td>
+    <td>同格式 TSV；会自动发现 / 软链 sibling <code>tiny_translator/data</code>，避免重复下载</td>
+  </tr>
+</table>
+
+<div class="callout warn"><strong>不要直接比两边的 BLEU 数字</strong>
+  分词单位不同（字 vs BPE + sacrebleu）、方向不同（单向 vs 互译平均）、默认长度与数据过滤也不同。
+  应在<strong>同一项目、同一划分、同一评测脚本</strong>内做消融。</div>
+
+<h3 id="guide-vs-tag">方向标签如何工作</h3>
+<p>选 <code>direction=both</code> 时，每条平行句 <code>(en, zh)</code> 会展开成两条训练样本：</p>
+<ul>
+  <li>源 = <code>&lt;en2zh&gt;</code> + BPE(en) + <code>&lt;/s&gt;</code>，目标 = BPE(zh)（教师强制时带 <code>&lt;s&gt;</code>…<code>&lt;/s&gt;</code>）</li>
+  <li>源 = <code>&lt;zh2en&gt;</code> + BPE(zh) + <code>&lt;/s&gt;</code>，目标 = BPE(en)</li>
+</ul>
+<p>标签作为 SentencePiece 的 <code>user_defined_symbols</code> 写进词表，不会被切碎。
+  推理时必须指定方向，模型才能知道该往哪边译——这是相对 tiny「永远英→中」多出来的约定。</p>
+
+<h3 id="guide-vs-bpe">为什么用联合 BPE</h3>
+<ul>
+  <li><strong>tiny</strong>：中文按字 → 词表随汉字集合涨，英文稀有词易变 <code>&lt;unk&gt;</code>；实现直观，适合课内讲解。</li>
+  <li><strong>本项目</strong>：BPE 把高频片段压成子词，英文形态变化与中文词块都能共享容量；互译时源/目标在同一嵌入空间，更接近常见 NMT 配方。</li>
+</ul>
+<p>代价：调试时不如「一字一符」好读；<code>vocab_size</code> 过小会触发「字符集 &gt; 词表」错误（训练端会自动抬升）。</p>
+
+<h2 id="guide-pipeline">网页上的三步</h2>
+<ol class="steps">
+  <li><strong>配置</strong>：确认数据集就绪；调数据 / 结构 / 训练 / 解码，或套用预设；「检查配置」估算句对、参数量与总步数（完整 SPM 在真正开始训练时构建）。</li>
+  <li><strong>训练</strong>：后台线程：准备数据 → 训 SPM → 训练；曲线含损失 / BLEU / 学习率；互译时每轮可看英→中与中→英 BLEU；可停止并保留权重。</li>
+  <li><strong>验证</strong>：选运行；选方向做交互翻译；在 test/val 上批量评估（报告平均 BLEU 与分方向分数）。</li>
+</ol>
+
+<h2 id="guide-data">一、数据参数</h2>
+
+<h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>bilingual</code>）</h3>
+<p>结果目录：<code>project/bilingual_mt/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。与 tiny 的 runs <strong>互不覆盖</strong>，请用能区分实验的名字（如 <code>jetson_both</code>、<code>nc_en2zh</code>）。</p>
+
+<h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>news-commentary</code>）</h3>
+<p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置与模型实验相同的三套可下载语料；设备上通常已软链自
+  <code>tiny_translator/data</code>。</p>
+<ul>
+  <li><code>cmn-eng</code>：短句，适合快速试跑（与 tiny 默认语料一致）。</li>
+  <li><code>news-commentary</code>：约 31 万对新闻评论，<strong>本项目默认</strong>；句子更长，请配合足够的 <code>max_*_len</code>。</li>
+  <li><code>ted2020</code>：口语演讲句对。</li>
+</ul>
+
+<h3 id="guide-p-direction">翻译方向 <code>direction</code>（默认 <code>both</code>）</h3>
+<table>
+  <tr><th>取值</th><th>训练样本</th><th>何时用</th></tr>
+  <tr><td><code>both</code></td><td>每句对 → 两条（英→中 + 中→英）</td><td>默认；要互译能力时</td></tr>
+  <tr><td><code>en2zh</code></td><td>仅英→中</td><td>只关心中文生成；样本量为 both 的一半</td></tr>
+  <tr><td><code>zh2en</code></td><td>仅中→英</td><td>只关心英文生成</td></tr>
+</table>
+<p><code>both</code> 时每个 epoch 实际优化步数约为「句对数 × 2 / batch_size」。与 tiny 比，同样原始句对数下这里步数更多。</p>
+
+<h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>0</code> = 全部）</h3>
+<p>对原始平行句对截断（在展开方向<strong>之前</strong>）。烟雾测试建议 2k–15k；Jetson 正式跑可用预设里的 8 万上限。</p>
+
+<h3 id="guide-p-zh-simplified">中文统一为简体 <code>zh_simplified</code>（默认开启）</h3>
+<p>与 tiny 相同：用 <code>zhconv</code> 转简体，避免繁简各占词表配额。互译时源端中文、目标端中文都会受益。</p>
+
+<h3 id="guide-p-max-src">源端最大子词数 <code>max_src_len</code>（默认 <code>64</code>）</h3>
+<p><strong>单位是 BPE 片数</strong>（含方向标签与结束符），不是英文词数。超长则截断并强制保留 <code>&lt;/s&gt;</code>。
+  新闻语料上 48–64 较常见；短句试跑可用 32。比 tiny 的默认 20「词」更宽松，因为子词切分后序列往往更长。</p>
+
+<h3 id="guide-p-max-tgt">目标端最大子词数 <code>max_tgt_len</code>（默认 <code>64</code>）</h3>
+<p>教师强制序列上限；过长截断。推理另见 <code>max_decode_len</code>。</p>
+
+<h3 id="guide-p-vocab">联合 BPE 词表大小 <code>vocab_size</code>（默认 <code>8000</code>）</h3>
+<p>替代 tiny 的 <code>min_freq</code>。中文字符集大时，若设定值小于「必须覆盖的字符 + 特殊符号」，SentencePiece 会失败——本项目会<strong>自动尝试抬升</strong>到更大词表。</p>
+<ul>
+  <li>过小：切得太碎或训练失败（已做兜底）。</li>
+  <li>过大：嵌入矩阵变大、稀有片统计不足。</li>
+  <li>快速试跑常用 4000；Jetson / 新闻常用 6000–8000。</li>
+</ul>
+
+<h3 id="guide-p-val-ratio">验证 / 测试比例 <code>val_ratio</code> / <code>test_ratio</code>（默认各 <code>0.02</code>）</h3>
+<p>在<strong>展开方向之后</strong>的样本上划分（互译时验证集里会同时有两个方向）。合计须 &lt; 50%。
+  大数据集上 2% 已够；小数据可略增以降低 BLEU 噪声。测试集仍不参与选模。</p>
+
+<h3 id="guide-p-seed">随机种子 <code>seed</code>（默认 <code>42</code>）</h3>
+<p>控制抽样、划分与初始化。与 tiny 含义相同。</p>
+
+<h2 id="guide-model">二、模型结构参数</h2>
+<p>模块组成与 tiny 同类（手写 Enc–Dec，非 <code>nn.Transformer</code>）。差异主要在<strong>词表与嵌入共享方式</strong>，以及 Web 默认更大。</p>
+
+<h3 id="guide-p-d-model">模型宽度 <code>d_model</code>（默认 <code>512</code>）</h3>
+<p>须被 <code>n_heads</code> 整除。Web 全局默认 512 偏「完整体」；在 Jetson 上请改用预设（128 / 256），否则易慢或 OOM。
+  tiny 教学默认是 256。</p>
+
+<h3 id="guide-p-n-heads">注意力头数 <code>n_heads</code>（默认 <code>8</code>）</h3>
+<p>常见搭配：128/4、256/4、512/8。本项目验证页<strong>不展示</strong>交叉注意力热力图（tiny 有）；头数主要影响容量与速度。</p>
+
+<h3 id="guide-p-n-enc">编码器 / 解码器层数（默认各 <code>6</code>）</h3>
+<p>默认比 tiny 的 3+3 更深。小数据或边缘设备用 2+2 / 4+4 更合适（见预设）。</p>
+
+<h3 id="guide-p-d-ff">前馈宽度 <code>d_ff</code>（默认 <code>2048</code>）</h3>
+<p>惯例约 <code>4 × d_model</code>。参数与显存大户；OOM 时优先降 <code>d_ff</code> / <code>batch_size</code> / 层数。</p>
+
+<h3 id="guide-p-dropout">Dropout <code>dropout</code>（默认 <code>0.1</code>）</h3>
+<p>与 tiny 相同角色。互译数据相当于「翻倍」时，过拟合压力略小于同规模单向小语料，但仍建议保留 0.1。</p>
+
+<h3 id="guide-p-norm-first">Pre-LN <code>norm_first</code>（默认开启）</h3>
+<p>与 tiny 一致：更深时更好训。</p>
+
+<h3 id="guide-p-activation">激活 <code>activation</code>（默认 <code>gelu</code>）</h3>
+<p><code>gelu</code> / <code>relu</code>。保持 GELU 即可。</p>
+
+<h3 id="guide-p-tie">共享输出层权重 <code>tie_embeddings</code>（默认开启）</h3>
+<p>输出投影与（联合）嵌入共用权重。双语大词表时省参更明显，建议保持开启。</p>
+
+<h2 id="guide-train">三、训练参数</h2>
+
+<h3 id="guide-p-epochs">训练轮数 <code>epochs</code>（默认 <code>30</code>）</h3>
+<p>配合 <code>patience</code> 早停。快速试跑 8 轮；Jetson 预设 20 轮。</p>
+
+<h3 id="guide-p-batch">批大小 <code>batch_size</code>（默认 <code>64</code>）</h3>
+<p>句对数 / 步。无 tiny 的长度分桶，长句 batch 更吃显存——Jetson 上常用 16。OOM → 先减 batch。</p>
+
+<h3 id="guide-p-lr">峰值学习率 <code>lr</code>（默认 <code>5e-4</code>）</h3>
+<p>略低于 tiny 默认 <code>7e-4</code>（默认模型更大）。不稳就降 lr 或加长 warmup。</p>
+
+<h3 id="guide-p-schedule">学习率计划 <code>schedule</code>（默认 <code>cosine</code>）</h3>
+<p><code>cosine</code> / <code>inverse_sqrt</code> / <code>constant</code>，语义与 tiny 相同。inverse_sqrt 在本实现里会归一化到峰值约等于所填 <code>lr</code>。</p>
+
+<h3 id="guide-p-warmup">预热步数 <code>warmup_steps</code>（默认 <code>4000</code>）</h3>
+<p>默认按「完整体、较多总步数」设定。短训必须改小（快速预设 200；Jetson 2000），否则大半训练仍在爬升学习率。</p>
+
+<h3 id="guide-p-wd">权重衰减 <code>weight_decay</code>（默认 <code>0.01</code>）</h3>
+<p>AdamW 解耦衰减，与 tiny 相同。</p>
+
+<h3 id="guide-p-ls">标签平滑 <code>label_smoothing</code>（默认 <code>0.1</code>）</h3>
+<p>与 tiny 相同。实现上对本项目损失为「token 平均」的平滑 NLL。</p>
+
+<h3 id="guide-p-clip">梯度裁剪 <code>grad_clip</code>（默认 <code>1.0</code>）</h3>
+<p>全局范数裁剪；0 = 关闭。</p>
+
+<h3 id="guide-p-patience">早停耐心 <code>patience</code>（默认 <code>5</code>）</h3>
+<p>验证<strong>平均 BLEU</strong>连续若干轮未刷新最佳则停。tiny 默认 0（不早停）；本项目默认更积极，避免长训空转。</p>
+
+<h3 id="guide-p-amp">混合精度 AMP <code>amp</code>（默认开启）</h3>
+<p><strong>tiny 没有此项。</strong>仅在 CUDA 上生效；用 <code>torch.amp</code> GradScaler。省显存、通常更快；若遇数值问题可关掉对比。</p>
+
+<h3 id="guide-p-device">设备 <code>device</code>（默认 <code>auto</code>）</h3>
+<p><code>auto</code> / <code>cuda</code> / <code>cpu</code>。顶栏 GPU 条与 tiny 相同（Jetson sysfs + nvidia-smi）。</p>
+
+<h3 id="guide-p-log-every">日志间隔 <code>log_every</code>（默认 <code>50</code>）</h3>
+<p>训练进度条 postfix 刷新间隔（步）。曲线点仍按内部 STEP_EVERY（约每 10 步）记录。</p>
+
+<h2 id="guide-decode-cfg">四、解码参数</h2>
+
+<h3 id="guide-p-beam">默认束宽 <code>beam_size</code>（默认 <code>4</code>）</h3>
+<p>写入配置，供验证页默认；<strong>训练过程中的验证仍用贪心</strong>（快）。交互翻译可在页面上改束宽。</p>
+
+<h3 id="guide-p-max-decode">最大解码长度 <code>max_decode_len</code>（默认 <code>80</code>）</h3>
+<p>推理时最多生成的子词步数（含起止）。可比 <code>max_tgt_len</code> 略大，避免译文被截断。tiny 大致用 <code>max_tgt_len + 余量</code>。</p>
+
+<h2 id="guide-presets">预设分别改了什么</h2>
+<table>
+  <tr><th>预设</th><th>要点</th><th>适合</th></tr>
+  <tr>
+    <td>快速试跑</td>
+    <td>cmn-eng、both、1.5 万句、d=128、2+2、vocab=4k、8 轮、batch=64</td>
+    <td>确认互译流程、曲线、GPU；数分钟量级</td>
+  </tr>
+  <tr>
+    <td>Jetson 互译</td>
+    <td>news-commentary、both、最多 8 万句、d=256、4+4、batch=16、20 轮</td>
+    <td>边缘设备上认真训一版互译</td>
+  </tr>
+  <tr>
+    <td>仅英→中 / 仅中→英</td>
+    <td>把 <code>direction</code> 设为单方向（其它跟默认）</td>
+    <td>对照「互译 vs 单向」或只要一个方向</td>
+  </tr>
+</table>
+<div class="callout warn"><strong>不要直接点「检查配置」后不改就用全局默认开训</strong>
+  Web 里 TrainConfig 默认偏大（512 / 6+6）。在 Jetson 上务必先点预设，或手动降容量。</div>
+
+<h2 id="guide-metrics">训练和验证时看什么</h2>
+<table>
+  <tr><th>指标</th><th>含义</th><th>怎么读</th></tr>
+  <tr><td>训练损失</td><td>标签平滑 NLL</td><td>应下降；不降 → lr / 数据 / 方向标签是否搞反</td></tr>
+  <tr><td>验证损失 / ppl</td><td>每轮验证</td><td>训练降、验证升 → 过拟合</td></tr>
+  <tr><td>BLEU（平均）</td><td>选 best 的依据</td><td><code>both</code> 时为两方向算术平均</td></tr>
+  <tr><td>BLEU 英→中 / 中→英</td><td>分方向 sacrebleu</td><td>看互译是否偏科；某一侧崩了优先查该方向数据与长度</td></tr>
+  <tr><td>测试 BLEU</td><td>结束后用 best 贪心评测</td><td>最终报告；不作早停</td></tr>
+  <tr><td>GPU 使用率</td><td>顶栏</td><td>与 tiny 相同读数来源</td></tr>
+</table>
+<p>与 tiny 的字级 BLEU <strong>不可横比</strong>。同一项目内用同一 <code>direction</code> 与语料对比才有意义。</p>
+
+<h2 id="guide-decode">验证页：方向、贪心与束搜索</h2>
+<ul>
+  <li>先选<strong>方向</strong>再输入：英→中输入英文；中→英输入中文。方向与标签必须一致。</li>
+  <li><strong>贪心 (beam=1)</strong>：快，适合扫测试集。</li>
+  <li><strong>束搜索 (4/8)</strong>：通常略好、更慢。</li>
+</ul>
+<p>本页<strong>没有</strong>交叉注意力热力图（tiny 验证页有）。要对齐可视化请用模型实验；本页聚焦双向译文与 BLEU。</p>
+
+<h2 id="guide-tune">调参建议（相对 tiny 的额外注意）</h2>
+<ol class="steps">
+  <li>先「快速试跑」确认两个方向都能出字（验证样例里应能看到 <code>en2zh</code> / <code>zh2en</code>）。</li>
+  <li>再「Jetson 互译」或自备配置；一次只改数据规模 / 宽度层数 / 学习率之一。</li>
+  <li>互译一侧差、一侧好 → 查该方向长度截断是否过狠、简繁是否统一。</li>
+  <li>OOM → batch↓、<code>max_*_len</code>↓、层数或 <code>d_ff</code>↓、确认 AMP 已开。</li>
+  <li>短训却用很大 <code>warmup_steps</code> → 学习率长期爬升，BLEU 起不来；按总步数的 5%–15% 设预热。</li>
+  <li>需要热力图或字级课内 Demo → 回 <a href="/translator/">模型实验</a>；需要 CLI / 互译 / BPE → 留在本页。</li>
+</ol>
+
+<h2 id="guide-cli">命令行对照</h2>
+<p>Web 与 CLI 共用 <code>mt/</code>。设备上示例：</p>
+<pre>cd ~/deep_learning/project/bilingual_mt
+source ~/deep_learning/.venv/bin/activate
+export PYTHONPATH=.
+python -m mt.cli prepare -c configs/jetson.yaml
+python -m mt.cli train   -c configs/jetson.yaml
+python -m mt.cli eval jetson --split test
+python -m mt.cli translate &lt;run名或路径&gt; -d en2zh -t "Hello"
+python -m mt.cli translate &lt;run名或路径&gt; -d zh2en -t "你好"</pre>
+<p class="muted small">代码：<code>project/bilingual_mt/</code> · 配置 <code>mt/config.py</code> / <code>mt/web_schema.py</code> ·
+  模型 <code>mt/model.py</code> · Web 训练 <code>mt/job.py</code> · CLI <code>mt/cli.py</code> ·
+  对照教学 Demo：<code>project/tiny_translator/</code></p>
+</article>
+</div>

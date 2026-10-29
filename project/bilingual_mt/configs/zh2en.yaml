@@ -1,0 +1,6 @@
+# 仅中→英
+inherit: base.yaml
+name: bilingual_zh2en
+
+data:
+  direction: zh2en

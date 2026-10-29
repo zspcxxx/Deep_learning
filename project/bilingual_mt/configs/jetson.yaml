@@ -1,0 +1,34 @@
+# Jetson / 边缘设备：中等规模 + 较小 batch
+inherit: base.yaml
+name: bilingual_jetson
+
+data:
+  dataset: news-commentary
+  direction: both
+  max_pairs: 80000
+  max_src_len: 48
+  max_tgt_len: 48
+
+vocab:
+  vocab_size: 6000
+
+model:
+  d_model: 256
+  n_heads: 4
+  n_enc_layers: 4
+  n_dec_layers: 4
+  d_ff: 1024
+  dropout: 0.1
+
+train:
+  epochs: 20
+  batch_size: 16
+  lr: 5.0e-4
+  warmup_steps: 2000
+  patience: 4
+  amp: true
+  device: cuda
+
+decode:
+  beam_size: 3
+  max_decode_len: 64

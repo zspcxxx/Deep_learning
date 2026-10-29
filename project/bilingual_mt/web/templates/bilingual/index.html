@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>中英互译 · Transformer</title>
+<link rel="stylesheet" href="{{ url_for('bilingual.static', filename='style.css') }}">
+</head>
+<body data-base="{{ url_for('bilingual.index') }}">
+<header class="top">
+  {% if url_for('bilingual.index') != '/' %}<a class="home" href="/">← 实验看板</a>{% endif %}
+  <div class="brand">中英互译 <span>Encoder–Decoder Transformer · EN↔ZH</span></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" data-tab="config" role="tab"><b>1</b> 配置</button>
+    <button class="tab" data-tab="train" role="tab"><b>2</b> 训练</button>
+    <button class="tab" data-tab="eval" role="tab"><b>3</b> 验证</button>
+    <button class="tab" data-tab="guide" role="tab">说明</button>
+  </nav>
+  <div class="gpu-meter" id="gpuMeter" title="GPU 使用率">
+    <span class="gpu-label">GPU</span>
+    <div class="gpu-track"><div class="gpu-fill" id="gpuFill"></div></div>
+    <span class="gpu-pct" id="gpuPct">—</span>
+  </div>
+  <div class="job-pill" id="jobPill" hidden></div>
+</header>
+
+<main>
+  <section class="panel" id="tab-config" hidden>
+    <div class="card">
+      <h2>数据集</h2>
+      <div id="datasetList" class="dataset-list"></div>
+    </div>
+    <div class="card">
+      <div class="row-between">
+        <h2>训练配置</h2>
+        <div class="presets" id="presets"></div>
+      </div>
+      <form id="configForm" class="config-grid" autocomplete="off"></form>
+      <div class="actions">
+        <button class="btn" id="btnCheck" type="button">检查配置</button>
+        <button class="btn primary" id="btnStart" type="button">开始训练</button>
+        <button class="btn" type="button" data-goto-guide>参数说明</button>
+        <span class="hint" id="configMsg"></span>
+      </div>
+    </div>
+    <div class="card" id="checkCard" hidden>
+      <h2>配置检查结果</h2>
+      <div id="checkResult" class="stat-grid"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-train" hidden>
+    <div class="card" id="trainEmpty">
+      <p class="muted">还没有训练任务。到「配置」页设置参数后点击「开始训练」。</p>
+    </div>
+    <div id="trainBody" hidden>
+      <div class="card">
+        <div class="row-between">
+          <div>
+            <h2 id="trainTitle">—</h2>
+            <div class="muted small" id="trainMeta"></div>
+          </div>
+          <div class="actions tight">
+            <span class="status" id="trainStatus"></span>
+            <button class="btn danger" id="btnStop" type="button">停止训练</button>
+            <button class="btn" id="btnToEval" type="button" hidden>去验证这个模型</button>
+          </div>
+        </div>
+        <div class="progress"><div class="bar" id="trainBar"></div></div>
+        <div class="stat-row" id="trainStats"></div>
+      </div>
+      <div class="chart-grid">
+        <div class="card"><h3>损失（训练 / 验证）</h3><canvas id="chartLoss" height="230"></canvas></div>
+        <div class="card"><h3>验证 BLEU</h3><canvas id="chartBleu" height="230"></canvas></div>
+        <div class="card"><h3>学习率</h3><canvas id="chartLr" height="230"></canvas></div>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3>每轮结果</h3>
+          <div class="table-wrap"><table class="data metrics" id="epochTable">
+            <thead><tr>
+              <th>轮</th>
+              <th class="num">训练损失</th><th class="num">验证损失</th>
+              <th class="num">困惑度</th><th class="num">BLEU</th>
+              <th class="num">英→中</th><th class="num">中→英</th>
+              <th class="num">用时</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h3>验证集样例 <span class="muted small" id="sampleEpoch"></span></h3>
+          <div id="samples" class="samples"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>日志</h3>
+        <pre class="log" id="trainLog"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-eval" hidden>
+    <div class="eval-layout">
+      <aside class="card runs">
+        <div class="row-between"><h2>已训练的模型</h2><button class="btn small" id="btnRefreshRuns" type="button">刷新</button></div>
+        <div id="runList" class="run-list"></div>
+      </aside>
+      <div class="eval-main">
+        <div class="card" id="evalEmpty"><p class="muted">从左侧选择一个已完成（或已停止）的训练运行。</p></div>
+        <div id="evalBody" hidden>
+          <div class="card">
+            <div class="row-between">
+              <div><h2 id="evalTitle"></h2><div class="muted small" id="evalMeta"></div></div>
+              <div class="actions tight">
+                <label class="inline">检查点
+                  <select id="evalCkpt"><option value="best">best</option><option value="last">last</option></select>
+                </label>
+                <button class="btn danger small" id="btnDeleteRun" type="button">删除</button>
+              </div>
+            </div>
+            <div class="stat-row" id="evalStats"></div>
+            <details class="config-detail"><summary>完整配置</summary><div id="evalConfig" class="kv"></div></details>
+            <div class="chart-grid two">
+              <div><h3>损失</h3><canvas id="evalChartLoss" height="200"></canvas></div>
+              <div><h3>验证 BLEU</h3><canvas id="evalChartBleu" height="200"></canvas></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>交互翻译</h2>
+            <div class="translate-box">
+              <div class="actions" style="margin-bottom:.5rem">
+                <label class="inline">方向
+                  <select id="direction">
+                    <option value="en2zh">英 → 中</option>
+                    <option value="zh2en">中 → 英</option>
+                  </select>
+                </label>
+              </div>
+              <textarea id="srcText" rows="2" placeholder="输入待译句子…"></textarea>
+              <div class="actions">
+                <label class="inline">解码
+                  <select id="beamSize"><option value="1">贪心</option><option value="4" selected>束搜索 (4)</option><option value="8">束搜索 (8)</option></select>
+                </label>
+                <button class="btn primary" id="btnTranslate" type="button">翻译</button>
+                <span class="hint" id="translateMsg"></span>
+              </div>
+              <div class="examples" id="examples"></div>
+            </div>
+            <div id="translateOut" hidden>
+              <div class="output" id="outText"></div>
+              <div class="muted small">源端子词：</div>
+              <div class="tokens" id="srcTokens"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <h2>测试集评估</h2>
+            <div class="actions">
+              <label class="inline">数据
+                <select id="evalSplit"><option value="test">测试集</option><option value="val">验证集</option></select>
+              </label>
+              <label class="inline">句数
+                <select id="evalLimit"><option value="200">前 200 句</option><option value="0">全部</option></select>
+              </label>
+              <label class="inline">解码
+                <select id="evalBeam"><option value="1">贪心</option><option value="4">束搜索 (4)</option></select>
+              </label>
+              <button class="btn primary" id="btnEvaluate" type="button">开始评估</button>
+              <span class="hint" id="evalMsg"></span>
+            </div>
+            <div id="evalResult" hidden>
+              <div class="stat-row" id="evalScore"></div>
+              <div class="row-between">
+                <h3>逐句对照（源 / 参考 / 模型）</h3>
+                <label class="inline">排序
+                  <select id="evalSort"><option value="order">原顺序</option><option value="worst">分数由低到高</option><option value="best">分数由高到低</option></select>
+                </label>
+              </div>
+              <div class="table-wrap tall"><table class="data" id="evalTable">
+                <thead><tr><th style="width:3rem">#</th><th>方向</th><th>源文</th><th>参考</th><th>模型</th><th class="num" style="width:5rem">分数</th></tr></thead>
+                <tbody></tbody>
+              </table></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-guide" hidden>
+    {% include "bilingual/_guide.html" %}
+  </section>
+</main>
+
+<script src="{{ url_for('bilingual.static', filename='charts.js') }}"></script>
+<script src="{{ url_for('bilingual.static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+# 完整中英互译默认配置（双向 both）
+name: bilingual_base
+
+data:
+  dataset: news-commentary
+  direction: both          # en2zh | zh2en | both
+  max_pairs: 0             # 0 = 全量
+  zh_simplified: true
+  max_src_len: 64
+  max_tgt_len: 64
+  val_ratio: 0.02
+  test_ratio: 0.02
+  seed: 42
+
+vocab:
+  vocab_size: 8000
+
+model:
+  d_model: 512
+  n_heads: 8
+  n_enc_layers: 6
+  n_dec_layers: 6
+  d_ff: 2048
+  dropout: 0.1
+  norm_first: true
+  activation: gelu
+  tie_embeddings: true
+
+train:
+  epochs: 30
+  batch_size: 64
+  lr: 5.0e-4
+  schedule: cosine         # cosine | inverse_sqrt | constant
+  warmup_steps: 4000
+  weight_decay: 0.01
+  label_smoothing: 0.1
+  grad_clip: 1.0
+  patience: 5
+  amp: true
+  device: auto
+  num_workers: 0
+  log_every: 50
+
+decode:
+  beam_size: 4
+  max_decode_len: 80

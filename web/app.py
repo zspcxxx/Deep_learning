@@ -16,6 +16,7 @@ app = Flask(__name__)
 app.json.ensure_ascii = False
 DOCS = PROJECT_ROOT / "docs"
 TRANSLATOR_DIR = PROJECT_ROOT / "project" / "tiny_translator"
+BILINGUAL_DIR = PROJECT_ROOT / "project" / "bilingual_mt"
 manager = RunManager()
 
 
@@ -30,11 +31,33 @@ def mount_translator() -> str | None:
     return None
 
 
+def mount_bilingual() -> str | None:
+    """Serve project/bilingual_mt at /bilingual/."""
+    sys.path.insert(0, str(BILINGUAL_DIR))
+    try:
+        from mt.webui import bp as bilingual_bp
+    except ImportError as exc:
+        return (
+            f"{exc}（在本环境安装：pip install torch flask sentencepiece sacrebleu pyyaml zhconv，"
+            f"或运行 {BILINGUAL_DIR.name}/scripts/setup.sh）"
+        )
+    app.register_blueprint(bilingual_bp, url_prefix="/bilingual")
+    return None
+
+
 TRANSLATOR_ERROR = mount_translator()
 if TRANSLATOR_ERROR:
     @app.get("/translator/")
     def translator_unavailable():
         return render_template("translator_unavailable.html", reason=TRANSLATOR_ERROR), 503
+
+BILINGUAL_ERROR = mount_bilingual()
+if BILINGUAL_ERROR:
+    @app.get("/bilingual/")
+    def bilingual_unavailable():
+        return render_template(
+            "bilingual_unavailable.html", reason=BILINGUAL_ERROR
+        ), 503
 
 DOC_FILES = {
     "01": "01_perceptron.html",

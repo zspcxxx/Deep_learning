@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}中英互译不可用 · Deep Learning Lab{% endblock %}
+{% block content %}
+<header class="hero">
+  <h1>中英互译页面暂时不可用</h1>
+  <p class="lead">加载 <code>project/bilingual_mt</code> 失败：</p>
+  <pre class="log">{{ reason }}</pre>
+  <p class="lead">安装依赖后重启看板即可。代码目录：<code>project/bilingual_mt/</code>。</p>
+  <p><a class="btn" href="/">← 返回看板</a></p>
+</header>
+{% endblock %}
