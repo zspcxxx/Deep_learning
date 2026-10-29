@@ -1,0 +1,37 @@
+# 儿童对话中英互译（短句、both 方向）
+inherit: base.yaml
+name: bilingual_kids
+
+data:
+  dataset: kids-dialogue
+  direction: both
+  max_pairs: 0
+  max_src_len: 32
+  max_tgt_len: 32
+  val_ratio: 0.05
+  test_ratio: 0.05
+
+vocab:
+  vocab_size: 4000
+
+model:
+  d_model: 256
+  n_heads: 4
+  n_enc_layers: 3
+  n_dec_layers: 3
+  d_ff: 1024
+  dropout: 0.15
+
+train:
+  epochs: 40
+  batch_size: 32
+  lr: 7.0e-4
+  schedule: cosine
+  warmup_steps: 500
+  patience: 6
+  amp: true
+  device: auto
+
+decode:
+  beam_size: 4
+  max_decode_len: 40

@@ -9,11 +9,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIGS = ROOT / "configs"
-DATA_DIR = ROOT / "data"
 RUNS_DIR = ROOT / "runs"
 
-# Also look for corpora already downloaded by the sibling tiny_translator project.
-SIBLING_DATA = ROOT.parent / "tiny_translator" / "data"
+# Shared by all translation projects under project/ (tiny_translator, bilingual_mt, …).
+DATA_DIR = ROOT.parent / "mt_data"
+# Legacy per-project folder still accepted as a fallback when listing/loading.
+LEGACY_DATA_DIR = ROOT / "data"
 
 DIRECTIONS = ("en2zh", "zh2en", "both")
 
@@ -22,7 +23,7 @@ DIRECTIONS = ("en2zh", "zh2en", "both")
 class TrainConfig:
     name: str = "bilingual"
     # data
-    dataset: str = "news-commentary"  # stem of data/<name>.tsv, or a built-in downloadable name
+    dataset: str = "kids-dialogue"  # stem under project/mt_data/, or a built-in name
     direction: str = "both"  # en2zh | zh2en | both
     max_pairs: int = 0
     zh_simplified: bool = True

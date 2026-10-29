@@ -52,11 +52,12 @@
     <p>只影响目录名：结果写到 <code>project/tiny_translator/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。起一个能区分实验的名字
       （如 <code>quick</code>、<code>d256_ep30</code>），方便验证页对照。</p>
 
-    <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>cmn-eng</code>）</h3>
+    <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>cmn-eng</code>；儿童场景用 <code>kids-dialogue</code>）</h3>
     <p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置三套可下载语料：</p>
     <ul>
+      <li><code>kids-dialogue</code>：儿童/家庭口语（共享 <code>project/mt_data/</code>，约 2.8k）；适合小朋友对话翻译，需已同步到设备。</li>
       <li><code>cmn-eng</code>：Tatoeba 短句约 3 万对，上手快。</li>
-      <li><code>news-commentary</code>：WMT 新闻评论约 <strong>31 万对</strong>，质量更高，想提升效果优先选它；句子更长，配合预设「新闻语料」或把长度调到约 40 / 60。</li>
+      <li><code>news-commentary</code>：WMT 新闻评论约 <strong>31 万对</strong>；句子更长，配合预设「新闻语料」或把长度调到约 40 / 60。</li>
       <li><code>ted2020</code>：TED 口语约 1.6 万对。</li>
     </ul>
     <p>也可自备同格式的 TSV，刷新后会出现在下拉框。</p>

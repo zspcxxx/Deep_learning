@@ -75,13 +75,38 @@ FIELDS: dict[str, tuple[str, str, str, dict]] = {
 _HIDDEN = {"spm_model", "num_workers", "share_encoder_decoder_emb"}
 
 PRESETS = {
+    "kids": {
+        "label": "儿童对话互译（推荐）",
+        "values": {
+            "name": "kids",
+            "dataset": "kids-dialogue",
+            "direction": "both",
+            "max_pairs": 0,
+            "max_src_len": 32,
+            "max_tgt_len": 32,
+            "vocab_size": 4000,
+            "d_model": 256,
+            "n_heads": 4,
+            "n_enc_layers": 3,
+            "n_dec_layers": 3,
+            "d_ff": 1024,
+            "dropout": 0.15,
+            "epochs": 40,
+            "batch_size": 32,
+            "lr": 7e-4,
+            "warmup_steps": 500,
+            "patience": 6,
+            "beam_size": 4,
+            "max_decode_len": 40,
+        },
+    },
     "quick": {
         "label": "快速试跑（Jetson ≈ 数分钟）",
         "values": {
             "name": "quick",
-            "dataset": "cmn-eng",
+            "dataset": "kids-dialogue",
             "direction": "both",
-            "max_pairs": 15000,
+            "max_pairs": 0,
             "max_src_len": 32,
             "max_tgt_len": 32,
             "vocab_size": 4000,
@@ -90,7 +115,7 @@ PRESETS = {
             "n_enc_layers": 2,
             "n_dec_layers": 2,
             "d_ff": 512,
-            "epochs": 8,
+            "epochs": 12,
             "batch_size": 64,
             "lr": 1e-3,
             "warmup_steps": 200,
@@ -98,7 +123,7 @@ PRESETS = {
         },
     },
     "jetson": {
-        "label": "Jetson 互译（中等）",
+        "label": "Jetson 新闻互译（中等，非儿童）",
         "values": {
             "name": "jetson",
             "dataset": "news-commentary",
@@ -120,12 +145,12 @@ PRESETS = {
         },
     },
     "en2zh": {
-        "label": "仅英→中",
-        "values": {"name": "en2zh", "direction": "en2zh", "dataset": "news-commentary"},
+        "label": "仅英→中（儿童语料）",
+        "values": {"name": "en2zh_kids", "direction": "en2zh", "dataset": "kids-dialogue"},
     },
     "zh2en": {
-        "label": "仅中→英",
-        "values": {"name": "zh2en", "direction": "zh2en", "dataset": "news-commentary"},
+        "label": "仅中→英（儿童语料）",
+        "values": {"name": "zh2en_kids", "direction": "zh2en", "dataset": "kids-dialogue"},
     },
 }
 

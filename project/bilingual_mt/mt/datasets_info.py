@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .config import DATA_DIR, SIBLING_DATA
+from .config import DATA_DIR, LEGACY_DATA_DIR
 from .data import BUILTINS, download_builtin
 
 
@@ -15,10 +15,18 @@ def _count_lines(path: Path) -> int:
     return n
 
 
+def _resolve_tsv(name: str) -> Path | None:
+    for root in (DATA_DIR, LEGACY_DATA_DIR):
+        cand = root / f"{name}.tsv"
+        if cand.is_file():
+            return cand
+    return None
+
+
 def list_datasets() -> list[dict]:
     """Return dataset cards for the config tab."""
     names = set(BUILTINS)
-    for root in (DATA_DIR, SIBLING_DATA):
+    for root in (DATA_DIR, LEGACY_DATA_DIR):
         if not root.is_dir():
             continue
         for p in root.glob("*.tsv"):
@@ -26,12 +34,8 @@ def list_datasets() -> list[dict]:
 
     out = []
     for name in sorted(names):
-        path = DATA_DIR / f"{name}.tsv"
-        if not path.is_file():
-            sib = SIBLING_DATA / f"{name}.tsv"
-            if sib.is_file():
-                path = sib
-        ready = path.is_file()
+        path = _resolve_tsv(name)
+        ready = path is not None
         meta = BUILTINS.get(name, {})
         out.append(
             {
@@ -47,13 +51,11 @@ def list_datasets() -> list[dict]:
 
 
 def ensure_dataset(name: str, log=None) -> Path:
-    path = DATA_DIR / f"{name}.tsv"
-    if path.is_file():
+    path = _resolve_tsv(name)
+    if path is not None:
         return path
-    if (SIBLING_DATA / f"{name}.tsv").is_file():
-        return download_builtin(name)  # will symlink
     if name in BUILTINS:
         if log:
             log(f"下载数据集 {name}…")
         return download_builtin(name)
-    raise FileNotFoundError(f"找不到数据集 data/{name}.tsv")
+    raise FileNotFoundError(f"找不到数据集 {DATA_DIR}/{name}.tsv")

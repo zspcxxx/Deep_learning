@@ -14,12 +14,19 @@ from pathlib import Path
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
+# Shared by all translation projects under project/ (see project/mt_data/).
+DATA_DIR = ROOT.parent / "mt_data"
+LEGACY_DATA_DIR = ROOT / "data"
 
 PAD, BOS, EOS, UNK = 0, 1, 2, 3
 SPECIALS = ["<pad>", "<bos>", "<eos>", "<unk>"]
 
 BUILTIN = {
+    "kids-dialogue": {
+        "label": "儿童对话中英（家庭/学校口语，共享 mt_data，适合小朋友）",
+        "url": "",
+        "format": "shared_ready",  # 由 bilingual_mt 构建；本页只消费共享文件
+    },
     "cmn-eng": {
         "label": "Tatoeba 英→中（manythings.org，约 3 万短句，CC-BY 2.0）",
         "url": "https://www.manythings.org/anki/cmn-eng.zip",
@@ -29,7 +36,7 @@ BUILTIN = {
     # WMT News Commentary：新闻评论平行语料，质量高、规模大，比短句 Tatoeba 更适合提升 BLEU。
     # 句子偏长，建议把英文最大词数 / 中文最大字数调到约 40 / 60。
     "news-commentary": {
-        "label": "News Commentary 英→中（WMT/statmt，约 31 万对，推荐）",
+        "label": "News Commentary 英→中（WMT/statmt，约 31 万对）",
         "url": "https://data.statmt.org/news-commentary/v16/training/news-commentary-v16.en-zh.tsv.gz",
         "format": "tsv_gz",
     },
@@ -69,7 +76,14 @@ def to_simplified(text: str) -> str:
 # ---------------------------------------------------------------- datasets
 
 def dataset_path(name: str) -> Path:
-    return DATA_DIR / f"{name}.tsv"
+    """Prefer shared mt_data/; fall back to this project's legacy data/."""
+    shared = DATA_DIR / f"{name}.tsv"
+    if shared.is_file():
+        return shared
+    legacy = LEGACY_DATA_DIR / f"{name}.tsv"
+    if legacy.is_file():
+        return legacy
+    return shared
 
 
 def _count_lines(path: Path) -> int:
@@ -79,14 +93,17 @@ def _count_lines(path: Path) -> int:
 
 def list_datasets() -> list[dict]:
     labels = {name: spec["label"] for name, spec in BUILTIN.items()}
-    if DATA_DIR.is_dir():
-        for path in sorted(DATA_DIR.glob("*.tsv")):
-            labels.setdefault(path.stem, f"自定义句对文件 data/{path.name}")
+    for root in (DATA_DIR, LEGACY_DATA_DIR):
+        if root.is_dir():
+            for path in sorted(root.glob("*.tsv")):
+                labels.setdefault(path.stem, f"自定义句对文件 {path.name}")
     out = []
     for name, label in labels.items():
         path = dataset_path(name)
         ready = path.is_file()
-        out.append({"name": name, "label": label, "ready": ready, "downloadable": name in BUILTIN,
+        spec = BUILTIN.get(name)
+        downloadable = bool(spec) and spec.get("format") != "shared_ready"
+        out.append({"name": name, "label": label, "ready": ready, "downloadable": downloadable,
                     "pairs": _count_lines(path) if ready else None})
     return out
 
@@ -155,11 +172,20 @@ def _pairs_from_tsv_gz(blob: bytes) -> list[tuple[str, str]]:
 def download_dataset(name: str, log=print) -> int:
     spec = BUILTIN.get(name)
     if spec is None:
-        raise ValueError(f"数据集 {name} 不支持自动下载，请把句对文件放到 data/{name}.tsv")
+        raise ValueError(f"数据集 {name} 不支持自动下载，请把句对文件放到 {DATA_DIR}/{name}.tsv")
+    dest = DATA_DIR / f"{name}.tsv"
+    fmt = spec.get("format", "anki_zip")
+    if fmt == "shared_ready":
+        if dest.is_file():
+            n = _count_lines(dest)
+            log(f"{name} 已在共享目录就绪：{dest}（{n} 行）")
+            return n
+        raise FileNotFoundError(
+            f"{name} 需由 bilingual_mt 构建后放入 {dest}（本机下载后 rsync 到设备）"
+        )
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     log(f"下载 {spec['url']} …")
     blob = _fetch(spec["url"])
-    fmt = spec.get("format", "anki_zip")
     if fmt == "anki_zip":
         pairs = _pairs_from_anki_zip(blob, spec["member"])
     elif fmt == "opus_moses":
@@ -169,9 +195,13 @@ def download_dataset(name: str, log=print) -> int:
     else:
         raise ValueError(f"未知数据集格式：{fmt}")
     pairs = _normalize_en_zh_pairs(pairs)
-    dest = dataset_path(name)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     write_pairs(dest, pairs)
-    log(f"已保存 {len(pairs)} 个句对到 {dest.relative_to(ROOT)}")
+    try:
+        shown = dest.relative_to(ROOT.parent)
+    except ValueError:
+        shown = dest
+    log(f"已保存 {len(pairs)} 个句对到 {shown}")
     return len(pairs)
 
 
@@ -244,7 +274,7 @@ class Prepared:
 def prepare(cfg, log=print) -> Prepared:
     path = dataset_path(cfg.dataset)
     if not path.is_file():
-        raise FileNotFoundError(f"找不到数据集文件 {path.relative_to(ROOT)}")
+        raise FileNotFoundError(f"找不到数据集文件 {path}")
     pairs = read_pairs(path)
     total = len(pairs)
     rng = random.Random(cfg.seed)

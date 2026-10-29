@@ -31,7 +31,7 @@ done
 
 同样的页面也挂在上级 Deep_learning 实验看板里（推荐，设备上就是这样部署的）：在仓库根目录后台启动看板
 `setsid nohup .venv/bin/python web/app.py > /tmp/dllab_web.log 2>&1 < /dev/null &`，然后打开 `http://<IP>:8080/translator/`
-（看板顶部导航的“模型实验”；完整的安装、停止、重启命令见根目录 README「手动安装与启动」）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `data/` 和 `runs/`。
+（看板顶部导航的“模型实验”；完整的安装、停止、重启命令见根目录 README「手动安装与启动」）。看板所用的 Python 环境需要装 `torch zhconv`；两种启动方式共用本目录的 `runs/`，语料与 `bilingual_mt` 共享 `project/mt_data/`。
 训练与验证页会轮询 GPU 使用率（Jetson 读 sysfs，其它机器读 nvidia-smi）。
 
 配置页每一项参数的含义、默认值与调法见网页内「说明」标签：`/translator/#guide`
@@ -51,11 +51,12 @@ done
 
 | 名称 | 来源 | 约句对数 | 说明 |
 |---|---|---|---|
+| `kids-dialogue` | 本机构建后放入 `project/mt_data/` | ~2.8k | 儿童/家庭口语，适合小朋友对话（与 bilingual_mt 共享） |
 | `cmn-eng` | [manythings / Tatoeba](https://www.manythings.org/anki/) | 3 万 | 短句口语，上手快（默认） |
-| `news-commentary` | [WMT News Commentary v16](https://data.statmt.org/news-commentary/v16/) | **31 万** | 新闻评论，质量高，**推荐用来提升效果**；句子较长，可用预设「新闻语料」或把长度调到 40 / 60 |
+| `news-commentary` | [WMT News Commentary v16](https://data.statmt.org/news-commentary/v16/) | **31 万** | 新闻评论；句子较长，可用预设「新闻语料」或把长度调到 40 / 60 |
 | `ted2020` | [OPUS TED2020](https://opus.nlpl.eu/) | 1.6 万 | TED 口语演讲句对 |
 
-也可以放入自己的句对文件 `data/<名称>.tsv`，每行 `英文<Tab>中文`，刷新后出现在下拉框。
+也可以放入自己的句对文件 `project/mt_data/<名称>.tsv`，每行 `英文<Tab>中文`，刷新后出现在下拉框。
 
 - 英文：小写，按词和标点切分，训练集中出现少于“词表最低频次”次的词记为 `<unk>`。
 - 中文：默认用 `zhconv` 统一转为简体（Tatoeba 原文繁简混杂），按字切分，保留全角标点。
@@ -78,7 +79,7 @@ web/
   app.py       单独启动（端口 8090）
   templates/translator/index.html, static/{app.js, charts.js, style.css}
 scripts/setup.sh, scripts/run.sh
-data/          下载的语料（不提交）
+（语料）       与 bilingual_mt 共享 ../mt_data/（不提交）
 runs/<时间>_<名称>/   config.json、vocab_*.json、val/test.tsv、history.json、summary.json、train.log、best.pt、last.pt（不提交）
 ```
 

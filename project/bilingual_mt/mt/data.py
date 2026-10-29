@@ -10,11 +10,16 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import DATA_DIR, SIBLING_DATA
+from .config import DATA_DIR, LEGACY_DATA_DIR
 from .text import clean_pair
 
 # Built-in corpora (same sources as tiny_translator where possible).
 BUILTINS: dict[str, dict] = {
+    "kids-dialogue": {
+        "url": "",
+        "kind": "kids_build",
+        "label": "儿童对话中英（家庭/学校口语，适合双向互译）",
+    },
     "cmn-eng": {
         "url": "https://www.manythings.org/anki/cmn-eng.zip",
         "kind": "anki",
@@ -44,12 +49,22 @@ def _download(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
     print(f"下载 {url}")
-    urllib.request.urlretrieve(url, tmp)
+    # manythings.org 等站点对无 UA 的请求会返回 406。
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; bilingual_mt/0.1; +local-lab)"},
+    )
+    with urllib.request.urlopen(req, timeout=600) as resp, tmp.open("wb") as out:
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
     tmp.replace(dest)
 
 
 def _find_existing_tsv(name: str) -> Path | None:
-    for root in (DATA_DIR, SIBLING_DATA):
+    for root in (DATA_DIR, LEGACY_DATA_DIR):
         for cand in (root / f"{name}.tsv", root / name / f"{name}.tsv"):
             if cand.is_file():
                 return cand
@@ -109,12 +124,13 @@ def download_builtin(name: str, force: bool = False) -> Path:
         return out
     existing = _find_existing_tsv(name)
     if existing and not force:
-        if existing.resolve() != out.resolve():
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            if not out.exists():
-                out.symlink_to(existing.resolve())
-                print(f"链接已有语料 → {out} -> {existing}")
-        return out if out.exists() else existing
+        if existing.resolve() == out.resolve():
+            return out
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if not out.exists():
+            existing.replace(out)
+            print(f"已迁入共享语料目录 → {out}")
+        return out
 
     meta = BUILTINS.get(name)
     if meta is None:
@@ -122,11 +138,22 @@ def download_builtin(name: str, force: bool = False) -> Path:
             f"未知数据集 {name!r}。可选内置：{list(BUILTINS)}，或把 TSV 放到 {DATA_DIR}/{name}.tsv"
         )
 
+    kind = meta["kind"]
+    if kind == "kids_build":
+        import importlib.util
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "build_kids_dialogue.py"
+        spec = importlib.util.spec_from_file_location("build_kids_dialogue", script)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"无法加载 {script}")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod.build(out, force_download=force)
+
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     raw = DATA_DIR / f"_raw_{name}"
     raw.mkdir(exist_ok=True)
     url = meta["url"]
-    kind = meta["kind"]
     if kind == "anki":
         zpath = raw / "cmn-eng.zip"
         if not zpath.is_file() or force:

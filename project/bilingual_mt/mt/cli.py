@@ -19,7 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     d = sub.add_parser("download", help="下载内置平行语料到 data/")
-    d.add_argument("dataset", choices=["cmn-eng", "news-commentary", "ted2020", "all"])
+    d.add_argument(
+        "dataset",
+        choices=["kids-dialogue", "cmn-eng", "news-commentary", "ted2020", "all"],
+    )
     d.add_argument("--force", action="store_true")
 
     pr = sub.add_parser("prepare", help="清洗语料、划分、训练 SentencePiece")

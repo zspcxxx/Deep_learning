@@ -38,8 +38,8 @@
   <div class="card"><h4>目标</h4><p>标签平滑交叉熵；验证/测试用 sacrebleu（中文 <code>zh</code> 分词、英文 <code>13a</code>）。</p></div>
   <div class="card"><h4>产出</h4><p><code>runs/&lt;时间&gt;_&lt;名称&gt;/</code>：配置、SPM 模型、history、best/last 权重；也可用 CLI 同目录训练。</p></div>
 </div>
-<div class="callout ok"><strong>建议用法</strong>先套预设「快速试跑」跑通互译；再切「Jetson 互译」或换
-  <code>news-commentary</code> 做正式实验。一次只改一类旋钮，并与「模型实验」的结果区分开（任务与分词都不同，BLEU 不可直接横比）。</div>
+<div class="callout ok"><strong>建议用法</strong>先套预设「儿童对话互译」或「快速试跑」跑通中英双向；
+  新闻类正式实验再用「Jetson 新闻互译」/<code>news-commentary</code>。一次只改一类旋钮；与「模型实验」BLEU 不可直接横比。</div>
 
 <h2 id="guide-vs">与 tiny_translator（模型实验）的实现差异</h2>
 <p>两者都是「网页上配置 → 后台训 Transformer → 验证试译」，但<strong>定位不同</strong>：
@@ -136,12 +136,12 @@
 <h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>bilingual</code>）</h3>
 <p>结果目录：<code>project/bilingual_mt/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。与 tiny 的 runs <strong>互不覆盖</strong>，请用能区分实验的名字（如 <code>jetson_both</code>、<code>nc_en2zh</code>）。</p>
 
-<h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>news-commentary</code>）</h3>
-<p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置与模型实验相同的三套可下载语料；设备上通常已软链自
-  <code>tiny_translator/data</code>。</p>
+<h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>kids-dialogue</code>）</h3>
+<p>每行 <code>英文&lt;Tab&gt;中文</code>，文件在共享目录 <code>project/mt_data/&lt;名称&gt;.tsv</code>（与「模型实验」共用）。</p>
 <ul>
-  <li><code>cmn-eng</code>：短句，适合快速试跑（与 tiny 默认语料一致）。</li>
-  <li><code>news-commentary</code>：约 31 万对新闻评论，<strong>本项目默认</strong>；句子更长，请配合足够的 <code>max_*_len</code>。</li>
+  <li><code>kids-dialogue</code>：儿童/家庭口语短句（约 2.8k），适合小朋友双向对话翻译；<strong>本项目默认</strong>。本机构建后 rsync 到设备，勿在设备上慢速拉网。</li>
+  <li><code>cmn-eng</code>：Tatoeba 短句，通用口语，可自动下载。</li>
+  <li><code>news-commentary</code>：约 31 万对新闻评论；句子更长，请配合足够的 <code>max_*_len</code>。</li>
   <li><code>ted2020</code>：口语演讲句对。</li>
 </ul>
 
@@ -260,18 +260,23 @@
 <table>
   <tr><th>预设</th><th>要点</th><th>适合</th></tr>
   <tr>
+    <td>儿童对话互译</td>
+    <td>kids-dialogue、both、全量、d=256、3+3、vocab=4k、40 轮、batch=32</td>
+    <td>小朋友口语双向翻译（推荐）</td>
+  </tr>
+  <tr>
     <td>快速试跑</td>
-    <td>cmn-eng、both、1.5 万句、d=128、2+2、vocab=4k、8 轮、batch=64</td>
+    <td>kids-dialogue、both、d=128、2+2、vocab=4k、12 轮、batch=64</td>
     <td>确认互译流程、曲线、GPU；数分钟量级</td>
   </tr>
   <tr>
-    <td>Jetson 互译</td>
+    <td>Jetson 新闻互译</td>
     <td>news-commentary、both、最多 8 万句、d=256、4+4、batch=16、20 轮</td>
-    <td>边缘设备上认真训一版互译</td>
+    <td>新闻域互译（非儿童场景）</td>
   </tr>
   <tr>
     <td>仅英→中 / 仅中→英</td>
-    <td>把 <code>direction</code> 设为单方向（其它跟默认）</td>
+    <td>kids-dialogue + 单方向</td>
     <td>对照「互译 vs 单向」或只要一个方向</td>
   </tr>
 </table>
