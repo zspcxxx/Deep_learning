@@ -1,18 +1,16 @@
-# 儿童对话中英互译（短句、both 方向）
+# 儿童口语中英互译（推荐）：儿童口语合集 5 万句、both 方向
 inherit: base.yaml
 name: bilingual_kids
 
 data:
-  dataset: kids-dialogue
+  dataset: kids-mix
   direction: both
-  max_pairs: 0
-  max_src_len: 32
-  max_tgt_len: 32
-  val_ratio: 0.05
-  test_ratio: 0.05
+  max_pairs: 50000
+  val_ratio: 0.03
+  test_ratio: 0.03
 
 vocab:
-  vocab_size: 4000
+  vocab_size: 8000
 
 model:
   d_model: 256
@@ -20,15 +18,15 @@ model:
   n_enc_layers: 3
   n_dec_layers: 3
   d_ff: 1024
-  dropout: 0.15
+  dropout: 0.1
 
 train:
-  epochs: 40
-  batch_size: 32
+  epochs: 20
+  batch_size: 64
   lr: 7.0e-4
   schedule: cosine
-  warmup_steps: 500
-  patience: 6
+  warmup_steps: 1000
+  patience: 4
   amp: true
   device: auto
 

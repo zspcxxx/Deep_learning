@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 端到端冒烟（复用 sibling news-commentary，1 epoch 小模型）
+# 端到端冒烟（kids-tatoeba 前 2000 句，1 epoch 小模型）
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

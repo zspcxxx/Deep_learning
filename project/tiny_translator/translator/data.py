@@ -1,12 +1,10 @@
 """Parallel corpus: download, tokenisation, vocabularies, splits and batching."""
 from __future__ import annotations
 
-import io
+import importlib.util
 import random
 import re
 import unicodedata
-import urllib.request
-import zipfile
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,31 +19,12 @@ LEGACY_DATA_DIR = ROOT / "data"
 PAD, BOS, EOS, UNK = 0, 1, 2, 3
 SPECIALS = ["<pad>", "<bos>", "<eos>", "<unk>"]
 
+# All built by bilingual_mt/scripts/build_kids_corpora.py from OPUS, filtered for kids' spoken language.
+KIDS_BUILDER = ROOT.parent / "bilingual_mt" / "scripts" / "build_kids_corpora.py"
 BUILTIN = {
-    "kids-dialogue": {
-        "label": "儿童对话中英（家庭/学校口语，共享 mt_data，适合小朋友）",
-        "url": "",
-        "format": "shared_ready",  # 由 bilingual_mt 构建；本页只消费共享文件
-    },
-    "cmn-eng": {
-        "label": "Tatoeba 英→中（manythings.org，约 3 万短句，CC-BY 2.0）",
-        "url": "https://www.manythings.org/anki/cmn-eng.zip",
-        "format": "anki_zip",
-        "member": "cmn.txt",
-    },
-    # WMT News Commentary：新闻评论平行语料，质量高、规模大，比短句 Tatoeba 更适合提升 BLEU。
-    # 句子偏长，建议把英文最大词数 / 中文最大字数调到约 40 / 60。
-    "news-commentary": {
-        "label": "News Commentary 英→中（WMT/statmt，约 31 万对）",
-        "url": "https://data.statmt.org/news-commentary/v16/training/news-commentary-v16.en-zh.tsv.gz",
-        "format": "tsv_gz",
-    },
-    "ted2020": {
-        "label": "TED2020 英→中（OPUS，约 1.6 万口语句对）",
-        "url": "https://object.pouta.csc.fi/OPUS-TED2020/v1/moses/en-zh.txt.zip",
-        "format": "opus_moses",
-        "prefix": "TED2020.en-zh",
-    },
+    "kids-mix": {"label": "儿童口语·合集（人工种子 + 影视字幕 + Tatoeba，去重）"},
+    "kids-subtitles": {"label": "儿童口语·影视字幕（OpenSubtitles 2024 按儿童话题筛选）"},
+    "kids-tatoeba": {"label": "儿童口语·日常短句（Tatoeba 2026 筛选，量小质优）"},
 }
 
 EN_TOKEN = re.compile(r"[a-z0-9]+(?:'[a-z]+)?|[^\sa-z0-9]")
@@ -101,108 +80,25 @@ def list_datasets() -> list[dict]:
     for name, label in labels.items():
         path = dataset_path(name)
         ready = path.is_file()
-        spec = BUILTIN.get(name)
-        downloadable = bool(spec) and spec.get("format") != "shared_ready"
-        out.append({"name": name, "label": label, "ready": ready, "downloadable": downloadable,
+        out.append({"name": name, "label": label, "ready": ready, "downloadable": name in BUILTIN,
                     "pairs": _count_lines(path) if ready else None})
     return out
 
 
-def _fetch(url: str, timeout: int = 600) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (tiny-translator)"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read()
-
-
-def _ascii_ratio(text: str) -> float:
-    if not text:
-        return 0.0
-    return sum(1 for c in text if ("a" <= c <= "z") or ("A" <= c <= "Z")) / len(text)
-
-
-def _normalize_en_zh_pairs(pairs: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    """Ensure (English, Chinese) order; some dumps put Chinese first."""
-    if not pairs:
-        return pairs
-    sample = pairs[:200]
-    swaps = sum(1 for en, zh in sample if _ascii_ratio(en) < _ascii_ratio(zh))
-    if swaps > len(sample) // 2:
-        pairs = [(zh, en) for en, zh in pairs]
-    # de-duplicate while keeping order
-    seen: set[tuple[str, str]] = set()
-    out: list[tuple[str, str]] = []
-    for pair in pairs:
-        if pair in seen:
-            continue
-        seen.add(pair)
-        out.append(pair)
-    return out
-
-
-def _pairs_from_anki_zip(blob: bytes, member: str) -> list[tuple[str, str]]:
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        text = zf.read(member).decode("utf-8")
-    pairs = []
-    for line in text.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
-            pairs.append((parts[0].strip(), parts[1].strip()))
-    return pairs
-
-
-def _pairs_from_opus_moses(blob: bytes, prefix: str) -> list[tuple[str, str]]:
-    with zipfile.ZipFile(io.BytesIO(blob)) as zf:
-        ens = zf.read(f"{prefix}.en").decode("utf-8").splitlines()
-        zhs = zf.read(f"{prefix}.zh").decode("utf-8").splitlines()
-    return [(e.strip(), z.strip()) for e, z in zip(ens, zhs) if e.strip() and z.strip()]
-
-
-def _pairs_from_tsv_gz(blob: bytes) -> list[tuple[str, str]]:
-    import gzip
-
-    text = gzip.decompress(blob).decode("utf-8", errors="replace")
-    pairs = []
-    for line in text.splitlines():
-        parts = line.split("\t")
-        if len(parts) >= 2 and parts[0].strip() and parts[1].strip():
-            pairs.append((parts[0].strip(), parts[1].strip()))
-    return pairs
-
-
 def download_dataset(name: str, log=print) -> int:
-    spec = BUILTIN.get(name)
-    if spec is None:
+    """Build a built-in kids corpus into the shared mt_data/ directory; returns its pair count."""
+    if name not in BUILTIN:
         raise ValueError(f"数据集 {name} 不支持自动下载，请把句对文件放到 {DATA_DIR}/{name}.tsv")
-    dest = DATA_DIR / f"{name}.tsv"
-    fmt = spec.get("format", "anki_zip")
-    if fmt == "shared_ready":
-        if dest.is_file():
-            n = _count_lines(dest)
-            log(f"{name} 已在共享目录就绪：{dest}（{n} 行）")
-            return n
-        raise FileNotFoundError(
-            f"{name} 需由 bilingual_mt 构建后放入 {dest}（本机下载后 rsync 到设备）"
-        )
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    log(f"下载 {spec['url']} …")
-    blob = _fetch(spec["url"])
-    if fmt == "anki_zip":
-        pairs = _pairs_from_anki_zip(blob, spec["member"])
-    elif fmt == "opus_moses":
-        pairs = _pairs_from_opus_moses(blob, spec["prefix"])
-    elif fmt == "tsv_gz":
-        pairs = _pairs_from_tsv_gz(blob)
-    else:
-        raise ValueError(f"未知数据集格式：{fmt}")
-    pairs = _normalize_en_zh_pairs(pairs)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    write_pairs(dest, pairs)
-    try:
-        shown = dest.relative_to(ROOT.parent)
-    except ValueError:
-        shown = dest
-    log(f"已保存 {len(pairs)} 个句对到 {shown}")
-    return len(pairs)
+    spec = importlib.util.spec_from_file_location("build_kids_corpora", KIDS_BUILDER)
+    if spec is None or spec.loader is None:
+        raise FileNotFoundError(f"找不到儿童语料构建脚本 {KIDS_BUILDER}")
+    builder = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builder)
+    log(f"从 OPUS 下载并筛选 {name}（影视字幕约 600 MB，需要几分钟）…")
+    dest = builder.build(name)
+    n = _count_lines(dest)
+    log(f"已保存 {n} 个句对到 {dest.relative_to(ROOT.parent)}")
+    return n
 
 
 def read_pairs(path: Path) -> list[tuple[str, str]]:

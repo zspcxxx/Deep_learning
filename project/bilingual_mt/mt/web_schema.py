@@ -74,85 +74,63 @@ FIELDS: dict[str, tuple[str, str, str, dict]] = {
 # Fields present on TrainConfig but omitted from the web form.
 _HIDDEN = {"spm_model", "num_workers", "share_encoder_decoder_emb"}
 
+# Presets climb the data ladder: tiny clean set → 50k → 200k → all of kids-mix.
+_KIDS_LEN = {"max_src_len": 32, "max_tgt_len": 32, "beam_size": 4, "max_decode_len": 40}
 PRESETS = {
-    "kids": {
-        "label": "儿童对话互译（推荐）",
-        "values": {
-            "name": "kids",
-            "dataset": "kids-dialogue",
-            "direction": "both",
-            "max_pairs": 0,
-            "max_src_len": 32,
-            "max_tgt_len": 32,
-            "vocab_size": 4000,
-            "d_model": 256,
-            "n_heads": 4,
-            "n_enc_layers": 3,
-            "n_dec_layers": 3,
-            "d_ff": 1024,
-            "dropout": 0.15,
-            "epochs": 40,
-            "batch_size": 32,
-            "lr": 7e-4,
-            "warmup_steps": 500,
-            "patience": 6,
-            "beam_size": 4,
-            "max_decode_len": 40,
-        },
-    },
     "quick": {
-        "label": "快速试跑（Jetson ≈ 数分钟）",
+        "label": "快速试跑：日常短句 3.8k（约 1 分钟）",
         "values": {
-            "name": "quick",
-            "dataset": "kids-dialogue",
-            "direction": "both",
-            "max_pairs": 0,
-            "max_src_len": 32,
-            "max_tgt_len": 32,
-            "vocab_size": 4000,
-            "d_model": 128,
-            "n_heads": 4,
-            "n_enc_layers": 2,
-            "n_dec_layers": 2,
-            "d_ff": 512,
-            "epochs": 12,
-            "batch_size": 64,
-            "lr": 1e-3,
-            "warmup_steps": 200,
-            "patience": 3,
+            "name": "quick", "dataset": "kids-tatoeba", "direction": "both", "max_pairs": 0,
+            "val_ratio": 0.05, "test_ratio": 0.05, "vocab_size": 2000, **_KIDS_LEN,
+            "d_model": 128, "n_heads": 4, "n_enc_layers": 2, "n_dec_layers": 2, "d_ff": 512,
+            "dropout": 0.1, "epochs": 40, "batch_size": 64, "lr": 1e-3, "warmup_steps": 200,
+            "patience": 5,
         },
     },
-    "jetson": {
-        "label": "Jetson 新闻互译（中等，非儿童）",
+    "kids": {
+        "label": "推荐：儿童口语 5 万句（约 13 分钟）",
         "values": {
-            "name": "jetson",
-            "dataset": "news-commentary",
-            "direction": "both",
-            "max_pairs": 80000,
-            "max_src_len": 48,
-            "max_tgt_len": 48,
-            "vocab_size": 6000,
-            "d_model": 256,
-            "n_heads": 4,
-            "n_enc_layers": 4,
-            "n_dec_layers": 4,
-            "d_ff": 1024,
-            "epochs": 20,
-            "batch_size": 16,
-            "lr": 5e-4,
-            "warmup_steps": 2000,
+            "name": "kids", "dataset": "kids-mix", "direction": "both", "max_pairs": 50000,
+            "val_ratio": 0.03, "test_ratio": 0.03, "vocab_size": 8000, **_KIDS_LEN,
+            "d_model": 256, "n_heads": 4, "n_enc_layers": 3, "n_dec_layers": 3, "d_ff": 1024,
+            "dropout": 0.1, "epochs": 20, "batch_size": 64, "lr": 7e-4, "warmup_steps": 1000,
             "patience": 4,
         },
     },
+    "large": {
+        "label": "加大：儿童口语 20 万句（约 1 小时）",
+        "values": {
+            "name": "kids_large", "dataset": "kids-mix", "direction": "both", "max_pairs": 200000,
+            "val_ratio": 0.02, "test_ratio": 0.02, "vocab_size": 12000, **_KIDS_LEN,
+            "d_model": 384, "n_heads": 6, "n_enc_layers": 4, "n_dec_layers": 4, "d_ff": 1536,
+            "dropout": 0.15, "epochs": 12, "batch_size": 64, "lr": 5e-4, "warmup_steps": 2000,
+            "patience": 3,
+        },
+    },
+    "full": {
+        "label": "全量：儿童口语合集 41 万句（约 2 小时，最准）",
+        "values": {
+            "name": "kids_full", "dataset": "kids-mix", "direction": "both", "max_pairs": 0,
+            "val_ratio": 0.01, "test_ratio": 0.01, "vocab_size": 16000, **_KIDS_LEN,
+            "d_model": 384, "n_heads": 6, "n_enc_layers": 4, "n_dec_layers": 4, "d_ff": 1536,
+            "dropout": 0.15, "epochs": 10, "batch_size": 64, "lr": 5e-4, "warmup_steps": 4000,
+            "patience": 3,
+        },
+    },
     "en2zh": {
-        "label": "仅英→中（儿童语料）",
-        "values": {"name": "en2zh_kids", "direction": "en2zh", "dataset": "kids-dialogue"},
+        "label": "仅英→中：儿童口语 5 万句",
+        "values": {"name": "kids_en2zh", "direction": "en2zh"},
+        "base": "kids",
     },
     "zh2en": {
-        "label": "仅中→英（儿童语料）",
-        "values": {"name": "zh2en_kids", "direction": "zh2en", "dataset": "kids-dialogue"},
+        "label": "仅中→英：儿童口语 5 万句",
+        "values": {"name": "kids_zh2en", "direction": "zh2en"},
+        "base": "kids",
     },
 }
+for _preset in PRESETS.values():
+    if "base" in _preset:
+        _preset["values"] = {**PRESETS[_preset.pop("base")]["values"], **_preset["values"]}
 
 
 def schema(datasets: list[dict]) -> dict:

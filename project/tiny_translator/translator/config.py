@@ -6,13 +6,13 @@ from dataclasses import asdict, dataclass, fields
 
 @dataclass
 class TrainConfig:
-    name: str = "demo"
+    name: str = "standard"
     # data
-    dataset: str = "cmn-eng"
-    max_pairs: int = 0
+    dataset: str = "kids-mix"
+    max_pairs: int = 50000
     zh_simplified: bool = True
-    max_src_len: int = 20
-    max_tgt_len: int = 30
+    max_src_len: int = 16
+    max_tgt_len: int = 26
     min_freq: int = 2
     val_ratio: float = 0.05
     test_ratio: float = 0.05
@@ -27,7 +27,7 @@ class TrainConfig:
     activation: str = "gelu"
     tie_embeddings: bool = True
     # training
-    epochs: int = 30
+    epochs: int = 20
     batch_size: int = 128
     lr: float = 7e-4
     schedule: str = "cosine"
@@ -54,7 +54,7 @@ FIELDS: dict[str, tuple[str, str, str, dict]] = {
     "name": ("data", "运行名称", "用于区分不同训练，保存在 runs/ 下的目录名里", {}),
     "dataset": ("data", "数据集", "句对文件 data/<名称>.tsv，每行“英文<Tab>中文”", {"choices": []}),
     "max_pairs": ("data", "最多使用句对数", "0 表示全部；先用少量数据试跑可以更快看到效果", {"min": 0, "max": 2_000_000, "step": 1000}),
-    "zh_simplified": ("data", "中文统一为简体", "Tatoeba 的中文繁简混杂，统一后字表更小、BLEU 更可比（需要 zhconv）", {}),
+    "zh_simplified": ("data", "中文统一为简体", "儿童语料构建时已转为简体；自定义语料繁简混杂时保持勾选（需要 zhconv）", {}),
     "max_src_len": ("data", "英文最大词数", "超过此长度的句对被丢弃", {"min": 4, "max": 128}),
     "max_tgt_len": ("data", "中文最大字数", "超过此长度的句对被丢弃；也决定译文最长能生成多少字", {"min": 4, "max": 160}),
     "min_freq": ("data", "词表最低频次", "训练集中出现少于此次数的词记为 <unk>", {"min": 1, "max": 20}),
@@ -82,27 +82,33 @@ FIELDS: dict[str, tuple[str, str, str, dict]] = {
     "seed": ("train", "随机种子", "决定数据划分和初始化", {"min": 0, "max": 2**31 - 1}),
 }
 
+# Presets climb the data ladder: tiny clean set → 50k → 200k → all of kids-mix.
+# The defaults above are the "standard" preset.
 PRESETS = {
     "quick": {
-        "label": "快速试跑（约 1 分钟）",
-        "values": {"name": "quick", "d_model": 128, "n_heads": 4, "n_enc_layers": 2, "n_dec_layers": 2,
-                   "d_ff": 512, "epochs": 12, "warmup_steps": 200, "lr": 1e-3},
+        "label": "快速试跑：日常短句 3.8k（约 30 秒）",
+        "values": {"name": "quick", "dataset": "kids-tatoeba", "max_pairs": 0, "min_freq": 1,
+                   "val_ratio": 0.05, "test_ratio": 0.05, "d_model": 128, "n_heads": 4,
+                   "n_enc_layers": 2, "n_dec_layers": 2, "d_ff": 512, "epochs": 40, "batch_size": 64,
+                   "lr": 1e-3, "warmup_steps": 100},
     },
     "standard": {
-        "label": "标准（约 4 分钟）",
-        "values": {"name": "standard"},
+        "label": "标准：儿童口语 5 万句（约 4 分钟）",
+        "values": {"name": "standard", "dataset": "kids-mix"},
     },
     "large": {
-        "label": "加大模型（更久、通常更准）",
-        "values": {"name": "large", "d_model": 384, "n_heads": 6, "n_enc_layers": 4, "n_dec_layers": 4,
-                   "d_ff": 1536, "dropout": 0.2, "epochs": 50, "lr": 5e-4, "warmup_steps": 800, "patience": 8},
+        "label": "加大：儿童口语 20 万句（约 25 分钟）",
+        "values": {"name": "large", "dataset": "kids-mix", "max_pairs": 200000, "min_freq": 3, "val_ratio": 0.02,
+                   "test_ratio": 0.02, "d_model": 384, "n_heads": 6, "n_enc_layers": 4,
+                   "n_dec_layers": 4, "d_ff": 1536, "dropout": 0.15, "epochs": 12, "lr": 5e-4,
+                   "warmup_steps": 1000, "patience": 3},
     },
-    # News Commentary 句子更长；拉长上限才能用上大部分语料。
-    "news": {
-        "label": "新闻语料（News Commentary，更准更久）",
-        "values": {"name": "news", "dataset": "news-commentary", "max_src_len": 40, "max_tgt_len": 60,
-                   "d_model": 256, "n_heads": 4, "n_enc_layers": 3, "n_dec_layers": 3, "d_ff": 1024,
-                   "epochs": 20, "batch_size": 64, "warmup_steps": 800, "lr": 5e-4, "patience": 5},
+    "full": {
+        "label": "全量：儿童口语合集 41 万句（约 40 分钟，最准）",
+        "values": {"name": "full", "dataset": "kids-mix", "max_pairs": 0, "min_freq": 3, "val_ratio": 0.01,
+                   "test_ratio": 0.01, "d_model": 384, "n_heads": 6, "n_enc_layers": 4,
+                   "n_dec_layers": 4, "d_ff": 1536, "dropout": 0.15, "epochs": 10, "lr": 5e-4,
+                   "warmup_steps": 2000, "patience": 3},
     },
 }
 

@@ -38,8 +38,8 @@
   <div class="card"><h4>目标</h4><p>标签平滑交叉熵；验证/测试用 sacrebleu（中文 <code>zh</code> 分词、英文 <code>13a</code>）。</p></div>
   <div class="card"><h4>产出</h4><p><code>runs/&lt;时间&gt;_&lt;名称&gt;/</code>：配置、SPM 模型、history、best/last 权重；也可用 CLI 同目录训练。</p></div>
 </div>
-<div class="callout ok"><strong>建议用法</strong>先套预设「儿童对话互译」或「快速试跑」跑通中英双向；
-  新闻类正式实验再用「Jetson 新闻互译」/<code>news-commentary</code>。一次只改一类旋钮；与「模型实验」BLEU 不可直接横比。</div>
+<div class="callout ok"><strong>建议用法</strong>先套预设「快速试跑」确认中英双向流程，再用「推荐：儿童口语 5 万句」；
+  效果不够再按「加大 → 全量」逐级放大。一次只改一类旋钮；与「模型实验」BLEU 不可直接横比。</div>
 
 <h2 id="guide-vs">与 tiny_translator（模型实验）的实现差异</h2>
 <p>两者都是「网页上配置 → 后台训 Transformer → 验证试译」，但<strong>定位不同</strong>：
@@ -136,13 +136,15 @@
 <h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>bilingual</code>）</h3>
 <p>结果目录：<code>project/bilingual_mt/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。与 tiny 的 runs <strong>互不覆盖</strong>，请用能区分实验的名字（如 <code>jetson_both</code>、<code>nc_en2zh</code>）。</p>
 
-<h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>kids-dialogue</code>）</h3>
-<p>每行 <code>英文&lt;Tab&gt;中文</code>，文件在共享目录 <code>project/mt_data/&lt;名称&gt;.tsv</code>（与「模型实验」共用）。</p>
+<h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>kids-mix</code>）</h3>
+<p>每行 <code>英文&lt;Tab&gt;中文</code>，文件在共享目录 <code>project/mt_data/&lt;名称&gt;.tsv</code>（与「模型实验」共用）。
+  三个内置数据集都由 <code>scripts/build_kids_corpora.py</code> 从 OPUS 下载后筛选：英文不超过 10 个词、带儿童话题词
+  （家人、学校、吃喝、玩具、动物、颜色……）和口语特征，过滤不适宜内容，中文统一为简体和全角标点。点「下载」即可生成。</p>
 <ul>
-  <li><code>kids-dialogue</code>：儿童/家庭口语短句（约 2.8k），适合小朋友双向对话翻译；<strong>本项目默认</strong>。本机构建后 rsync 到设备，勿在设备上慢速拉网。</li>
-  <li><code>cmn-eng</code>：Tatoeba 短句，通用口语，可自动下载。</li>
-  <li><code>news-commentary</code>：约 31 万对新闻评论；句子更长，请配合足够的 <code>max_*_len</code>。</li>
-  <li><code>ted2020</code>：口语演讲句对。</li>
+  <li><code>kids-mix</code>：下面两个来源加上 320 句人工编写的亲子对话种子，去重后的合集；<strong>本项目默认</strong>，预设都用它。</li>
+  <li><code>kids-subtitles</code>：OpenSubtitles 2024 电影、动画字幕（2240 万行筛选）。字幕常有错位，
+    额外要求英文里的话题词在中文里有对应译词（如 dinner ↔ 饭、sister ↔ 姐/妹），并去掉多人台词和截断句。</li>
+  <li><code>kids-tatoeba</code>：Tatoeba 2026 志愿者整理的日常短句，约 3.8k 句；量小但最干净，适合快速试跑。</li>
 </ul>
 
 <h3 id="guide-p-direction">翻译方向 <code>direction</code>（默认 <code>both</code>）</h3>
@@ -155,14 +157,14 @@
 <p><code>both</code> 时每个 epoch 实际优化步数约为「句对数 × 2 / batch_size」。与 tiny 比，同样原始句对数下这里步数更多。</p>
 
 <h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>0</code> = 全部）</h3>
-<p>对原始平行句对截断（在展开方向<strong>之前</strong>）。烟雾测试建议 2k–15k；Jetson 正式跑可用预设里的 8 万上限。</p>
+<p>对原始平行句对随机抽样（在展开方向<strong>之前</strong>）。冒烟测试建议 2k；预设按 5 万 → 20 万 → 全部逐级放大。</p>
 
 <h3 id="guide-p-zh-simplified">中文统一为简体 <code>zh_simplified</code>（默认开启）</h3>
 <p>与 tiny 相同：用 <code>zhconv</code> 转简体，避免繁简各占词表配额。互译时源端中文、目标端中文都会受益。</p>
 
 <h3 id="guide-p-max-src">源端最大子词数 <code>max_src_len</code>（默认 <code>64</code>）</h3>
 <p><strong>单位是 BPE 片数</strong>（含方向标签与结束符），不是英文词数。超长则截断并强制保留 <code>&lt;/s&gt;</code>。
-  新闻语料上 48–64 较常见；短句试跑可用 32。比 tiny 的默认 20「词」更宽松，因为子词切分后序列往往更长。</p>
+  儿童语料英文不超过 10 个词，加上方向标签后通常不到 20 片，预设用 32；自备长句语料再调到 48–64。</p>
 
 <h3 id="guide-p-max-tgt">目标端最大子词数 <code>max_tgt_len</code>（默认 <code>64</code>）</h3>
 <p>教师强制序列上限；过长截断。推理另见 <code>max_decode_len</code>。</p>
@@ -172,7 +174,7 @@
 <ul>
   <li>过小：切得太碎或训练失败（已做兜底）。</li>
   <li>过大：嵌入矩阵变大、稀有片统计不足。</li>
-  <li>快速试跑常用 4000；Jetson / 新闻常用 6000–8000。</li>
+  <li>预设随数据量放大：3.8k 句用 2000，5 万句用 8000，20 万句用 12000，全量用 16000。</li>
 </ul>
 
 <h3 id="guide-p-val-ratio">验证 / 测试比例 <code>val_ratio</code> / <code>test_ratio</code>（默认各 <code>0.02</code>）</h3>
@@ -260,23 +262,28 @@
 <table>
   <tr><th>预设</th><th>要点</th><th>适合</th></tr>
   <tr>
-    <td>儿童对话互译</td>
-    <td>kids-dialogue、both、全量、d=256、3+3、vocab=4k、40 轮、batch=32</td>
-    <td>小朋友口语双向翻译（推荐）</td>
-  </tr>
-  <tr>
     <td>快速试跑</td>
-    <td>kids-dialogue、both、d=128、2+2、vocab=4k、12 轮、batch=64</td>
-    <td>确认互译流程、曲线、GPU；数分钟量级</td>
+    <td>kids-tatoeba 全部（约 3.8k）、both、vocab=2k、d=128、2+2、40 轮、batch=64</td>
+    <td>确认互译流程、曲线、GPU</td>
   </tr>
   <tr>
-    <td>Jetson 新闻互译</td>
-    <td>news-commentary、both、最多 8 万句、d=256、4+4、batch=16、20 轮</td>
-    <td>新闻域互译（非儿童场景）</td>
+    <td>推荐：儿童口语 5 万句</td>
+    <td>kids-mix 抽 5 万、both、vocab=8k、d=256、3+3、20 轮、batch=64、早停 4</td>
+    <td>小朋友口语双向翻译的日常选择</td>
+  </tr>
+  <tr>
+    <td>加大：儿童口语 20 万句</td>
+    <td>kids-mix 抽 20 万、both、vocab=12k、d=384、4+4、dropout=0.15、12 轮、早停 3</td>
+    <td>推荐档效果不够时</td>
+  </tr>
+  <tr>
+    <td>全量：儿童口语合集</td>
+    <td>kids-mix 全部、both、vocab=16k、d=384、4+4、10 轮、早停 3</td>
+    <td>追求最好效果，耗时最长</td>
   </tr>
   <tr>
     <td>仅英→中 / 仅中→英</td>
-    <td>kids-dialogue + 单方向</td>
+    <td>与「推荐」相同，只训一个方向</td>
     <td>对照「互译 vs 单向」或只要一个方向</td>
   </tr>
 </table>

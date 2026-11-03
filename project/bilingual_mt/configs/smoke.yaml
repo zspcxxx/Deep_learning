@@ -1,18 +1,18 @@
-# 本地冒烟：复用已下载的 news-commentary，极少数据 / 极小模型
+# 冒烟：kids-tatoeba 前 2000 句，极小模型，1 轮
 inherit: base.yaml
 name: smoke
 
 data:
-  dataset: news-commentary
+  dataset: kids-tatoeba
   direction: both
   max_pairs: 2000
-  max_src_len: 40
-  max_tgt_len: 40
+  max_src_len: 32
+  max_tgt_len: 32
   val_ratio: 0.05
   test_ratio: 0.05
 
 vocab:
-  vocab_size: 4000
+  vocab_size: 2000
 
 model:
   d_model: 128

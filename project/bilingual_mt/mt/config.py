@@ -23,7 +23,7 @@ DIRECTIONS = ("en2zh", "zh2en", "both")
 class TrainConfig:
     name: str = "bilingual"
     # data
-    dataset: str = "kids-dialogue"  # stem under project/mt_data/, or a built-in name
+    dataset: str = "kids-mix"  # stem under project/mt_data/, or a built-in name
     direction: str = "both"  # en2zh | zh2en | both
     max_pairs: int = 0
     zh_simplified: bool = True

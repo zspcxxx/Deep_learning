@@ -48,45 +48,47 @@
     <h2 id="guide-data">一、数据参数</h2>
     <p>控制「用多少语料、怎么切分、词表多大、留多少给验证和测试」。改这一组通常比改模型结构更划算：数据质量决定上限。</p>
 
-    <h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>demo</code>）</h3>
+    <h3 id="guide-p-name">运行名称 <code>name</code>（默认 <code>standard</code>）</h3>
     <p>只影响目录名：结果写到 <code>project/tiny_translator/runs/&lt;时间戳&gt;_&lt;名称&gt;/</code>。起一个能区分实验的名字
       （如 <code>quick</code>、<code>d256_ep30</code>），方便验证页对照。</p>
 
-    <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>cmn-eng</code>；儿童场景用 <code>kids-dialogue</code>）</h3>
-    <p>对应 <code>data/&lt;名称&gt;.tsv</code>，每行 <code>英文&lt;Tab&gt;中文</code>。内置三套可下载语料：</p>
+    <h3 id="guide-p-dataset">数据集 <code>dataset</code>（默认 <code>kids-mix</code>）</h3>
+    <p>文件在共享目录 <code>project/mt_data/&lt;名称&gt;.tsv</code>（与「中英互译」共用），每行 <code>英文&lt;Tab&gt;中文</code>。
+      三个内置数据集都是从 OPUS 下载后按儿童口语筛选的：英文不超过 10 个词、带儿童话题词（家人、学校、吃喝、玩具、动物、颜色……）
+      和口语特征，过滤不适宜内容，中文统一为简体和全角标点。点「下载」即可生成。</p>
     <ul>
-      <li><code>kids-dialogue</code>：儿童/家庭口语（共享 <code>project/mt_data/</code>，约 2.8k）；适合小朋友对话翻译，需已同步到设备。</li>
-      <li><code>cmn-eng</code>：Tatoeba 短句约 3 万对，上手快。</li>
-      <li><code>news-commentary</code>：WMT 新闻评论约 <strong>31 万对</strong>；句子更长，配合预设「新闻语料」或把长度调到约 40 / 60。</li>
-      <li><code>ted2020</code>：TED 口语约 1.6 万对。</li>
+      <li><code>kids-mix</code>：下面两个来源加 320 句人工编写的亲子对话，去重后的合集；<strong>默认</strong>，标准 / 加大 / 全量预设都用它。</li>
+      <li><code>kids-subtitles</code>：OpenSubtitles 2024 电影、动画字幕筛选；字幕常有错位，额外要求英文话题词在中文里有对应译词。</li>
+      <li><code>kids-tatoeba</code>：Tatoeba 2026 日常短句，约 3.8k 句；量小但最干净，快速试跑用它。</li>
     </ul>
     <p>也可自备同格式的 TSV，刷新后会出现在下拉框。</p>
     <div class="callout warn"><strong>注意</strong>短句语料上常见口语句容易译对；长句、罕见专名、训练集没见过的说法仍可能错
       （英文稀有词常变成 <code>&lt;unk&gt;</code>）。换更大语料前，记得相应放宽长度上限，否则多数句对会被过滤掉。</div>
 
-    <h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>0</code> = 全部）</h3>
-    <p>从文件里最多取多少对再划分训练/验证/测试。<strong>先设 3000–5000 做烟雾测试</strong>能很快看到曲线是否正常；正式对比再用全部。</p>
-    <p>作用：缩小语料 → 训练更快、词表更小、上限更低；设为 0 → 用满文件（长度过滤后约 3.2 万对）。</p>
+    <h3 id="guide-p-max-pairs">最多使用句对数 <code>max_pairs</code>（默认 <code>50000</code>；0 = 全部）</h3>
+    <p>打乱后最多取多少对再划分训练/验证/测试。合集有几十万句，全用一次要训很久，所以默认先抽 5 万；
+      预设按 5 万 → 20 万 → 全部逐级放大。</p>
+    <p>作用：缩小语料 → 训练更快、词表更小、上限更低；设为 0 → 用满文件。</p>
 
     <h3 id="guide-p-zh-simplified">中文统一为简体 <code>zh_simplified</code>（默认开启）</h3>
-    <p>Tatoeba 中文繁简混杂。开启后用 <code>zhconv</code> 转成简体再按字建词表。</p>
+    <p>内置儿童语料构建时已经转成简体；自备的语料若繁简混杂，开启后用 <code>zhconv</code> 转成简体再按字建词表。</p>
     <ul>
       <li><strong>开</strong>：字表更小、同一意思不会拆成繁简两套字，BLEU 更可比（推荐）。</li>
       <li><strong>关</strong>：保留原文繁简；词表变大，同义字被当成不同符号，一般更难学。</li>
     </ul>
 
-    <h3 id="guide-p-max-src">英文最大词数 <code>max_src_len</code>（默认 <code>20</code>）</h3>
+    <h3 id="guide-p-max-src">英文最大词数 <code>max_src_len</code>（默认 <code>16</code>）</h3>
     <p>英文分词后超过此长度的句对<strong>直接丢弃</strong>。短上限 → 丢掉长句、训练更快、位置编码覆盖的范围更小；
       过大 → 保留长句，但批内 padding 变多，显存和每步时间上升。</p>
-    <p>本实验默认语料大多很短（平均约 7 个英文词），20 已经够用。若换成自己的长句语料，再按分布调高。</p>
+    <p>儿童语料构建时就只保留不超过 10 个英文词的句子，算上标点约 14 个 token，16 已经够用。若换成自己的长句语料，再按分布调高。</p>
 
-    <h3 id="guide-p-max-tgt">中文最大字数 <code>max_tgt_len</code>（默认 <code>30</code>）</h3>
+    <h3 id="guide-p-max-tgt">中文最大字数 <code>max_tgt_len</code>（默认 <code>26</code>）</h3>
     <p>两层含义：</p>
     <ol>
       <li>训练时：超过此长度的句对丢弃；</li>
       <li>推理时：解码器最多生成这么多字（再加起止符），太短会截断译文。</li>
     </ol>
-    <p>默认中文平均约 10 字，30 留有余量。生成总爱「说不完」时，可略增；想强制短答可略减。</p>
+    <p>儿童语料的中文不超过 24 字，26 留有余量。生成总爱「说不完」时，可略增；想强制短答可略减。</p>
 
     <h3 id="guide-p-min-freq">词表最低频次 <code>min_freq</code>（默认 <code>2</code>）</h3>
     <p>只在<strong>训练集</strong>上统计：出现次数 &lt; 此值的英文词 / 中文字记为 <code>&lt;unk&gt;</code>。</p>
@@ -98,7 +100,7 @@
 
     <h3 id="guide-p-val-ratio">验证集比例 <code>val_ratio</code>（默认 <code>0.05</code>）</h3>
     <p>打乱后切出的验证集占比。每轮结束在其上算验证损失和字级 BLEU，用来选 <code>best.pt</code>、画曲线、触发早停。</p>
-    <p>太小 → BLEU 噪声大，早停不稳；太大 → 训练集变少。默认 5%（约 1600 句）对 3 万对语料较合适。
+    <p>太小 → BLEU 噪声大，早停不稳；太大 → 训练集变少。默认 5%（5 万句时约 2500 句）；数据更多时可降到 1–2%，预设已按数据量调整。
       与测试集合计必须 &lt; 50%。</p>
 
     <h3 id="guide-p-test-ratio">测试集比例 <code>test_ratio</code>（默认 <code>0.05</code>）</h3>
@@ -161,8 +163,8 @@
 
     <h2 id="guide-train">三、训练参数</h2>
 
-    <h3 id="guide-p-epochs">训练轮数 <code>epochs</code>（默认 <code>30</code>）</h3>
-    <p>完整扫过训练集的次数。一轮 = 若干 step（由句对数 ÷ 批大小决定）。快速试跑 12 轮；标准 30；加大 50。
+    <h3 id="guide-p-epochs">训练轮数 <code>epochs</code>（默认 <code>20</code>）</h3>
+    <p>完整扫过训练集的次数。一轮 = 若干 step（由句对数 ÷ 批大小决定）。数据越多每轮越久、需要的轮数越少：快速试跑 40 轮；标准 20；加大 12；全量 10。
       可配合早停：设较大 <code>epochs</code> + 非零 <code>patience</code>，让验证 BLEU 不再升时自动停。</p>
 
     <h3 id="guide-p-batch">批大小 <code>batch_size</code>（默认 <code>128</code>）</h3>
@@ -223,30 +225,39 @@
     <p>控制数据划分打乱与参数初始化。同一配置同一种子，结果应大体可复现（GPU 上仍可能有轻微非确定性）。
       想估计「运气」带来的波动时，换几个种子各跑一遍看 BLEU 分布。</p>
 
-    <h2 id="guide-presets">三套预设分别改了什么</h2>
+    <h2 id="guide-presets">四套预设分别改了什么</h2>
+    <p>预设按数据量逐级放大，模型容量、轮数和正则化随之调整。点预设会把所有参数重置为该档的完整配置。</p>
     <table>
-      <tr><th>预设</th><th>结构要点</th><th>训练要点</th><th>适合</th></tr>
+      <tr><th>预设</th><th>数据</th><th>结构要点</th><th>训练要点</th><th>适合</th></tr>
       <tr>
         <td>快速试跑</td>
-        <td>2+2 层，d=128，d_ff=512，约 180 万参数</td>
-        <td>12 轮，lr=1e-3，warmup=200</td>
-        <td>确认流程、看曲线、试 GPU；Jetson 上大约一两分钟量级</td>
+        <td>kids-tatoeba 全部（约 3.8k）、min_freq=1</td>
+        <td>2+2 层，d=128，d_ff=512</td>
+        <td>40 轮，batch=64，lr=1e-3，warmup=100</td>
+        <td>确认流程、看曲线、试 GPU</td>
       </tr>
       <tr>
         <td>标准</td>
-        <td>默认：3+3 层，d=256，约 730 万参数</td>
-        <td>30 轮，lr=7e-4，warmup=400</td>
-        <td>日常对比实验的基线；短句英中已经能译得像样</td>
+        <td>kids-mix 抽 5 万</td>
+        <td>默认：3+3 层，d=256，d_ff=1024</td>
+        <td>20 轮，lr=7e-4，warmup=400</td>
+        <td>日常对比实验的基线</td>
       </tr>
       <tr>
-        <td>加大模型</td>
-        <td>4+4 层，d=384，6 头，d_ff=1536，dropout=0.2</td>
-        <td>50 轮，lr=5e-4，warmup=800，patience=8</td>
-        <td>愿意多花时间换更高 BLEU；小数据上要注意过拟合</td>
+        <td>加大</td>
+        <td>kids-mix 抽 20 万、min_freq=3</td>
+        <td>4+4 层，d=384，6 头，d_ff=1536，dropout=0.15</td>
+        <td>12 轮，lr=5e-4，warmup=1000，早停 3</td>
+        <td>标准档效果不够时</td>
+      </tr>
+      <tr>
+        <td>全量</td>
+        <td>kids-mix 全部、min_freq=3</td>
+        <td>同加大</td>
+        <td>10 轮，lr=5e-4，warmup=2000，早停 3</td>
+        <td>追求最好效果，耗时最长</td>
       </tr>
     </table>
-    <div class="callout ok"><strong>实测量级（Jetson，完整 cmn-eng）</strong>快速试跑验证 BLEU 约 28、测试约 29；
-      标准预设验证约 39、测试约 40。具体数字随驱动与随机性会有小幅波动。</div>
 
     <h2 id="guide-metrics">训练和验证时看什么</h2>
     <table>
